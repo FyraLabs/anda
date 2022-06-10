@@ -1,11 +1,11 @@
-use clap::{App, Arg, SubCommand, crate_authors, crate_description};
+use clap::{App, Arg, SubCommand, crate_authors, crate_description, crate_version};
 use log4rs::*;
 use log::{info, debug, trace, error};
 
 
 fn main() {
     let app = App::new("anda")
-        .version(env!("CARGO_PKG_VERSION"))
+        .version(crate_version!())
         .author(crate_authors!("\n"))
         .about(crate_description!())
         .arg(

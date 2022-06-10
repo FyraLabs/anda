@@ -1,0 +1,8 @@
+
+  name: test
+  version: "1.0"
+  description: test
+  type: rpm
+  license: GPLv2
+  build_scripts:
+    - echo "Hello World" > test.txt

@@ -10,6 +10,9 @@ dependencies = [
  "log",
  "log4rs",
  "pyo3",
+ "serde",
+ "serde_json",
+ "serde_yaml",
 ]
 
 [[package]]
