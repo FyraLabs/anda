@@ -78,6 +78,24 @@ fn main() {
                         .default_value("repo name"),
                 ]),
             SubCommand::with_name("setup").about("Sets up a umpkg development environment"),
+
+            SubCommand::with_name("install")
+                .about("Installs packages")
+                .args(&[
+                    Arg::with_name("packages")
+                        .help("The packages to install")
+                        .min_values(1)
+                        .required(true),
+                ]),
+            SubCommand::with_name("uninstall")
+                .about("Uninstalls packages")
+                .alias("remove")
+                .args(&[
+                    Arg::with_name("packages")
+                        .help("The packages to uninstall")
+                        .min_values(1)
+                        .required(true),
+                ]),
         ]);
     let matches = app.get_matches();
     let path = matches.value_of("path").unwrap_or(".");
@@ -140,6 +158,21 @@ fn main() {
         }
         ("setup", None) => {
             println!("Setting up umpkg development environment");
+        }
+
+        ("install", Some(matches)) => {
+            println!("Installing packages");
+            let packages = matches.values_of("packages").unwrap();
+            for pkg in packages {
+                println!("Package: {}", pkg);
+            }
+        }
+        ("uninstall", Some(matches)) => {
+            println!("Uninstalling packages");
+            let packages = matches.values_of("packages").unwrap();
+            for pkg in packages {
+                println!("Package: {}", pkg);
+            }
         }
         _ => println!("No subcommand specified, run --help for more info"),
     }
