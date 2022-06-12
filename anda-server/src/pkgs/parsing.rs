@@ -136,6 +136,8 @@ async fn test_parse() {
     }
 
 
+}
+
 #[cfg(test)]
 mod test_super {
     use super::*;
@@ -147,6 +149,5 @@ mod test_super {
             .build()
             .unwrap()
             .block_on(test_parse())
-    }
     }
 }
