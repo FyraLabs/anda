@@ -56,7 +56,7 @@ impl Repo {
         let reponames = Repo::list_repos().await;
         let mut repos: Vec<Repo> = Vec::new();
         for name in reponames {
-            repos.push(Repo::load_from_yaml(format!("{}.yml", name)).await);
+            repos.push(Repo::load_from_yaml(format!("{}.yml", name).as_str()).await);
         }
         repos
     }
@@ -87,9 +87,8 @@ impl Repo {
         out
     }
     pub async fn get_pkg(&self, name: &str) -> Package {
-        let pkg: Package =
-            Package::load_from_yaml(format!("./anda-pkgs/{}/{}/anda.yml", self.name, name))
-                .await;
+        let path: String = format!("./anda-pkgs/{}/{}/anda.yml", self.name, name);
+        let pkg: Package = Package::load_from_yaml(path.as_str()).await;
         pkg
     }
 }

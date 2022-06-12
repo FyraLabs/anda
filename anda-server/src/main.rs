@@ -15,7 +15,7 @@ struct PkgReq {
 }
 
 #[get("/<repo>", data = "<pkgreq>")]
-async fn process_pkgs(repo: &str, pkgreq: Json<PkgReq>) {
+async fn process_pkgs(repo: &str, pkgreq: Json<PkgReq>) -> &'static str {
     if pkgs::repo_exists(repo).await {
         let mut reponame = String::from(repo);
         reponame.push_str(".yml");
@@ -27,9 +27,18 @@ async fn process_pkgs(repo: &str, pkgreq: Json<PkgReq>) {
             packages.push(repo.get_pkg(pkg.as_str()).await);
         }
     }
+    "hai"
+}
+
+#[get("/<repo>/<pkg>")]
+async fn process_pkgs_browser(repo: &str, pkg: &str) -> &'static str {
+    "you are accessing this from your browser I guess"
 }
 
 #[launch]
 fn rocket() -> _ {
-    rocket::build().mount("/", routes![index])
+    rocket::build()
+        .mount("/", routes![index])
+        .mount("/", routes![process_pkgs])
+        .mount("/", routes![process_pkgs_browser])
 }
