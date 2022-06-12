@@ -1,10 +1,6 @@
 use std::str;
 use serde::{Deserialize, Serialize};
-// use serde_yaml::Value;
-// use tokio::fs::{read, read_dir, ReadDir};
 use serde_xml_rs::from_str;
-use tokio;
-// use reqwest;
 
 
 #[derive(Debug, Deserialize)]
@@ -128,7 +124,6 @@ async fn test_parse() {
     let metalink: Metalink = from_str(&resp).unwrap();
     assert_eq!(&metalink.files.files[0].name, "repomd.xml");
 }
-
 
 #[cfg(test)]
 mod test_super {
