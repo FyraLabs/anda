@@ -1,0 +1,3 @@
+[submodule "anda-server/anda-pkgs"]
+	path = anda-server/anda-pkgs
+	url = git@github.com:Ultramarine-Linux/anda-pkgs.git
