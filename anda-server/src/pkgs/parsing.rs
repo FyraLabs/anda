@@ -7,57 +7,52 @@ use tokio;
 // use reqwest;
 
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize)]
 pub struct Metalink {
-    // pub files: Files,
-    #[serde(rename = "files")]
-    pub files: Vec<FileKind>,
+    pub files: Files,
 }
 
-// #[derive(Debug, Serialize, Deserialize, PartialEq)]
-// pub struct Files {
-// }
+#[derive(Debug, Deserialize)]
+pub struct Files {
+    #[serde(rename = "file")]
+    pub files: Vec<File>,
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-pub enum FileKind {
-    File(File)
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize)]
 pub struct File {
     pub name: String,
     pub size: i16,
-    #[serde(rename = "verification")]
-    pub verification: Vec<HashKind>,
-    pub resources: Vec<UrlKind>,
+    pub verification: Verification,
+    pub resources: Resources,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-pub enum HashKind {
-    Hash(Hash)
+#[derive(Debug, Deserialize)]
+pub struct Verification {
+    #[serde(rename = "hash")]
+    pub hashes: Vec<Hash>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize)]
 pub struct Hash {
     pub r#type: HashType,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize)]
+pub struct Resources {
+    #[serde(rename = "url")]
+    pub urls: Vec<Url>,
+}
+
+#[derive(Debug, Deserialize)]
 pub enum HashType {
     md5,
     sha1,
     sha256,
+    sha512,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-pub enum UrlKind {
-    Url(Url)
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize)]
 pub struct Url {
     pub protocol: Protocol,
     pub r#type: UrlType,
@@ -131,9 +126,8 @@ async fn test_parse() {
 </files>
 </metalink>"#;
     let metalink: Metalink = from_str(&resp).unwrap();
-    match &metalink.files[0] {
-        FileKind::File(f) => println!("{}", f.name)
-    }
+    assert_eq!(&metalink.files.files[0].name, "repomd.xml");
+}
 
 
 #[cfg(test)]
@@ -147,6 +141,5 @@ mod test_super {
             .build()
             .unwrap()
             .block_on(test_parse())
-    }
     }
 }
