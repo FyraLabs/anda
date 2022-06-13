@@ -18,15 +18,15 @@ pub async fn repo_exists(name: &str) -> bool {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Repo<'a> {
-    pub name: &'a str,
-    pub url:  &'a str,
-    pub meta: &'a str,
-    pub kind: &'a str,
+pub struct Repo {
+    pub name: String,
+    pub url:  String,
+    pub meta: String,
+    pub kind: String,
 }
 
-impl<'a> Repo<'a> {
-    pub fn new(name: &'a str, url: &'a str, meta: &'a str, kind: &'a str) -> Repo<'a> {
+impl Repo {
+    pub fn new(name: String, url: String, meta: String, kind: String) -> Repo {
         Repo {
             name,
             url,
@@ -34,9 +34,10 @@ impl<'a> Repo<'a> {
             kind,
         }
     }
-    pub async fn load_from_yaml(path: &str) -> Repo<'a> {
+    pub async fn load_from_yaml(path: &str) -> Repo {
         let file: std::vec::Vec<u8> = read(path).await.unwrap();
         let val: Value = serde_yaml::from_str(str::from_utf8(&file).unwrap()).unwrap();
+        //serde_yaml::from_value(val).unwrap()
         serde_yaml::from_value(val).unwrap()
     }
 
@@ -52,7 +53,7 @@ impl<'a> Repo<'a> {
         }
         return out;
     }
-    pub async fn get_repos() -> Vec<Repo<'a>> {
+    pub async fn get_repos() -> Vec<Repo> {
         let reponames = Repo::list_repos().await;
         let mut repos: Vec<Repo> = Vec::new();
         for name in reponames {
@@ -61,7 +62,7 @@ impl<'a> Repo<'a> {
         repos
     }
 
-    pub async fn load_meta(&'a mut self) {
+    pub async fn load_meta(mut self) {
         let resp = reqwest::get(self.meta)
             .await
             .unwrap()
@@ -72,7 +73,7 @@ impl<'a> Repo<'a> {
         let file = &metalink.files.files[0];
         assert_eq!(file.name, "repomd.xml");
         write("./anda-pkgs/".to_string() + &self.name + "/repomd.xml", resp.as_bytes()).await.unwrap();
-        let empty = String::new();
+/*         let empty = String::new();
         let mut best_url: &String = &empty;
         let mut best_preference = 0;
         for url in &file.resources.urls {
@@ -80,9 +81,18 @@ impl<'a> Repo<'a> {
                 best_url = &url.location;
                 best_preference = url.preference;
             }
+        } */
+
+        let (mut best_url, mut best_preference) = (String::new(), 0);
+        for url in &file.resources.urls {
+            if url.protocol == parsing::Protocol::https && url.preference > best_preference {
+                best_url = url.location.clone();
+                best_preference = url.preference;
+            }
         }
+
         //WARN assume best_url is not ""
-        self.url = best_url.as_str();
+        self.url = best_url.clone().to_string();
     }
     pub async fn update_pkgs() {
         todo!();
