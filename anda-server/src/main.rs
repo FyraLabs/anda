@@ -20,7 +20,7 @@ async fn process_pkgs(repo: &str, pkgreq: Json<PkgReq>) -> &'static str {
         let mut reponame = String::from(repo);
         reponame.push_str(".yml");
         let repo = pkgs::Repo::load_from_yaml(reponame.as_str()).await;
-        let size: i8 = 0;  // size in MiB
+        let size: i16 = 0;  // size in MiB
         let paths: Vec<String> = Vec::new();
         let mut packages: Vec<pkgs::Package> = Vec::new();
         for pkg in &pkgreq.pkgs {

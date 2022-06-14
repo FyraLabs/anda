@@ -26,14 +26,14 @@ pub struct Repo {
 }
 
 impl Repo {
-    pub fn new(name: String, url: String, meta: String, kind: String) -> Repo {
-        Repo {
-            name,
-            url,
-            meta,
-            kind,
-        }
-    }
+    // pub fn new(name: String, url: String, meta: String, kind: String) -> Repo {
+    //     Repo {
+    //         name,
+    //         url,
+    //         meta,
+    //         kind,
+    //     }
+    // }
     pub async fn load_from_yaml(path: &str) -> Repo {
         let file: std::vec::Vec<u8> = read(path).await.unwrap();
         let val: Value = serde_yaml::from_str(str::from_utf8(&file).unwrap()).unwrap();
@@ -73,19 +73,10 @@ impl Repo {
         let file = &metalink.files.files[0];
         assert_eq!(file.name, "repomd.xml");
         write("./anda-pkgs/".to_string() + &self.name + "/repomd.xml", resp.as_bytes()).await.unwrap();
-/*         let empty = String::new();
-        let mut best_url: &String = &empty;
-        let mut best_preference = 0;
-        for url in &file.resources.urls {
-            if url.protocol == parsing::Protocol::https && url.preference > best_preference {
-                best_url = &url.location;
-                best_preference = url.preference;
-            }
-        } */
 
         let (mut best_url, mut best_preference) = (String::new(), 0);
         for url in &file.resources.urls {
-            if url.protocol == parsing::Protocol::https && url.preference > best_preference {
+            if url.protocol == parsing::Protocol::Https && url.preference > best_preference {
                 best_url = url.location.clone();
                 best_preference = url.preference;
             }
@@ -124,15 +115,15 @@ pub struct Package {
 }
 
 impl Package {
-    pub fn new(name: String, version: String, description: String, license: String) -> Package {
-        Package {
-            name,
-            version,
-            description,
-            license,
-            build_scripts: None,
-        }
-    }
+    // pub fn new(name: String, version: String, description: String, license: String) -> Package {
+    //     Package {
+    //         name,
+    //         version,
+    //         description,
+    //         license,
+    //         build_scripts: None,
+    //     }
+    // }
     pub fn set_build_scripts(&mut self, build_scripts: Vec<String>) {
         self.build_scripts = Some(build_scripts);
     }

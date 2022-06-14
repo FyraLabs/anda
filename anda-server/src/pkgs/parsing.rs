@@ -1,7 +1,6 @@
-use std::str;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_xml_rs::from_str;
-
+use std::str;
 
 #[derive(Debug, Deserialize)]
 pub struct Metalink {
@@ -12,13 +11,12 @@ pub struct Metalink {
 pub struct Files {
     #[serde(rename = "file")]
     pub files: Vec<File>,
-
 }
 
 #[derive(Debug, Deserialize)]
 pub struct File {
     pub name: String,
-    pub size: i16,
+    pub size: u16,
     pub verification: Verification,
     pub resources: Resources,
 }
@@ -41,11 +39,12 @@ pub struct Resources {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum HashType {
-    md5,
-    sha1,
-    sha256,
-    sha512,
+    Md5,
+    Sha1,
+    Sha256,
+    Sha512,
 }
 
 #[derive(Debug, Deserialize)]
@@ -56,73 +55,93 @@ pub struct Url {
     pub preference: i8,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
 pub enum Protocol {
-    http,
-    https,
-    rsync,
+    Http,
+    Https,
+    Rsync,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
 pub enum UrlType {
-    https,
-    http,
-    rsync,
+    Https,
+    Http,
+    Rsync,
 }
 
-
-async fn test_parse() {
-    // let resp = reqwest::get("https://mirrors.fedoraproject.org/metalink?repo=fedora-36&arch=x86_64")
-    //     .await
-    //     .unwrap()
-    //     .text()
-    //     .await
-    //     .unwrap();
-    // println!("{}", resp);
-    let resp = r#"
-<metalink>
-<files>
-<file name="repomd.xml">
-<size>6285</size>
-<verification>
-    <hash type="md5">471e9eec10af547e2ac5883ef8085680</hash>
-    <hash type="sha1">3a4214f0efe3ac4d193a24b96648861613a66292</hash>
-    <hash type="sha256">4900a802ace6c0f4b13d10ec6b645cb47cdd8069c9d92bbc3231334183ec401c</hash>
-    <hash type="sha512">ff0c749bbc7508106f9e44c261f74f5d0d03abe6793d75dfbdc780d340d168cddebfcdc4e336cf219f7ab8c2ce7753466f304dcffdad114c0b35759def023e11</hash>
-</verification>
-<resources maxconnections="1">
-    <url protocol="http" type="http" location="JP" preference="100">http://ftp.riken.jp/Linux/fedora/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="rsync" type="rsync" location="JP" preference="100">rsync://ftp.riken.jp/fedora/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="https" type="https" location="JP" preference="100">https://ftp.riken.jp/Linux/fedora/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="https" type="https" location="CN" preference="99">https://mirrors.tuna.tsinghua.edu.cn/fedora/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="http" type="http" location="CN" preference="99">http://mirrors.tuna.tsinghua.edu.cn/fedora/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="rsync" type="rsync" location="CN" preference="99">rsync://mirrors.tuna.tsinghua.edu.cn/fedora/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="http" type="http" location="JP" preference="98">http://ftp.iij.ad.jp/pub/linux/Fedora/fedora/linux/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="rsync" type="rsync" location="JP" preference="98">rsync://ftp.iij.ad.jp/pub/linux/Fedora/fedora/linux/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="https" type="https" location="JP" preference="97">https://ftp.yz.yamagata-u.ac.jp/pub/linux/fedora-projects/fedora/linux/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="http" type="http" location="JP" preference="97">http://ftp.yz.yamagata-u.ac.jp/pub/linux/fedora-projects/fedora/linux/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="rsync" type="rsync" location="JP" preference="97">rsync://ftp.yz.yamagata-u.ac.jp/pub/linux/fedora-projects/fedora/linux/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="http" type="http" location="TH" preference="96">http://mirror2.totbb.net/fedora/linux/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="rsync" type="rsync" location="TH" preference="96">rsync://mirror2.totbb.net/fedora/linux/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="rsync" type="rsync" location="ID" preference="95">rsync://fedora.mirror.angkasa.id/fedora-enchilada/linux/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="http" type="http" location="ID" preference="95">http://fedora.mirror.angkasa.id/pub/fedora/linux/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="http" type="http" location="ID" preference="94">http://mr.heru.id/fedora/linux/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="https" type="https" location="ID" preference="94">https://mr.heru.id/fedora/linux/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="https" type="https" location="SG" preference="93">https://download.nus.edu.sg/mirror/fedora/linux/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="http" type="http" location="SG" preference="93">http://download.nus.edu.sg/mirror/fedora/linux/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="rsync" type="rsync" location="SG" preference="93">rsync://download.nus.edu.sg/fedora/linux/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="rsync" type="rsync" location="CN" preference="92">rsync://mirrors.bfsu.edu.cn/fedora/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="http" type="http" location="CN" preference="92">http://mirrors.bfsu.edu.cn/fedora/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="http" type="http" location="CN" preference="91">http://mirror.lzu.edu.cn/fedora/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="https" type="https" location="CN" preference="91">https://mirror.lzu.edu.cn/fedora/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="http" type="http" location="CN" preference="90">http://mirrors.163.com/fedora/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-    <url protocol="rsync" type="rsync" location="CN" preference="90">rsync://mirrors.163.com/fedora/releases/36/Everything/x86_64/os/repodata/repomd.xml</url>
-</resources>
-</file>
-</files>
-</metalink>"#;
+async fn _parse_metalink() {
+    let resp = r#"<metalink><files><file name="repomd.xml"><size>6285</size><verification><hash type="md5">hash</hash></verification><resources maxconnections="1"><url protocol="http" type="http" location="JP" preference="100">link</url></resources></file></files></metalink>"#;
     let metalink: Metalink = from_str(&resp).unwrap();
     assert_eq!(&metalink.files.files[0].name, "repomd.xml");
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Repomd {
+    pub revision: u32,
+    #[serde(rename = "data")]
+    pub data: Vec<Data>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Data {
+    pub r#type: String,
+    pub checksum: Checksum,
+    #[serde(rename = "open-checksum")]
+    pub ocm: Option<OpenChecksum>,
+    pub location: Location,
+    pub timestamp: u32,
+    pub size: u32,
+    #[serde(rename = "open-size")]
+    pub osize: Option<u32>,
+    #[serde(rename = "header-size")]
+    pub hsize: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Checksum {
+    pub r#type: HashType,
+    #[serde(rename = "$value")]
+    pub value: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OpenChecksum {
+    pub r#type: HashType,
+    #[serde(rename = "$value")]
+    pub value: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Location {
+    pub href: String,
+}
+
+async fn _parse_repomd() {
+    let resp = r#"
+<repomd xmlns="http://linux.duke.edu/metadata/repo" xmlns:rpm="http://linux.duke.edu/metadata/rpm">
+  <revision>1651698971</revision>
+  <data type="group_xz">
+    <checksum type="sha256">3f69beebaa5fb330617ca37b79c7e6381a415957f2999bc141386a1271ec86bc</checksum>
+    <location href="repodata/3f69beebaa5fb330617ca37b79c7e6381a415957f2999bc141386a1271ec86bc-comps-Everything.x86_64.xml.xz"/>
+    <timestamp>1651698877</timestamp>
+    <size>257776</size>
+  </data>
+  <data type="group_zck">
+    <checksum type="sha256">cd4101d88f0f384899265e0677fb70a7d9e5bdf9f3da89b36bf39b6ade52c93f</checksum>
+    <open-checksum type="sha256">3f69beebaa5fb330617ca37b79c7e6381a415957f2999bc141386a1271ec86bc</open-checksum>
+    <header-checksum type="sha256">b77cbb8a2379c3099b5332c45075d59f92161ca2f01b3de71a3c1dffc08322f6</header-checksum>
+    <location href="repodata/cd4101d88f0f384899265e0677fb70a7d9e5bdf9f3da89b36bf39b6ade52c93f-comps-Everything.x86_64.xml.zck"/>
+    <timestamp>1651698971</timestamp>
+    <size>479764</size>
+    <open-size>257776</open-size>
+    <header-size>1240</header-size>
+  </data>
+</repomd>
+"#;
+    let repomd: Repomd = from_str(&resp).unwrap();
+    assert_eq!(repomd.data[0].size, 257776);
 }
 
 #[cfg(test)]
@@ -130,11 +149,20 @@ mod test_super {
     use super::*;
 
     #[test]
-    fn parse() {
+    fn parse_metalink() {
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .unwrap()
-            .block_on(test_parse())
+            .block_on(_parse_metalink())
+    }
+
+    #[test]
+    fn parse_repomd() {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(_parse_repomd())
     }
 }
