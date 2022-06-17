@@ -1,6 +1,6 @@
 
 
-![Andaman Package Manager](assets/anda.png)
+![Andaman Package Manager](assets/anda-medium.png)
 
 # Andaman Package Manager
 
