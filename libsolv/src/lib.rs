@@ -1,5 +1,4 @@
 use libsolv_bind;
-pub mod pool;
 pub mod solv;
 
 #[cfg(test)]
