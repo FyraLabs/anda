@@ -2,16 +2,34 @@
 
 ![Andaman Package Manager](assets/anda-medium.png)
 
-# Andaman Package Manager
+# Andaman
 
-The Andaman Package Manager is a meta-package manager that allows you to easily build and manage packages from multiple sources.
+Andaman is a package manager and build system that allows you to easily manage dependencies and different kinds of artifacts
 
 It is based on Ultramarine Linux's `umpkg` project, and allows you to easily manage packages from multiple different package managers.
 
-Andaman mainly uses a ports-like system as its main repository source, with a repository directly containing spec files for each package, which will then be built into RPMs by umpkg and Andaman.
-It then integrates those with your existing Yum/DNF repositories, for extra binary dependency solving.
+Andaman is planned to have the following features:
 
-It is intended to be used as an extension of DNF and umpkg, and to supplement them with AUR/BSDPorts/Portage like features.
+- Building, resolving and installing RPM packages
+- Support for NPM, Cargo and PyPI packages
+- Signing packages
+- Build artifacts for:
+    - Disk images and live media (powered by Lorax)
+    - OSTree composes
+    - RPM-OSTree composes
+    - Docker images
+    - Flatpak
+- Generating whole repositories and composes from the above mentioned artifacts
+- An extra user repository for packages that cannot be included in the main repositories (like the AUR)
+
+It is planed to be the centerpiece of Ultramarine Linux and its ecosystem, and a replacement for the existing [Koji](https://koji.build) system.
+
+## The architecture
+
+Andaman is a meta-package manager and build system that can build and install packages from multiple sources at once.
+
+For RPMs, it parses an existing Yum repository as a base repository for packages, and integrates them with its own artifact repository.
+It does this by reading the repo metadata for the yum repository, and then resolving the dependencies with the artifact repository it has.
 
 ## Roadmap
 
