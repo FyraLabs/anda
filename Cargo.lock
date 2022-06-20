@@ -916,6 +916,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "libsolv"
+version = "0.1.0"
+dependencies = [
+ "libsolv-bind",
+]
+
+[[package]]
+name = "libsolv-bind"
+version = "0.1.0"
+dependencies = [
+ "bindgen",
+]
+
+[[package]]
 name = "linked-hash-map"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

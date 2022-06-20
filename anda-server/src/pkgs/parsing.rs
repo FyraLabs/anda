@@ -7,7 +7,6 @@ use reqwest;
 use serde::Deserialize;
 use serde_xml_rs::{from_reader, from_str};
 use std::str;
-use tokio::io::ReaderStream;
 
 #[derive(Debug, Deserialize)]
 pub struct Metalink {
@@ -157,18 +156,6 @@ pub struct Rpm {
     pub epoch: u32,
 }
 
-async fn _parse_rpm() {
-    const URL: &str = "https://ftp.yz.yamagata-u.ac.jp/pub/linux/fedora-projects/fedora/linux/releases/36/Everything/x86_64/os/repodata/f0f7fc0fca36fdec9d2b684d7fd8a07512e49d74849acfbb2a74a96989b6f180-filelists.xml.gz";
-    let res = reqwest::get(URL).await.unwrap();
-    let reader = res
-        .bytes_stream()
-        .map_err(|e| io::Error::new(ErrorKind::Other, e))
-        .into_async_read();
-    let mut decoder = GzipDecoder::new(BufReader::new(reader));
-    
-    let rpm: Rpm = from_reader(decoder).unwrap();
-}
-
 #[cfg(test)]
 mod test_super {
     use super::*;
@@ -191,12 +178,4 @@ mod test_super {
             .block_on(_parse_repomd())
     }
 
-    #[test]
-    fn parse_rpm() {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(_parse_rpm())
-    }
 }

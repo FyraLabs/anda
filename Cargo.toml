@@ -2,5 +2,7 @@
 [workspace]
 members = [
     "anda",
-    "anda-server"
+    "anda-server",
+    "libsolv",
+    "libsolv/libsolv-bind"
 ]
