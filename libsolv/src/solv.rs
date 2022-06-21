@@ -11,7 +11,7 @@ use anyhow::{anyhow, Result};
 use libc::{c_char, c_int};
 pub const SELECTION_NAME: c_int = 1 << 0;
 pub const SELECTION_FLAT: c_int = 1 << 10;
-use std::{ffi::CString, path::Path, ptr::null_mut, os::unix::prelude::OsStrExt};
+use std::{ffi::CString, os::unix::prelude::OsStrExt, path::Path, ptr::null_mut};
 pub const SOLVER_FLAG_BEST_OBEY_POLICY: c_int = 12;
 
 macro_rules! cstr {
@@ -20,14 +20,15 @@ macro_rules! cstr {
     };
 }
 
-
 pub struct Pool {
     pool: *mut libsolv_bind::Pool,
 }
 
 impl Pool {
     pub fn new() -> Pool {
-        Pool { pool: unsafe { libsolv_bind::pool_create() } }
+        Pool {
+            pool: unsafe { libsolv_bind::pool_create() },
+        }
     }
     pub fn match_package(&self, name: &str, mut queue: Queue) -> Result<Queue> {
         if unsafe { (*self.pool).whatprovides.is_null() } {
@@ -56,16 +57,13 @@ impl Pool {
     pub fn set_installed(&mut self, repo: &Repo) {
         unsafe { libsolv_bind::pool_set_installed(self.pool, repo.repo) }
     }
-
 }
-
 
 impl Drop for Pool {
     fn drop(&mut self) {
         unsafe { libsolv_bind::pool_free(self.pool) }
     }
 }
-
 
 pub struct Repo {
     repo: *mut libsolv_bind::Repo,
@@ -93,7 +91,9 @@ impl Repo {
 
         let result = unsafe { libsolv_bind::repo_add_rpm(self.repo, fp_ptr, 0) };
 
-        unsafe { libc::fclose(fp);}
+        unsafe {
+            libc::fclose(fp);
+        }
         if result != 0 {
             return Err(anyhow!("Failed to add rpm: {}", result));
         }
@@ -101,7 +101,7 @@ impl Repo {
     }
 
     pub fn add_rpmdb(&mut self) -> Result<()> {
-        let result = unsafe { libsolv_bind::repo_add_rpmdb(self.repo, self.repo, 0 ) };
+        let result = unsafe { libsolv_bind::repo_add_rpmdb(self.repo, self.repo, 0) };
         if result != 0 {
             return Err(anyhow!("Failed to add rpmdb: {}", result));
         }
@@ -168,7 +168,6 @@ impl Drop for Queue {
         unsafe { libsolv_bind::queue_free(&mut self.queue) }
     }
 }
-
 
 pub struct Transaction {
     t: *mut libsolv_bind::Transaction,

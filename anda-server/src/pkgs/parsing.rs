@@ -177,5 +177,4 @@ mod test_super {
             .unwrap()
             .block_on(_parse_repomd())
     }
-
 }

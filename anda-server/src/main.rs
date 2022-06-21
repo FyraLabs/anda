@@ -1,5 +1,6 @@
-#[macro_use] extern crate rocket;
-use rocket::serde::{Deserialize, json::Json};
+#[macro_use]
+extern crate rocket;
+use rocket::serde::{json::Json, Deserialize};
 
 mod pkgs;
 
@@ -11,7 +12,7 @@ fn index() -> &'static str {
 #[derive(Deserialize)]
 #[serde(crate = "rocket::serde")]
 struct PkgReq {
-    pkgs: Vec<String>
+    pkgs: Vec<String>,
 }
 
 #[get("/<repo>", data = "<pkgreq>")]
@@ -20,7 +21,7 @@ async fn process_pkgs(repo: &str, pkgreq: Json<PkgReq>) -> &'static str {
         let mut reponame = String::from(repo);
         reponame.push_str(".yml");
         let repo = pkgs::Repo::load_from_yaml(reponame.as_str()).await;
-        let size: i16 = 0;  // size in MiB
+        let size: i16 = 0; // size in MiB
         let paths: Vec<String> = Vec::new();
         let mut packages: Vec<pkgs::Package> = Vec::new();
         for pkg in &pkgreq.pkgs {

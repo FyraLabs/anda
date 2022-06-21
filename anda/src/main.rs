@@ -1,7 +1,6 @@
-use clap::{App, Arg, SubCommand, arg, Command,};
+use clap::{arg, App, Arg, Command, SubCommand};
+use log::{debug, error, info, trace};
 use log4rs::*;
-use log::{info, debug, trace, error};
-
 
 fn main() {
     let mut app = App::new("anda")
@@ -19,8 +18,7 @@ fn main() {
             Command::new("install")
                 .about("Install a package")
                 // Allow multiple packages to be specified
-                .arg(arg!(<PACKAGES>... "The packages to install")
-            .multiple_values(true))
+                .arg(arg!(<PACKAGES>... "The packages to install").multiple_values(true))
                 .arg_required_else_help(true),
         )
         .subcommand(
@@ -30,17 +28,21 @@ fn main() {
                 .arg_required_else_help(true),
         );
 
-
-
     let matches = app.clone().get_matches();
 
     match matches.subcommand() {
         Some(("install", sub_matches)) => {
-            let packages = sub_matches.values_of("PACKAGES").unwrap().collect::<Vec<_>>();
+            let packages = sub_matches
+                .values_of("PACKAGES")
+                .unwrap()
+                .collect::<Vec<_>>();
             println!("Installing {}", packages.join(", "));
         }
         Some(("remove", sub_matches)) => {
-            let packages = sub_matches.values_of("PACKAGES").unwrap().collect::<Vec<_>>();
+            let packages = sub_matches
+                .values_of("PACKAGES")
+                .unwrap()
+                .collect::<Vec<_>>();
             println!("Removing {}", packages.join(", "));
         }
         Some(_) => todo!(),
@@ -48,7 +50,6 @@ fn main() {
         // print help if no subcommand is used
         None => app.print_help().unwrap(),
     }
-
 }
 
 mod tests {

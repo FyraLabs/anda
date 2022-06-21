@@ -1,9 +1,9 @@
+use reqwest;
 use serde::{Deserialize, Serialize};
+use serde_xml_rs::from_str;
 use serde_yaml::Value;
 use std::str;
-use tokio::fs::{read, read_dir, ReadDir, write};
-use serde_xml_rs::from_str;
-use reqwest;
+use tokio::fs::{read, read_dir, write, ReadDir};
 mod parsing;
 
 pub async fn repo_exists(name: &str) -> bool {
@@ -20,7 +20,7 @@ pub async fn repo_exists(name: &str) -> bool {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Repo {
     pub name: String,
-    pub url:  String,
+    pub url: String,
     pub meta: String,
     pub kind: String,
 }
@@ -63,16 +63,16 @@ impl Repo {
     }
 
     pub async fn load_meta(mut self) {
-        let resp = reqwest::get(self.meta)
-            .await
-            .unwrap()
-            .text()
-            .await
-            .unwrap();
+        let resp = reqwest::get(self.meta).await.unwrap().text().await.unwrap();
         let metalink: parsing::Metalink = from_str(&resp).unwrap();
         let file = &metalink.files.files[0];
         assert_eq!(file.name, "repomd.xml");
-        write("./anda-pkgs/".to_string() + &self.name + "/repomd.xml", resp.as_bytes()).await.unwrap();
+        write(
+            "./anda-pkgs/".to_string() + &self.name + "/repomd.xml",
+            resp.as_bytes(),
+        )
+        .await
+        .unwrap();
 
         let (mut best_url, mut best_preference) = (String::new(), 0);
         for url in &file.resources.urls {
