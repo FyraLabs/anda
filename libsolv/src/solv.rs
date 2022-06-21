@@ -191,3 +191,21 @@ impl Drop for Transaction {
         unsafe { libsolv_bind::transaction_free(self.t) }
     }
 }
+
+pub struct Solver {
+    solver: *mut libsolv_bind::Solver,
+}
+
+impl Solver {
+    pub fn new(pool: &Pool) -> Solver {
+        Solver {
+            solver: unsafe { libsolv_bind::solver_create(pool.pool) },
+        }
+    }
+}
+
+impl Drop for Solver {
+    fn drop(&mut self) {
+        unsafe { libsolv_bind::solver_free(self.solver) }
+    }
+}
