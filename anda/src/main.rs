@@ -4,7 +4,7 @@ use log::{info, debug, trace, error};
 
 
 fn main() {
-    let app = App::new("anda")
+    let mut app = App::new("anda")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
@@ -18,30 +18,35 @@ fn main() {
         .subcommand(
             Command::new("install")
                 .about("Install a package")
-                .arg(arg!(<PACKAGE> "The package to install"))
+                // Allow multiple packages to be specified
+                .arg(arg!(<PACKAGES>... "The packages to install")
+            .multiple_values(true))
                 .arg_required_else_help(true),
         )
         .subcommand(
             Command::new("remove")
                 .about("Remove a package")
-                .arg(arg!(<PACKAGE> "The package to remove"))
+                .arg(arg!(<PACKAGES> "The package to remove"))
                 .arg_required_else_help(true),
         );
 
 
-    let matches = app.get_matches();
+
+    let matches = app.clone().get_matches();
 
     match matches.subcommand() {
         Some(("install", sub_matches)) => {
-            let package = sub_matches.value_of("PACKAGE").unwrap();
-            println!("Installing {}", package);
+            let packages = sub_matches.values_of("PACKAGES").unwrap().collect::<Vec<_>>();
+            println!("Installing {}", packages.join(", "));
         }
         Some(("remove", sub_matches)) => {
-            let package = sub_matches.value_of("PACKAGE").unwrap();
-            println!("Removing {}", package);
+            let packages = sub_matches.values_of("PACKAGES").unwrap().collect::<Vec<_>>();
+            println!("Removing {}", packages.join(", "));
         }
         Some(_) => todo!(),
-        None => todo!(),
+
+        // print help if no subcommand is used
+        None => app.print_help().unwrap(),
     }
 
 }
