@@ -33,7 +33,7 @@ impl Pool {
         if unsafe { (*self.pool).whatprovides.is_null() } {
             // we can't call createwhatprovides here because of how libsolv manages internal states
             return Err(anyhow!(
-                "internal error: `createwhatprovides` needs to be called first."
+                "internal error: `create_whatprovides` needs to be called first."
             ));
         }
         let ret = unsafe {
@@ -50,7 +50,7 @@ impl Pool {
 
         Ok(queue)
     }
-    pub fn createwhatprovides(&mut self) {
+    pub fn create_whatprovides(&mut self) {
         unsafe { libsolv_bind::pool_createwhatprovides(self.pool) }
     }
     pub fn set_installed(&mut self, repo: &Repo) {
