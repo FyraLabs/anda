@@ -15,7 +15,7 @@ name = "lib"
 crate-type = ["cdylib"]
 
 [dependencies]
-clap = "~2.33.0"
+clap = "3.2.5"
 log4rs = "~1.1.1"
 pyo3 = { version = "0.16.5", features = ["auto-initialize"] }
 log = "~0.4.17"
