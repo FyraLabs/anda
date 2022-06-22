@@ -7,110 +7,18 @@
 // , Adapted for use with RPM packages and more.
 // (https://github.com/AOSC-Dev/abbs-meta-rs)
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow};
 use libc::{c_char, c_int};
-pub const SELECTION_NAME: c_int = 1 << 0;
-pub const SELECTION_FLAT: c_int = 1 << 10;
 use std::{ffi::CString, os::unix::prelude::OsStrExt, path::Path, ptr::null_mut};
-pub const SOLVER_FLAG_BEST_OBEY_POLICY: c_int = 12;
 
-macro_rules! cstr {
-    ($s:expr) => {
-        CString::new($s).unwrap().as_ptr() as *const c_char
-    };
-}
+use crate::pool::Pool;
+use crate::repo::Repo;
 
-pub struct Pool {
-    pool: *mut libsolv_bind::Pool,
-}
-
-impl Pool {
-    pub fn new() -> Pool {
-        Pool {
-            pool: unsafe { libsolv_bind::pool_create() },
-        }
-    }
-    pub fn match_package(&self, name: &str, mut queue: Queue) -> Result<Queue> {
-        if unsafe { (*self.pool).whatprovides.is_null() } {
-            // we can't call createwhatprovides here because of how libsolv manages internal states
-            return Err(anyhow!(
-                "internal error: `create_whatprovides` needs to be called first."
-            ));
-        }
-        let ret = unsafe {
-            libsolv_bind::selection_make(
-                self.pool,
-                &mut queue.queue,
-                cstr!(name),
-                SELECTION_NAME | SELECTION_FLAT,
-            )
-        };
-        if ret < 1 {
-            return Err(anyhow!("Error matching the package: {}", name));
-        }
-
-        Ok(queue)
-    }
-    pub fn create_whatprovides(&mut self) {
-        unsafe { libsolv_bind::pool_createwhatprovides(self.pool) }
-    }
-    pub fn set_installed(&mut self, repo: &Repo) {
-        unsafe { libsolv_bind::pool_set_installed(self.pool, repo.repo) }
-    }
-}
-
-impl Drop for Pool {
-    fn drop(&mut self) {
-        unsafe { libsolv_bind::pool_free(self.pool) }
-    }
-}
-
-pub struct Repo {
-    repo: *mut libsolv_bind::Repo,
-}
-
-impl Repo {
-    pub fn new(pool: &Pool, name: &str) -> Result<Repo> {
-        let name = CString::new(name)?;
-        Ok(Repo {
-            repo: unsafe { libsolv_bind::repo_create(pool.pool, name.as_ptr()) },
-        })
-    }
-
-    pub fn add_rpm(&mut self, path: &Path) -> Result<()> {
-        // open file
-        let mut path_buf = path.as_os_str().as_bytes().to_owned();
-        path_buf.push(0);
-        let fp = unsafe { libc::fopen(path_buf.as_ptr() as *const c_char, cstr!("rb")) };
-
-        // convert fp to *const c_char (i8)
-        let fp_ptr = fp as *const c_char;
-        if fp_ptr.is_null() {
-            return Err(anyhow!("failed to open {}", path.display()));
-        }
-
-        let result = unsafe { libsolv_bind::repo_add_rpm(self.repo, fp_ptr, 0) };
-
-        unsafe {
-            libc::fclose(fp);
-        }
-        if result != 0 {
-            return Err(anyhow!("Failed to add rpm: {}", result));
-        }
-        Ok(())
-    }
-
-    pub fn add_rpmdb(&mut self) -> Result<()> {
-        let result = unsafe { libsolv_bind::repo_add_rpmdb(self.repo, self.repo, 0) };
-        if result != 0 {
-            return Err(anyhow!("Failed to add rpmdb: {}", result));
-        }
-        Ok(())
-    }
-}
+// import cstr macro from util.rs
+use crate::cstr;
 
 pub struct Queue {
-    queue: libsolv_bind::Queue,
+    pub queue: libsolv_bind::Queue,
 }
 
 impl Queue {
@@ -159,6 +67,16 @@ impl Queue {
                 q.queue.count,
                 q.queue.elements,
             )
+        }
+    }
+    pub fn delete(&mut self, item: c_int) {
+        unsafe {
+            libsolv_bind::queue_delete(&mut self.queue, item);
+        }
+    }
+    pub fn delete2(&mut self, item: c_int) {
+        unsafe {
+            libsolv_bind::queue_delete2(&mut self.queue, item);
         }
     }
 }

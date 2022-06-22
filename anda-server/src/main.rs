@@ -3,6 +3,8 @@ extern crate rocket;
 use rocket::serde::{json::Json, Deserialize};
 
 mod pkgs;
+mod builds;
+mod repos;
 
 #[get("/")]
 fn index() -> &'static str {
