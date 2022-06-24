@@ -7,6 +7,7 @@ authors = [
     "Cappy Ishihara <cappy@cappuchino.xyz>",
     "windowsboy111 <wboy111@outlook.com>",
 ]
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -22,3 +23,12 @@ log = "~0.4.17"
 serde = "1.0.137"
 serde_json = "1.0.13"
 serde_yaml = "0.8.24"
+
+[package.metadata.rpm]
+package = "anda"
+
+[package.metadata.rpm.cargo]
+buildflags = ["--release"]
+
+[package.metadata.rpm.targets]
+anda = { path = "/usr/bin/anda" }
