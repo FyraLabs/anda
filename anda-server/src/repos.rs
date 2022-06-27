@@ -100,6 +100,8 @@ mod test {
 
     #[test]
     fn test_imagerepo() {
+        //print cwd
+        println!("{}", std::env::current_dir().unwrap().display());
         let repo = ImageRepo::from_dir("test/imagerepo").expect("Failed to read repo data");
         assert_eq!(repo.project, "test-project");
     }

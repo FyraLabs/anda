@@ -25,14 +25,33 @@ impl Package {
     pub fn set_build_scripts(&mut self, build_scripts: Vec<String>) {
         self.build_scripts = Some(build_scripts);
     }
-    // Load a package from a yaml file
-    pub fn load_from_yaml(path: &str) -> Package {
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PkgFile {
+    pub packages: Vec<Package>,
+}
+
+impl PkgFile {
+    pub fn new() -> PkgFile {
+        PkgFile {
+            packages: Vec::new(),
+        }
+    }
+
+    pub fn from_file(path: &str) -> PkgFile {
         let mut file = File::open(path).unwrap();
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
         let value: Value = serde_yaml::from_str(&contents).unwrap();
-        let package: Package = serde_yaml::from_value(value).unwrap();
-        package
+        let mut packages = Vec::new();
+        for dict in value.as_mapping().unwrap().iter() {
+            let package: Package = serde_yaml::from_value(dict.1.clone()).unwrap();
+            packages.push(package);
+        }
+        PkgFile {
+            packages,
+        }
     }
 }
 
@@ -42,7 +61,7 @@ mod test_super {
 
     #[test]
     fn test_() {
-        let pkg = Package::load_from_yaml("tests/test.yml");
+        let pkg = PkgFile::from_file("tests/test.yml");
         println!("{:#?}", pkg);
     }
 }
