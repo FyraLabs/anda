@@ -1,54 +1,49 @@
-use clap::{arg, App, Arg, Command, SubCommand};
+use std::path::PathBuf;
+
+use clap::{AppSettings, Parser, Subcommand};
 use log::{debug, error, info, trace};
 use log4rs::*;
 
+#[derive(Parser)]
+#[clap(about, version)]
+#[clap(global_setting = AppSettings::DeriveDisplayOrder)]
+struct Cli {
+    /// Path to the package
+    #[clap(value_name = "FILE", default_value = ".")]
+    path: PathBuf,
+
+    #[clap(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Install a package
+    Install {
+        /// Packages to be installed
+        #[clap(required = true)]
+        packages: Vec<String>,
+    },
+
+    /// Remove a package
+    Remove {
+        /// Packages to be removed
+        #[clap(required = true)]
+        packages: Vec<String>,
+    },
+}
+
 fn main() {
-    let mut app = App::new("anda")
-        .version(env!("CARGO_PKG_VERSION"))
-        .author(env!("CARGO_PKG_AUTHORS"))
-        .about(env!("CARGO_PKG_DESCRIPTION"))
-        .arg(
-            Arg::with_name("path")
-                .help("The path to the package.")
-                .default_value(".")
-                .value_name("FILE"),
-        )
-        //.setting(clap::AppSettings::SubcommandRequiredElseHelp)
-        .subcommand(
-            Command::new("install")
-                .about("Install a package")
-                // Allow multiple packages to be specified
-                .arg(arg!(<PACKAGES>... "The packages to install").multiple_values(true))
-                .arg_required_else_help(true),
-        )
-        .subcommand(
-            Command::new("remove")
-                .about("Remove a package")
-                .arg(arg!(<PACKAGES> "The package to remove"))
-                .arg_required_else_help(true),
-        );
+    let cli = Cli::parse();
 
-    let matches = app.clone().get_matches();
-
-    match matches.subcommand() {
-        Some(("install", sub_matches)) => {
-            let packages = sub_matches
-                .values_of("PACKAGES")
-                .unwrap()
-                .collect::<Vec<_>>();
+    match cli.command {
+        Command::Install { packages } => {
             println!("Installing {}", packages.join(", "));
         }
-        Some(("remove", sub_matches)) => {
-            let packages = sub_matches
-                .values_of("PACKAGES")
-                .unwrap()
-                .collect::<Vec<_>>();
+
+        Command::Remove { packages } => {
             println!("Removing {}", packages.join(", "));
         }
-        Some(_) => todo!(),
-
-        // print help if no subcommand is used
-        None => app.print_help().unwrap(),
     }
 }
 
