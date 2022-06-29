@@ -4,5 +4,6 @@ members = [
     "anda",
     "anda-server",
     "libsolv",
-    "libsolv/libsolv-bind"
+    "libsolv/libsolv-bind",
+    "rpm-parse"
 ]

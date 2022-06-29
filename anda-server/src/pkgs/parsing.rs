@@ -150,12 +150,6 @@ async fn _parse_repomd() {
     assert_eq!(repomd.data[0].size, 257776);
 }
 
-#[derive(Debug, Deserialize)]
-pub struct Rpm {
-    pub name: String,
-    pub epoch: u32,
-}
-
 #[cfg(test)]
 mod test_super {
     use super::*;
