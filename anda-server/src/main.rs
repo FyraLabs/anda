@@ -1,10 +1,15 @@
 #[macro_use]
 extern crate rocket;
-use rocket::serde::{json::Json, Deserialize};
+use rocket::{serde::{json::Json, Deserialize}, fs::FileServer, fs::{relative, Options}};
 
 mod pkgs;
 mod builds;
 mod repos;
+mod auth;
+mod db;
+use db::Db;
+use sea_orm_rocket::Database;
+mod entity;
 
 #[get("/")]
 fn index() -> &'static str {
@@ -41,7 +46,8 @@ async fn process_pkgs_browser(repo: &str, pkg: &str) -> &'static str {
 #[launch]
 fn rocket() -> _ {
     rocket::build()
+        .attach(Db::init())
         .mount("/", routes![index])
-        .mount("/", routes![process_pkgs])
-        .mount("/", routes![process_pkgs_browser])
+        .mount("/repos", routes![process_pkgs])
+        .mount("/repos", routes![process_pkgs_browser])
 }
