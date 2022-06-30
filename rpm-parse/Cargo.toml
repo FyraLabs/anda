@@ -1,0 +1,14 @@
+[package]
+name = "rpm-parse"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+quick-xml = "0.23.0"
+reqwest = { version = "0.11", features = ["stream"]}
+async-compression = { version = "0.3.12", features = ["futures-io", "gzip", "tokio", "deflate"] }
+tokio = { version = "1", features = ["full"] }
+futures = "0.3.21"
+libflate = "1.2.0"
