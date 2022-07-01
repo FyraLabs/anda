@@ -7,8 +7,5 @@ edition = "2021"
 
 [dependencies]
 quick-xml = "0.23.0"
-reqwest = { version = "0.11", features = ["stream"]}
-async-compression = { version = "0.3.12", features = ["futures-io", "gzip", "tokio", "deflate"] }
-tokio = { version = "1", features = ["full"] }
-futures = "0.3.21"
+reqwest = { version = "0.11", features = ["blocking"]}
 libflate = "1.2.0"
