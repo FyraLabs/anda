@@ -12,8 +12,8 @@ pub struct Model {
     #[sea_orm(column_type = "Text", nullable)]
     pub name: Option<String>,
     #[sea_orm(column_type = "Text", nullable)]
-    pub r#type: Option<String>,
-    pub timestamp: Option<DateTimeUtc>,
+    pub art_type: Option<String>,
+    pub timestamp: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -11,15 +11,15 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub name: String,
     pub package_id: Option<i32>,
-    #[sea_orm(column_type = "Custom(\"array\".to_owned())", nullable)]
-    pub artifacts: Option<String>,
     pub owner: Option<i32>,
     #[sea_orm(column_type = "Text")]
-    pub r#type: String,
+    pub build_type: String,
     #[sea_orm(column_type = "Text")]
     pub version: String,
-    pub timestamp: DateTimeUtc,
+    pub timestamp: DateTimeWithTimeZone,
     pub for_target: Option<i32>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub status: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

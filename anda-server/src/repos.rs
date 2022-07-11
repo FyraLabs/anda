@@ -1,4 +1,4 @@
-use crate::builds::Build;
+use crate::prelude::Build;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use anyhow::{anyhow, Result};

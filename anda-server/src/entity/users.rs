@@ -8,9 +8,10 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
-    #[sea_orm(unique)]
-    pub name: i32,
-    pub r#type: i32,
+    #[sea_orm(column_type = "Text", unique)]
+    pub name: String,
+    #[sea_orm(column_type = "Text")]
+    pub r#type: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

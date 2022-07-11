@@ -1,13 +1,14 @@
 #[macro_use]
 extern crate rocket;
-use rocket::{serde::{json::Json, Deserialize}, fs::FileServer, fs::{relative, Options}};
+use rocket::{serde::{json::Json, Deserialize}, fs::FileServer, fs::{relative, Options}, State};
 
 mod pkgs;
-mod builds;
+mod prelude;
 mod repos;
 mod auth;
 mod db;
-use db::Db;
+mod api;
+use sea_orm::{DatabaseConnection, EntityTrait};
 use sea_orm_rocket::Database;
 mod entity;
 
@@ -44,10 +45,22 @@ async fn process_pkgs_browser(repo: &str, pkg: &str) -> &'static str {
 }
 
 #[launch]
-fn rocket() -> _ {
+async fn rocket() -> _ {
+
+    let database = match db::setup_db().await {
+        Ok(db) => db,
+        Err(e) => {
+            println!("{}", e);
+            panic!("{}", e);
+        }
+    };
+
     rocket::build()
-        .attach(Db::init())
+        .manage(database)
         .mount("/", routes![index])
         .mount("/repos", routes![process_pkgs])
         .mount("/repos", routes![process_pkgs_browser])
+        .mount("/builds", api::builds_routes())
+        .mount("/artifacts", api::artifacts_routes())
+
 }

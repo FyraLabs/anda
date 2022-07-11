@@ -1,40 +1,38 @@
-use async_trait::async_trait;
-use sea_orm::ConnectOptions;
-use sea_orm_rocket::{rocket::figment::Figment, Config, Database};
-use std::time::Duration;
+//! Database connection code for Anda API server
+//! This piece of code exists because we do need a global database connection object that Rocket can manage on startup,
+//! but also available to other parts of the code that does not use Rocket's state API (Internal processing).
 
-#[derive(Database, Debug)]
-#[database("anda")]
-pub struct Db(SeaOrmPool);
 
-#[derive(Debug, Clone)]
-pub struct SeaOrmPool {
-    pub conn: sea_orm::DatabaseConnection
+use sea_orm::*;
+
+use dotenv::dotenv;
+use std::env;
+use async_once_cell::OnceCell;
+
+
+pub struct DbPool {
+    pub conn: DatabaseConnection,
 }
 
+static DB: OnceCell<DatabaseConnection> = OnceCell::new();
 
-#[async_trait]
-impl sea_orm_rocket::Pool for SeaOrmPool {
-    type Error = sea_orm::DbErr;
 
-    type Connection = sea_orm::DatabaseConnection;
+impl DbPool {
 
-    async fn init(figment: &Figment) -> Result<Self, Self::Error> {
-        let config = figment.extract::<Config>().unwrap();
-        let mut options: ConnectOptions = config.url.into();
-        options
-            .max_connections(config.max_connections as u32)
-            .min_connections(config.min_connections.unwrap_or_default())
-            .connect_timeout(Duration::from_secs(config.connect_timeout));
-        if let Some(idle_timeout) = config.idle_timeout {
-            options.idle_timeout(Duration::from_secs(idle_timeout));
-        }
-        let conn = sea_orm::Database::connect(options).await?;
-
-        Ok(SeaOrmPool { conn })
+    pub async fn new() -> Result<DatabaseConnection, DbErr> {
+        dotenv().ok();
+        let url = env::var("DATABASE_URL").unwrap();
+        let db = Database::connect(&url).await?;
+        Ok(db)
     }
 
-    fn borrow(&self) -> &Self::Connection {
-        &self.conn
+    pub async fn get() -> &'static DatabaseConnection {
+        DB.get_or_init(async {
+            DbPool::new().await.unwrap()
+        }).await
     }
+}
+
+pub(crate) async fn setup_db() -> Result<DatabaseConnection, DbErr> {
+    Ok(DbPool::get().await.to_owned())
 }
