@@ -1,8 +1,13 @@
 // This code is licensed under the MIT License.
 // Copyright (c) 2022 the Ultramarine Project and Fyra Labs.
 
-use crate::entity::prelude::*;
+use entity::*;
+use sea_orm::*;
+use sea_orm_rocket::Database;
+use db::Db;
+use rocket::Rocket;
 
+use crate::{entity::artifacts, db};
 #[derive(Debug, Clone)]
 pub struct Artifact {
     pub art_type: String,
@@ -11,6 +16,13 @@ pub struct Artifact {
     pub name: String,
     pub timestamp: i32,
 }
+impl Artifact {
+    pub async fn get(id: &str) {
+        //let db = &Db::init();
+        //let arts = artifacts::Entity::find_by_id(id.to_string().to_string()).one(db).await;
+    }
+}
+
 
 
 #[derive(Clone, Debug)]

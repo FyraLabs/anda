@@ -1,3 +1,7 @@
+# Example development server
+# Do not use this in production
+
+
 # Use postgres/example user/password credentials
 # This is a test docker instance, PLEASE DONT USE THIS IN PRODUCTION OR YOU WILL GET PWNED
 version: '3.1'
@@ -11,9 +15,3 @@ services:
       POSTGRES_PASSWORD: example
     ports:
       - 5432:5432
-
-  adminer:
-    image: adminer
-    restart: always
-    ports:
-      - 8080:8080
