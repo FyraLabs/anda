@@ -75,7 +75,8 @@ create table if not exists builds
     for_target integer
         constraint builds_targets_id_fk
             references targets,
-    status     text
+    status     text,
+    worker     integer
 );
 
 comment on column builds.package_id is 'Package ID, none if test build';

@@ -132,6 +132,7 @@ pub struct Build {
     pub timestamp: DateTimeWithTimeZone,
     pub target_id: Option<i32>,
     pub status: Option<String>,
+    pub worker: Option<i32>,
 }
 
 impl Build {
@@ -147,6 +148,7 @@ impl Build {
             timestamp: model.timestamp,
             target_id: model.for_target,
             status: model.status,
+            worker: model.worker,
         })
     }
 
@@ -161,6 +163,7 @@ impl Build {
             timestamp,
             target_id,
             status: None,
+            worker: None,
         }
     }
 

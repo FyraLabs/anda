@@ -20,6 +20,7 @@ pub struct Model {
     pub for_target: Option<i32>,
     #[sea_orm(column_type = "Text", nullable)]
     pub status: Option<String>,
+    pub worker: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
