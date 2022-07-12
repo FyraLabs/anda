@@ -56,7 +56,7 @@ async fn rocket() -> _ {
     };
 
     rocket::build()
-        .manage(database)
+        .attach(db::Db::init())
         .mount("/", routes![index])
         .mount("/repos", routes![process_pkgs])
         .mount("/repos", routes![process_pkgs_browser])

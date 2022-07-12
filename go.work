@@ -1,3 +1,3 @@
 go 1.18
 
-use ./anda-worker
+use ./anda-buildkit
