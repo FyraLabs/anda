@@ -116,7 +116,6 @@ pub struct Build {
     pub worker: Uuid,
     pub status: i32,
     pub target_id: Uuid,
-    pub compose_id: Uuid,
     pub timestamp: DateTime,
 }
 
@@ -128,7 +127,6 @@ impl Build {
             worker: model.worker,
             status: model.status,
             target_id: model.target_id,
-            compose_id: model.compose_id,
             timestamp: model.timestamp,
         })
     }
@@ -139,7 +137,6 @@ impl Build {
             worker,
             status: 0,
             target_id,
-            compose_id,
             timestamp: Utc::now().naive_utc(),
         }
     }
@@ -152,7 +149,6 @@ impl Build {
             worker: ActiveValue::Set(self.worker),
             status: ActiveValue::Set(self.status),
             target_id: ActiveValue::Set(self.target_id),
-            compose_id: ActiveValue::Set(self.compose_id),
             timestamp: ActiveValue::Set(self.timestamp),
             ..Default::default()
         };
@@ -192,22 +188,6 @@ impl Build {
         let build = build::Entity::find()
             .order_by(build::Column::Timestamp, Order::Desc)
             .filter(build::Column::TargetId.eq(target_id))
-            .all(db)
-            .await?;
-        Ok(
-            future::try_join_all(
-                build.into_iter().map(|build| {
-                    Build::from_model(build)
-                })
-            ).await.unwrap()
-        )
-    }
-
-    pub async fn get_by_compose_id(project_id: Uuid) -> Result<Vec<Build>> {
-        let db = DbPool::get().await;
-        let build = build::Entity::find()
-            .order_by(build::Column::Timestamp, Order::Desc)
-            .filter(build::Column::ComposeId.eq(project_id))
             .all(db)
             .await?;
         Ok(

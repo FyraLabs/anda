@@ -8,7 +8,6 @@ pub(crate) fn routes() -> Vec<Route> {
     routes![
         index,
         get,
-        get_by_compose,
         get_by_target,
     ]
 }
@@ -23,14 +22,6 @@ async fn index(offset: Option<u64>,limit: Option<u64>) -> Json<Vec<Build>> {
 async fn get(id: Uuid) -> Option<Json<Build>> {
     match Build::get(id).await {
         Ok(build) => Some(Json(build)),
-        Err(_) => None,
-    }
-}
-
-#[get("/by_compose/<project_id>")]
-async fn get_by_compose(project_id: Uuid) -> Option<Json<Vec<Build>>> {
-    match Build::get_by_compose_id(project_id).await {
-        Ok(builds) => Some(Json(builds)),
         Err(_) => None,
     }
 }

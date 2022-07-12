@@ -11,20 +11,11 @@ pub struct Model {
     pub worker: Uuid,
     pub status: i32,
     pub target_id: Uuid,
-    pub compose_id: Uuid,
     pub timestamp: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::compose::Entity",
-        from = "Column::ComposeId",
-        to = "super::compose::Column::Id",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Compose,
     #[sea_orm(
         belongs_to = "super::target::Entity",
         from = "Column::TargetId",
@@ -35,12 +26,6 @@ pub enum Relation {
     Target,
     #[sea_orm(has_many = "super::artifact::Entity")]
     Artifact,
-}
-
-impl Related<super::compose::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Compose.def()
-    }
 }
 
 impl Related<super::target::Entity> for Entity {

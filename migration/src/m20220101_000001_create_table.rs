@@ -112,9 +112,6 @@ impl MigrationTrait for Migration {
                     ColumnDef::new(Build::TargetId).uuid().not_null(),
                 )
                 .col(
-                    ColumnDef::new(Build::ComposeId).uuid().not_null(),
-                )
-                .col(
                     ColumnDef::new(Build::Timestamp).timestamp().not_null()
                 )
                 .foreign_key(
@@ -122,12 +119,6 @@ impl MigrationTrait for Migration {
                         .name("fk-build-targetid-to-target-id")
                         .from(Build::Table, Build::TargetId)
                         .to(Target::Table, Target::Id),
-                )
-                .foreign_key(
-                    ForeignKey::create()
-                        .name("fk-build-composeid-to-compose-id")
-                        .from(Build::Table, Build::ComposeId)
-                        .to(Compose::Table, Compose::Id),
                 )
                 .to_owned()
             ).await?;
