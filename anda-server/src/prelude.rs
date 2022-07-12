@@ -270,13 +270,16 @@ impl Project {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Compose {
-    pub id: String,
-    pub target_id: i32,
+    pub id: Uuid,
+    pub r#ref: Option<String>,
+    pub project_id: Uuid,
+    pub timestamp: DateTime,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Target {
-    pub id: String,
-    pub packages: Vec<Project>,
-    pub external_repos: Vec<String>,
+    pub id: Uuid,
+    pub name: String,
+    pub image: Option<String>,
+    pub arch: i32,
 }

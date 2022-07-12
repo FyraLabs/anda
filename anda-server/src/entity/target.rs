@@ -9,34 +9,16 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub name: String,
-    pub image: String,
+    pub image: Option<String>,
     pub arch: i32,
-    pub project_id: Uuid,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::project::Entity",
-        from = "Column::ProjectId",
-        to = "super::project::Column::Id",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Project,
-    #[sea_orm(has_many = "super::build::Entity")]
-    Build,
-}
+#[derive(Copy, Clone, Debug, EnumIter)]
+pub enum Relation {}
 
-impl Related<super::project::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Project.def()
-    }
-}
-
-impl Related<super::build::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Build.def()
+impl RelationTrait for Relation {
+    fn def(&self) -> RelationDef {
+        panic!("No RelationDef")
     }
 }
 

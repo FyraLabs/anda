@@ -11,11 +11,21 @@ pub struct Model {
     pub worker: Uuid,
     pub status: i32,
     pub target_id: Uuid,
+    pub project_id: Option<Uuid>,
     pub timestamp: DateTime,
+    pub compose_id: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::target::Entity",
+        from = "Column::ProjectId",
+        to = "super::target::Column::Id",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    Target2,
     #[sea_orm(
         belongs_to = "super::target::Entity",
         from = "Column::TargetId",
@@ -23,15 +33,9 @@ pub enum Relation {
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    Target,
+    Target1,
     #[sea_orm(has_many = "super::artifact::Entity")]
     Artifact,
-}
-
-impl Related<super::target::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Target.def()
-    }
 }
 
 impl Related<super::artifact::Entity> for Entity {
