@@ -1,9 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"net/http"
-	"os"
 
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/moby/buildkit/client/llb"
@@ -18,7 +18,7 @@ type JobSpec struct {
 	Builder string `json:"builder"`
 }
 
-func (b *BuilderService) StartJob(spec JobSpec) (int, error) {
+func (b *BuilderService) JobLLB(spec JobSpec) (string, error) {
 	state := llb.Image(spec.Builder).Run(llb.Shlex("echo hello!")).
 		AddMount("/src", llb.Git(spec.Repo, spec.Ref)).
 		Dir("/src").
@@ -29,12 +29,14 @@ func (b *BuilderService) StartJob(spec JobSpec) (int, error) {
 
 	bc, err := state.Root().Marshal(context.TODO(), llb.LinuxAmd64)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 
-	llb.WriteTo(bc, os.Stdout)
+	var buf bytes.Buffer
 
-	return 1, nil
+	llb.WriteTo(bc, &buf)
+
+	return buf.String(), nil
 }
 
 func main() {
