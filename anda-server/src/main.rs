@@ -11,6 +11,7 @@ mod api;
 use sea_orm::{DatabaseConnection, EntityTrait};
 use sea_orm_rocket::Database;
 mod entity;
+mod artifacts;
 
 #[get("/")]
 fn index() -> &'static str {

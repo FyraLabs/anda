@@ -1,8 +1,13 @@
 use std::path::PathBuf;
 
-use clap::{AppSettings, Parser, Subcommand};
+use clap::{AppSettings, Parser, Subcommand, ArgEnum};
 use log::{debug, error, info, trace};
 use log4rs::*;
+use anyhow::{anyhow, Result};
+use std::fs;
+
+mod build;
+mod config;
 
 #[derive(Parser)]
 #[clap(about, version)]
@@ -14,6 +19,12 @@ struct Cli {
 
     #[clap(subcommand)]
     command: Command,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+enum BuildBackend {
+    System,
+    Mock,
 }
 
 #[derive(Subcommand)]
@@ -31,9 +42,17 @@ enum Command {
         #[clap(required = true)]
         packages: Vec<String>,
     },
+
+    /// Build a project
+    Build {
+        /// Path to the project
+        /// If not specified, the current directory is used
+        #[clap(value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+    }
 }
 
-fn main() {
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -44,7 +63,14 @@ fn main() {
         Command::Remove { packages } => {
             println!("Removing {}", packages.join(", "));
         }
-    }
+
+        Command::Build { path } => {
+            println!("Building from {}", fs::canonicalize(path.clone()).unwrap().display());
+            build::start_build(&path)?;
+        }
+    };
+
+    Ok(())
 }
 
 mod tests {
