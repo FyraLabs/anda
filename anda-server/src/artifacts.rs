@@ -27,7 +27,7 @@ lazy_static! {
     pub static ref BUCKET: String = env::var("S3_BUCKET").unwrap();
 }
 
-struct S3Artifact {
+pub struct S3Artifact {
     pub connection: Client,
 }
 
@@ -73,7 +73,6 @@ impl S3Artifact {
                 // get file name
                 // let file_name = file_path.file_name().unwrap().to_str().unwrap();
                 let real_path = format!("{}/{}", dest, file_path.strip_prefix(&src).unwrap().display());
-                println!("Uploading {} to {}", file_path.display(), real_path);
                 self.upload_file(&real_path, file_path).await?;
             }
         })

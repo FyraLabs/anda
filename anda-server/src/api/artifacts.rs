@@ -5,9 +5,9 @@ use rocket::form::{DataField, Form};
 use rocket::fs::TempFile;
 use rocket::{Route};
 use rocket::{serde::{json::Json, Deserialize}, fs::FileServer, fs::{relative, Options}, State};
-use sea_orm::DatabaseConnection;
 use crate::prelude::*;
 use rocket::serde::uuid::Uuid;
+use log::{debug, info};
 
 pub(crate) fn routes() -> Vec<Route> {
     routes![
@@ -19,7 +19,7 @@ pub(crate) fn routes() -> Vec<Route> {
 
 #[derive(FromForm)]
 pub struct ArtifactUpload<'r> {
-    build_id: String,
+    build_id: Uuid,
     // Dynamic form field for files
     // Can be multiple forms, starts with file/<path>
     files: HashMap<String, TempFile<'r>>,
@@ -43,19 +43,39 @@ async fn get(id: Uuid) -> Option<Json<Artifact>> {
 
 // Upload artifact (entire folders) with form data
 #[post("/", data = "<data>")]
-async fn upload(data: Form<ArtifactUpload<'_>>) {
+async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
 
     // Get the build ID
-    let build_id = data.build_id.as_str();
+    let build_id = data.build_id;
     println!("Build ID: {}", build_id);
     // Get the files
     let files = &data.files;
 
+    let obj = crate::artifacts::S3Artifact::new().unwrap();
+
+    let mut results = Vec::new();
+
     // for each file in the hashmap, print the name and path
     for (name, file) in files.iter() {
-        println!("{}: {:?}", name, file);
+        println!("{}: {}", name, file.path().unwrap().display());
+
+        // Upload the file to S3
+
+        let dest_path = format!("artifacts/{}/{}",build_id, name);
+
+        obj.upload_file(&dest_path, PathBuf::from(file.path().unwrap())).await.expect("Failed to upload file");
+
+        // Create an artifact object to store in the database
+        let artifact = Artifact::new(build_id, name.to_string(), dest_path.to_string());
+
+        // Store the artifact in the database
+        let artifact_ret = artifact.add().await;
+
+        // Add the artifact to the results vector
+        results.push(artifact_ret.expect("Failed to add artifact"));
     }
 
+    Json(results)
 
 }
 
