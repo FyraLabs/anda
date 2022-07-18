@@ -51,20 +51,24 @@ impl ArtifactUploader {
         let files: Vec<(String, PathBuf)> = self.files.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         let mut form = multipart::Form::new()
             .text("build_id", build_id);
+
+
         for file in files {
             // add to array of form data
             let (path, aa) = file;
+
+            debug!("adding file: {}", aa.display());
             // add part to form
-            let file_part = multipart::Part::text(format!("files[{}]", path))
+            let file_part = multipart::Part::text("files")
                 .file_name(aa.display().to_string())
                 .mime_str("application/octet-stream")?;
 
             form = form.part(format!("files[{}]", path), file_part);
         }
 
-        debug!("form: {:#?}", form);
+        //debug!("form: {:#?}", form);
 
-        // BUG: Only the first file uploads for some reason.
+        // BUG: Only the files in the top directory are uploaded.
         // Please fix this.
 
         let res = ClientBuilder::new()
@@ -74,6 +78,7 @@ impl ArtifactUploader {
             .multipart(form)
             .send()
             .await?;
+        debug!("res: {:#?}", res.text().await?);
         Ok(())
     }
 }
@@ -96,9 +101,9 @@ impl ProjectBuilder {
             let entry = entry?;
             if entry.file_type().is_file() {
                 let file_path = entry.into_path();
-                let real_path = file_path.strip_prefix(&folder).unwrap().display();
-                println!("{}", real_path);
-                hash.insert(real_path.to_string(), file_path);
+                let real_path = file_path.strip_prefix(&folder).unwrap();
+                println!("path: {}", real_path.display());
+                hash.insert(real_path.display().to_string(), file_path.canonicalize()?);
             }
         }
 
