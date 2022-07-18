@@ -1,42 +1,36 @@
 use anyhow::Result;
+use aws_sdk_s3::types::ByteStream;
+use aws_sdk_s3::{Client, Config, Credentials, Region, Endpoint};
 use lazy_static::lazy_static;
-use s3::bucket::Bucket;
-use s3::creds::Credentials;
-use s3::region::Region;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use std::env;
-use std::io::Read;
 use std::path::PathBuf;
 
 lazy_static! {
-    pub static ref BUCKET: Bucket = Bucket::new(
-        env::var("S3_BUCKET").unwrap().as_str(),
-        Region::Custom {
-            region: "".into(),
-            endpoint: env::var("S3_ENDPOINT").unwrap().into(),
-        },
-        Credentials::new(
-            Some(env::var("S3_ACCESS_KEY").unwrap().as_str()),
-            Some(env::var("S3_SECRET_KEY").unwrap().as_str()),
-            None,
-            None,
-            None
-        )
-        .unwrap()
-    )
-    .unwrap();
+    pub static ref CLIENT: Client = Client::from_conf(Config::builder()
+    .credentials_provider(Credentials::new(
+        env::var("S3_ACCESS_KEY").unwrap().as_str(),
+        env::var("S3_SECRET_KEY").unwrap().as_str(),    
+        None,
+        None,
+        "Environment"
+    )).region(Region::new("us-east-1")).endpoint_resolver(Endpoint::immutable(
+        env::var("S3_ENDPOINT").unwrap().parse().unwrap(),
+    )).build());
+
+    pub static ref BUCKET: String = env::var("S3_BUCKET").unwrap();
 }
 
 struct S3Artifact {
-    pub connection: s3::Bucket,
+    pub connection: Client,
 }
 
 impl S3Artifact {
     pub fn new() -> Result<S3Artifact> {
         dotenv::dotenv().ok();
         Ok(S3Artifact {
-            connection: BUCKET.clone(),
+            connection: CLIENT.clone(),
         })
     }
 
@@ -54,7 +48,8 @@ impl S3Artifact {
         // Read entire file into `bytes`
         file.read(&mut bytes).await?;
         // upload to S3
-        self.connection.put_object(path, &bytes).await?;
+        self.connection.put_object().key(path).body(ByteStream::from(bytes)).bucket(BUCKET.as_str()).send().await?;
+        // self.connection.put_object(path, &bytes).await?;
         Ok(())
     }
 
@@ -62,15 +57,17 @@ impl S3Artifact {
 
 #[cfg(test)]
 mod test_s3 {
+    use rocket::http::hyper::body::Buf;
+
     use super::*;
 
     #[tokio::test]
     async fn test_s3() {
         let artifact = S3Artifact::new().unwrap();
-        let ls = artifact.connection.list("".to_string(), Some("/".to_string())).await.unwrap();
+        let ls = artifact.connection.list_objects().bucket(BUCKET.as_str()).send().await.unwrap();
         println!("{:#?}", ls);
-        let a = artifact.connection.get_object("/Dockerfile".to_string()).await.unwrap();
-        println!("{:?}", std::str::from_utf8(&a.0).unwrap());
+        let a = artifact.connection.get_object().key("/Dockerfile").bucket(BUCKET.as_str()).send().await.unwrap();
+        println!("{:?}", std::str::from_utf8(a.body.collect().await.unwrap().chunk()));
     }
 
     #[tokio::test]
