@@ -1,5 +1,8 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
+use rocket::form::{DataField, Form};
+use rocket::fs::TempFile;
 use rocket::{Route};
 use rocket::{serde::{json::Json, Deserialize}, fs::FileServer, fs::{relative, Options}, State};
 use sea_orm::DatabaseConnection;
@@ -10,7 +13,16 @@ pub(crate) fn routes() -> Vec<Route> {
     routes![
         index,
         get,
+        upload,
     ]
+}
+
+#[derive(FromForm)]
+pub struct ArtifactUpload<'r> {
+    build_id: String,
+    // Dynamic form field for files
+    // Can be multiple forms, starts with file/<path>
+    files: HashMap<String, TempFile<'r>>,
 }
 
 
@@ -29,6 +41,25 @@ async fn get(id: Uuid) -> Option<Json<Artifact>> {
     }
 }
 
+// Upload artifact (entire folders) with form data
+#[post("/", data = "<data>")]
+async fn upload(data: Form<ArtifactUpload<'_>>) {
+
+    // Get the build ID
+    let build_id = data.build_id.as_str();
+    println!("Build ID: {}", build_id);
+    // Get the files
+    let files = &data.files;
+
+    // for each file in the hashmap, print the name and path
+    for (name, file) in files.iter() {
+        println!("{}: {:?}", name, file);
+    }
+
+
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -36,8 +67,9 @@ mod tests {
     #[tokio::test]
     async fn test_new_artifact() {
         let worker = Uuid::new_v4();
-        let target_id = Uuid::new_v4();
-        let build = Build::new(worker, 0, target_id, None);
+        let target = Target::new("test".to_string(), None, 0);
+        Target::add(&target).await.unwrap();
+        let build = Build::new(worker, 0, target.id, None);
         Build::add(&build).await.unwrap();
         let art = Artifact::new(build.id, "test".to_string(), "url".to_string());
 

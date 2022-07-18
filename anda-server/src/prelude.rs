@@ -3,7 +3,7 @@
 
 use entity::*;
 use sea_orm::{*, prelude::{DateTimeWithTimeZone, DateTime, Uuid}};
-use crate::{entity::{artifact, build, project}, db};
+use crate::{entity::{artifact, build, project, target}, db};
 use chrono::offset::Utc;
 
 use db::DbPool;
@@ -288,4 +288,37 @@ pub struct Target {
     pub name: String,
     pub image: Option<String>,
     pub arch: i32,
+}
+
+impl Target {
+    pub fn new(name: String, image: Option<String>, arch: i32) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            image,
+            arch
+        }
+    }
+
+    pub fn from_model(model: target::Model) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            image: model.image,
+            arch: model.arch,
+        }
+    }
+
+    pub async fn add(&self) -> Result<Target> {
+        let db = DbPool::get().await;
+        let target = target::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            name: ActiveValue::Set(self.name.clone()),
+            image: ActiveValue::Set(self.image.clone()),
+            arch: ActiveValue::Set(self.arch),
+            ..Default::default()
+        };
+        let res = target::ActiveModel::insert(target, db).await?;
+        Ok(Target::from_model(res))
+    }
 }
