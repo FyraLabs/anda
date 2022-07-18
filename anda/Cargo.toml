@@ -17,7 +17,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 clap = { version = "3.2", features = ["derive"] }
-log4rs = "~1.1.1"
+pretty_env_logger = "0.4.0"
 log = "~0.4.17"
 serde = "1.0.137"
 serde_derive = "1.0.139"
@@ -27,6 +27,10 @@ serde_yaml = "0.8.24"
 anyhow = "1.0.58"
 tempfile = "3.3.0"
 sudo = "0.6.0"
+tokio = "1.20.0"
+walkdir = "2.3.2"
+
+reqwest = { version = "0.11.11", features = ["multipart"] }
 
 [package.metadata.rpm]
 package = "anda"

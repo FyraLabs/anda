@@ -1,10 +1,18 @@
-use anyhow::{anyhow, Result};
-use std::fs;
+use anyhow::{anyhow, Result, Ok};
+use log::debug;
+use serde_derive::Serialize;
+use tokio::io::AsyncReadExt;
+use walkdir::WalkDir;
+use std::{fs, env};
 use std::path::Path;
 use std::{
     path::PathBuf,
     process::{Command, ExitStatus},
+    collections::HashMap,
 };
+use tokio::fs::File;
+use reqwest::{Client, ClientBuilder};
+use reqwest::multipart;
 
 trait ExitOkPolyfill {
     fn exit_ok_polyfilled(&self) -> Result<()>;
@@ -20,6 +28,56 @@ impl ExitOkPolyfill for ExitStatus {
     }
 }
 
+
+#[derive(Debug, Clone, Serialize)]
+struct ArtifactUploader {
+    pub files: HashMap<String, PathBuf>,
+}
+
+impl ArtifactUploader {
+    pub fn new(files: HashMap<String, PathBuf>) -> Self {
+        Self {
+            files,
+        }
+    }
+
+    pub async fn upload(&self) -> Result<()> {
+        let endpoint = format!("{}/artifacts",env::var("ANDA_ENDPOINT")?);
+        let build_id = env::var("ANDA_BUILD_ID")?;
+
+        // files is a hashmap of path -> actual file path
+        // we need to convert them into a tuple of (path, file)
+        // files[path] = actual_path
+        let files: Vec<(String, PathBuf)> = self.files.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let mut form = multipart::Form::new()
+            .text("build_id", build_id);
+        for file in files {
+            // add to array of form data
+            let (path, aa) = file;
+            // add part to form
+            let file_part = multipart::Part::text(format!("files[{}]", path))
+                .file_name(aa.display().to_string())
+                .mime_str("application/octet-stream")?;
+
+            form = form.part(format!("files[{}]", path), file_part);
+        }
+
+        debug!("form: {:#?}", form);
+
+        // BUG: Only the first file uploads for some reason.
+        // Please fix this.
+
+        let res = ClientBuilder::new()
+            .build()
+            .unwrap()
+            .post(&endpoint)
+            .multipart(form)
+            .send()
+            .await?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ProjectBuilder {
     root: PathBuf,
@@ -30,11 +88,31 @@ impl ProjectBuilder {
         ProjectBuilder { root }
     }
 
+    pub async fn push_folder(&self, folder: PathBuf) -> Result<()> {
+
+        let mut hash = HashMap::new();
+
+        for entry in WalkDir::new(&folder) {
+            let entry = entry?;
+            if entry.file_type().is_file() {
+                let file_path = entry.into_path();
+                let real_path = file_path.strip_prefix(&folder).unwrap().display();
+                println!("{}", real_path);
+                hash.insert(real_path.to_string(), file_path);
+            }
+        }
+
+        let uploader = ArtifactUploader::new(hash);
+        uploader.upload().await?;
+
+        Ok(())
+    }
+
     ///  Builds an Andaman project.
-    pub fn build(&self) -> Result<()> {
+    pub async fn build(&self) -> Result<()> {
         // TODO: Move this to a method called `build_rpm` as we support more project types
         let config = crate::config::load_config(&self.root)?;
-        sudo::escalate_if_needed().unwrap();
+        sudo::with_env(&["ANDA_"]).unwrap();
         let builddep_exit = Command::new("dnf")
             .args(vec![
                 "builddep",
@@ -63,6 +141,8 @@ impl ProjectBuilder {
             .status()?;
 
         rpmbuild_exit.exit_ok_polyfilled()?;
+
+        self.push_folder(PathBuf::from("anda-build")).await?;
 
         Ok(())
     }
