@@ -2,7 +2,7 @@
 name = "anda"
 version = "0.1.0"
 edition = "2021"
-description = "Andaman Package Manager (anda)"
+description = "Andaman Package Manager and frontend"
 authors = [
     "Cappy Ishihara <cappy@cappuchino.xyz>",
     "windowsboy111 <wboy111@outlook.com>",
@@ -26,6 +26,7 @@ serde_json = "1.0.13"
 serde_yaml = "0.8.24"
 anyhow = "1.0.58"
 tempfile = "3.3.0"
+sudo = "0.6.0"
 
 [package.metadata.rpm]
 package = "anda"

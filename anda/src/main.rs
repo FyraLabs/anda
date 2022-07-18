@@ -43,11 +43,11 @@ enum Command {
         packages: Vec<String>,
     },
 
-    /// Build a project
+    /// Build an Andaman project
     Build {
         /// Path to the project
         /// If not specified, the current directory is used
-        #[clap(value_name = "PATH", default_value = ".")]
+        #[clap(value_name = "PROJECT_PATH", default_value = ".")]
         path: PathBuf,
     }
 }
@@ -66,7 +66,8 @@ fn main() -> Result<()> {
 
         Command::Build { path } => {
             println!("Building from {}", fs::canonicalize(path.clone()).unwrap().display());
-            build::start_build(&path)?;
+            //build::start_build(&path)?;
+            build::ProjectBuilder::new(path).build()?;
         }
     };
 
