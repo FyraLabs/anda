@@ -25,9 +25,9 @@ pub struct Artifact {
 }
 impl Artifact {
 
-    pub fn new(id: Uuid,build_id: Uuid, name: String, url: String) -> Self {
+    pub fn new(build_id: Uuid, name: String, url: String) -> Self {
         Self {
-            id,
+            id: Uuid::new_v4(),
             build_id,
             name,
             timestamp: Utc::now().naive_utc(),
@@ -116,7 +116,9 @@ pub struct Build {
     pub worker: Uuid,
     pub status: i32,
     pub target_id: Uuid,
+    pub project_id: Option<Uuid>,
     pub timestamp: DateTime,
+    pub compose_id: Option<Uuid>,
 }
 
 impl Build {
@@ -127,17 +129,21 @@ impl Build {
             worker: model.worker,
             status: model.status,
             target_id: model.target_id,
+            project_id: model.project_id,
             timestamp: model.timestamp,
+            compose_id: model.compose_id,
         })
     }
 
-    pub fn new(worker: Uuid, target_id: Uuid, compose_id: Uuid) -> Self {
+    pub fn new(worker: Uuid, status: i32, target_id: Uuid, project_id: Option<Uuid>) -> Self {
         Self {
             id: Uuid::new_v4(),
             worker,
-            status: 0,
+            status,
             target_id,
+            project_id,
             timestamp: Utc::now().naive_utc(),
+            compose_id: None,
         }
     }
 
