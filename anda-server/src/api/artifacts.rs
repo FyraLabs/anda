@@ -29,4 +29,20 @@ async fn get(id: Uuid) -> Option<Json<Artifact>> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
 
+    #[tokio::test]
+    async fn test_new_artifact() {
+        let worker = Uuid::new_v4();
+        let target_id = Uuid::new_v4();
+        let build = Build::new(worker, 0, target_id, None);
+        Build::add(&build).await.unwrap();
+        let art = Artifact::new(build.id, "test".to_string(), "url".to_string());
+
+        let test = Artifact::add(&art).await.unwrap();
+
+        println!("{:?}", test);
+    }
+}
