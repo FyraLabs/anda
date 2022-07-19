@@ -1,18 +1,14 @@
 use anyhow::{anyhow, Result, Ok};
+use hyper::client::{Client};
 use log::debug;
 use serde_derive::Serialize;
-use tokio::io::AsyncReadExt;
 use walkdir::WalkDir;
 use std::{env};
-use std::path::Path;
 use std::{
     path::PathBuf,
     process::{Command, ExitStatus},
     collections::HashMap,
 };
-use reqwest::{Client, ClientBuilder};
-use reqwest::multipart;
-use tokio::fs::{File, OpenOptions};
 trait ExitOkPolyfill {
     fn exit_ok_polyfilled(&self) -> Result<()>;
 }
@@ -48,46 +44,20 @@ impl ArtifactUploader {
         // we need to convert them into a tuple of (path, file)
         // files[path] = actual_path
         let files: Vec<(String, PathBuf)> = self.files.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-        let mut form = multipart::Form::new()
-            .text("build_id", build_id);
 
+        let mut form = multipart::client::lazy::Multipart::new();
+        let mut form = form.add_text("build_id", build_id);
 
         for file in &files {
             // add to array of form data
             let (path, aa) = file;
-
-            let mut openfile = File::open(&aa).await?;
-
-            let mut buf = Vec::new();
-            openfile.read(&mut buf).await?;
-
-            debug!("adding file: {}", aa.display());
-            // add part to form
-            let file_part = multipart::Part::bytes(buf)
-                .file_name(aa.display().to_string())
-                .mime_str("application/octet-stream")?;
-
-            // Get a position of the hashmap by matching the key to the path
-            //let pos = files.clone().iter().position(|(k, _)| &k == &path);
-
-            //form = form.part(format!("files[{}]", pos.unwrap()), file_part);
-            form = form.part(format!("files[{}]", path), file_part);
-
+            form = form.add_file(aa.display().to_string(), path.as_str());
         }
+        
+        let res = form.client_request(&multipart::server::nickel::nickel::hyper::Client::new(), &endpoint)?;
 
-        debug!("form: {:#?}", form);
 
-        // BUG: Only the files in the top directory are uploaded.
-        // Please fix this.
-
-        let res = ClientBuilder::new()
-            .build()
-            .unwrap()
-            .post(&endpoint)
-            .multipart(form)
-            .send()
-            .await?;
-        debug!("res: {:#?}", res.text().await?);
+        debug!("res: {:#?}", res);
         Ok(())
     }
 }
