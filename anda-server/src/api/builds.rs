@@ -42,7 +42,7 @@ pub struct BuildSubmission {
 
 #[post("/", data = "<data>")]
 async fn submit(data: Form<BuildSubmission>) -> Json<Build> {
-    let build = Build::new(data.worker, 0, data.target_id, data.project_id)
+    let build = Build::new(data.worker, 0, data.project_id)
         .add()
         .await;
     Json(build.unwrap())

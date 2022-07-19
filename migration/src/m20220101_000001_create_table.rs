@@ -166,7 +166,7 @@ impl MigrationTrait for Migration {
                     ColumnDef::new(Build::Status).integer().not_null(),
                 )
                 .col(
-                    ColumnDef::new(Build::TargetId).uuid().not_null(),
+                    ColumnDef::new(Build::TargetId).uuid(),
                 )
                 .col(
                     ColumnDef::new(Build::ProjectId).uuid(), // Project ID can be null, if the build is not associated with a project

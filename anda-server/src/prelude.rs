@@ -113,7 +113,7 @@ pub struct Build {
     pub id: Uuid,
     pub worker: Uuid,
     pub status: i32,
-    pub target_id: Uuid,
+    pub target_id: Option<Uuid>,
     pub project_id: Option<Uuid>,
     pub timestamp: DateTime,
     pub compose_id: Option<Uuid>,
@@ -133,12 +133,12 @@ impl Build {
         })
     }
 
-    pub fn new(worker: Uuid, status: i32, target_id: Uuid, project_id: Option<Uuid>) -> Self {
+    pub fn new(worker: Uuid, status: i32, project_id: Option<Uuid>) -> Self {
         Self {
             id: Uuid::new_v4(),
             worker,
             status,
-            target_id,
+            target_id: None,
             project_id,
             timestamp: Utc::now().naive_utc(),
             compose_id: None,
@@ -186,14 +186,14 @@ impl Build {
         let db = DbPool::get().await;
         let build = build::ActiveModel {
             id: ActiveValue::Set(self.id),
-            target_id: ActiveValue::Set(target_id),
+            target_id: ActiveValue::Set(Some(target_id)),
             ..Default::default()
         };
         let res = build::ActiveModel::update(build, db).await?;
         Build::from_model(res).await
     }
 
-    /* pub async fn untag_target(&self) -> Result<Build> {
+    pub async fn untag_target(&self) -> Result<Build> {
         let db = DbPool::get().await;
         let build = build::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -202,7 +202,7 @@ impl Build {
         };
         let res = build::ActiveModel::update(build, db).await?;
         Build::from_model(res).await
-    } */
+    }
 
     /// Gets a build by ID
     pub async fn get(id: Uuid) -> Result<Build> {
