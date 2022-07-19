@@ -3,7 +3,7 @@
 
 use entity::*;
 use sea_orm::{*, prelude::{DateTimeWithTimeZone, DateTime, Uuid}};
-use crate::{entity::{artifact, build, project}, db};
+use crate::{entity::{artifact, build, project, target}, db};
 use chrono::offset::Utc;
 
 use db::DbPool;
@@ -71,15 +71,13 @@ impl Artifact {
     }
 
     /// Lists all available artifact
-    pub async fn list(limit: u64, offset: u64) -> Result<Vec<Artifact>> {
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Artifact>> {
 
         let db = DbPool::get().await;
         let artifact = artifact::Entity::find()
-            .limit(limit)
-            .offset(offset)
-            .all(db)
-            .await
-            .unwrap();
+            .paginate(db, limit)
+            .fetch_page(page)
+            .await?;
         // Marshall the types from our internal representation to the actual DB representation.
         Ok(artifact.into_iter().map(|artifact| Artifact::from_model(artifact).unwrap()).collect())
     }
@@ -172,13 +170,12 @@ impl Build {
         Ok(Build::from_model(build).await.unwrap())
     }
 
-    pub async fn list(limit: u64, offset: u64) -> Result<Vec<Build>> {
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Build>> {
         let db = DbPool::get().await;
         let build = build::Entity::find()
             .order_by(build::Column::Timestamp, Order::Desc)
-            .limit(limit)
-            .offset(offset)
-            .all(db)
+            .paginate(db, limit)
+            .fetch_page(page)
             .await?;
 
         Ok(
@@ -256,12 +253,11 @@ impl Project {
         Ok(Project::from_model(project).await.unwrap())
     }
 
-    pub async fn list(limit: u64, offset: u64) -> Result<Vec<Project>> {
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Project>> {
         let db = DbPool::get().await;
         let project = project::Entity::find()
-            .limit(limit)
-            .offset(offset)
-            .all(db)
+            .paginate(db, limit)
+            .fetch_page(page)
             .await?;
         Ok(
             future::try_join_all(
@@ -288,4 +284,37 @@ pub struct Target {
     pub name: String,
     pub image: Option<String>,
     pub arch: i32,
+}
+
+impl Target {
+    pub fn new(name: String, image: Option<String>, arch: i32) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            image,
+            arch
+        }
+    }
+
+    pub fn from_model(model: target::Model) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            image: model.image,
+            arch: model.arch,
+        }
+    }
+
+    pub async fn add(&self) -> Result<Target> {
+        let db = DbPool::get().await;
+        let target = target::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            name: ActiveValue::Set(self.name.clone()),
+            image: ActiveValue::Set(self.image.clone()),
+            arch: ActiveValue::Set(self.arch),
+            ..Default::default()
+        };
+        let res = target::ActiveModel::insert(target, db).await?;
+        Ok(Target::from_model(res))
+    }
 }

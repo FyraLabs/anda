@@ -12,9 +12,9 @@ pub(crate) fn routes() -> Vec<Route> {
     ]
 }
 
-#[get("/?<limit>&<offset>")]
-async fn index(offset: Option<u64>,limit: Option<u64>) -> Json<Vec<Build>> {
-    let builds = Build::list(limit.unwrap_or(100),offset.unwrap_or(0)).await;
+#[get("/?<limit>&<page>")]
+async fn index(page: Option<usize>,limit: Option<usize>) -> Json<Vec<Build>> {
+    let builds = Build::list(limit.unwrap_or(100),page.unwrap_or(0)).await;
     Json(builds.unwrap())
 }
 

@@ -15,3 +15,11 @@ services:
       POSTGRES_PASSWORD: example
     ports:
       - 5432:5432
+
+  s3:
+    image: minio/minio
+    restart: always
+    ports:
+      - 9000:9000
+      - 9001:9001
+    command: server /data --console-address=:9001
