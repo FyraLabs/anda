@@ -92,14 +92,8 @@ dependencies = [
  "chrono",
  "clap",
  "dotenv",
-<<<<<<< HEAD
- "hyper 0.14.20",
  "libxml",
- "log 0.4.17",
- "multipart",
-=======
  "log",
->>>>>>> b1cc258869acd0a79903377229f1afe3d00a6205
  "pretty_env_logger",
  "pubgrub",
  "reqwest",
@@ -1702,7 +1696,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
 name = "libxml"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1714,20 +1707,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libz-sys"
-version = "1.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9702761c3935f8cc2f101793272e202c72b99da8f4224a19ddcf1279a6450bbf"
-dependencies = [
- "cc",
- "libc",
- "pkg-config",
- "vcpkg",
-]
-
-[[package]]
-=======
->>>>>>> b1cc258869acd0a79903377229f1afe3d00a6205
 name = "linked-hash-map"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3231,7 +3210,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88bd84d4c082e18e37fef52c0088e4407dabcef19d23a607fb4b5ee03b7d5b83"
 dependencies = [
  "libc",
- "log 0.4.17",
+ "log",
 ]
 
 [[package]]
