@@ -51,7 +51,8 @@ impl ArtifactUploader {
         for file in &files {
             // add to array of form data
             let (path, aa) = file;
-            form = form.add_file(aa.display().to_string(), path.as_str());
+
+            form = form.add_file(path, aa.as_path());
         }
         
         let res = form.client_request(&multipart::server::nickel::nickel::hyper::Client::new(), &endpoint)?;
