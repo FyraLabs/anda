@@ -81,8 +81,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "libxml",
  "log",
  "log4rs",
+ "pubgrub",
  "serde",
  "serde_derive",
  "serde_json",
@@ -1354,6 +1356,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "libxml"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "687f5a78939052c5d02865c0fe3ea2ce2acdca875f7f81db82f7aef256dd97ac"
+dependencies = [
+ "libc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "linked-hash-map"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1949,6 +1962,16 @@ dependencies = [
  "syn",
  "version_check",
  "yansi",
+]
+
+[[package]]
+name = "pubgrub"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdd14552ad5f5d743a323c10d576f26822a044355d6601f377d813ece46f38fd"
+dependencies = [
+ "rustc-hash",
+ "thiserror",
 ]
 
 [[package]]

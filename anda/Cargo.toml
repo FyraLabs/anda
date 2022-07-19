@@ -27,6 +27,8 @@ serde_yaml = "0.8.24"
 anyhow = "1.0.58"
 tempfile = "3.3.0"
 sudo = "0.6.0"
+pubgrub = "0.2.1"
+libxml = "0.3.0"
 
 [package.metadata.rpm]
 package = "anda"
