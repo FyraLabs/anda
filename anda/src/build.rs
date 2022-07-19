@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result, Ok};
-use curl::easy::{Easy, Form, Part};
-use hyper::client::{Client};
 use log::debug;
+use tokio::io::AsyncReadExt;
 use serde_derive::Serialize;
 use walkdir::WalkDir;
 use std::{env};
@@ -10,6 +9,9 @@ use std::{
     process::{Command, ExitStatus},
     collections::HashMap,
 };
+use reqwest::{Client, ClientBuilder};
+use reqwest::multipart;
+use tokio::fs::{File, OpenOptions};
 trait ExitOkPolyfill {
     fn exit_ok_polyfilled(&self) -> Result<()>;
 }
@@ -38,11 +40,6 @@ impl ArtifactUploader {
     }
 
     pub async fn upload(&self) -> Result<()> {
-        // For this part, we will be using libcurl to upload the files to the server.
-        // why? because for some reason, reqwest's implementation of multipart forms are kinda broken
-        // I've posted a bug here: https://github.com/seanmonstar/reqwest/issues/1585
-        // Now we will be relying on 2 libraries to interact with the server.
-        // because curl does not have serde serialization.
         let endpoint = format!("{}/artifacts",env::var("ANDA_ENDPOINT")?);
         let build_id = env::var("ANDA_BUILD_ID")?;
 
@@ -50,38 +47,47 @@ impl ArtifactUploader {
         // we need to convert them into a tuple of (path, file)
         // files[path] = actual_path
         let files: Vec<(String, PathBuf)> = self.files.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let mut form = multipart::Form::new()
+            .percent_encode_noop()
+            .text("build_id", build_id);
 
-        let mut easy = Easy::new();
-        easy.url(&endpoint)?;
-        easy.verbose(true)?;
-        easy.post(true)?;
-
-        let mut form = Form::new();
-        form.part("build_id").contents(build_id.as_bytes()).add()?;
-
-        // let mut form = multipart::client::lazy::Multipart::new();
-        // let mut form = form.add_text("build_id", build_id);
 
         for file in &files {
             // add to array of form data
             let (path, aa) = file;
-            debug!("path: {:?}", path);
-            let filep = &format!("files[{}]", path);
-            debug!("filep: {:?}", filep);
-            let mut f = form.part(filep);
-            f.file(aa);
-            //file_part.file(aa);
-            f.add()?;
+
+            let mut openfile = File::open(&aa).await?;
+
+            let mut buf = Vec::new();
+            openfile.read(&mut buf).await?;
+
+            debug!("adding file: {}", aa.display());
+            // add part to form
+            let file_part = multipart::Part::stream(buf)
+                .file_name(aa.display().to_string())
+                .mime_str("application/octet-stream")?;
+
+            // Get a position of the hashmap by matching the key to the path
+            //let pos = files.clone().iter().position(|(k, _)| &k == &path);
+
+            //form = form.part(format!("files[{}]", pos.unwrap()), file_part);
+            form = form.part(format!("files[{}]", path), file_part);
+
         }
 
-        //file_part.add()?;
-        //id_part.add()?;
         debug!("form: {:#?}", form);
 
-        easy.httppost(form)?;
-        easy.perform()?;
+        // BUG: Only the files in the top directory are uploaded.
+        // Please fix this.
 
-        debug!("res: {:#?}", easy.response_code());
+        let res = ClientBuilder::new()
+            .build()
+            .unwrap()
+            .post(&endpoint)
+            .multipart(form)
+            .send()
+            .await?;
+        debug!("res: {:#?}", res.text().await?);
         Ok(())
     }
 }
