@@ -71,15 +71,13 @@ impl Artifact {
     }
 
     /// Lists all available artifact
-    pub async fn list(limit: u64, offset: u64) -> Result<Vec<Artifact>> {
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Artifact>> {
 
         let db = DbPool::get().await;
         let artifact = artifact::Entity::find()
-            .limit(limit)
-            .offset(offset)
-            .all(db)
-            .await
-            .unwrap();
+            .paginate(db, limit)
+            .fetch_page(page)
+            .await?;
         // Marshall the types from our internal representation to the actual DB representation.
         Ok(artifact.into_iter().map(|artifact| Artifact::from_model(artifact).unwrap()).collect())
     }
@@ -172,13 +170,12 @@ impl Build {
         Ok(Build::from_model(build).await.unwrap())
     }
 
-    pub async fn list(limit: u64, offset: u64) -> Result<Vec<Build>> {
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Build>> {
         let db = DbPool::get().await;
         let build = build::Entity::find()
             .order_by(build::Column::Timestamp, Order::Desc)
-            .limit(limit)
-            .offset(offset)
-            .all(db)
+            .paginate(db, limit)
+            .fetch_page(page)
             .await?;
 
         Ok(
@@ -256,12 +253,11 @@ impl Project {
         Ok(Project::from_model(project).await.unwrap())
     }
 
-    pub async fn list(limit: u64, offset: u64) -> Result<Vec<Project>> {
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Project>> {
         let db = DbPool::get().await;
         let project = project::Entity::find()
-            .limit(limit)
-            .offset(offset)
-            .all(db)
+            .paginate(db, limit)
+            .fetch_page(page)
             .await?;
         Ok(
             future::try_join_all(

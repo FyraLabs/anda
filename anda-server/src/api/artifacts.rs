@@ -26,9 +26,9 @@ pub struct ArtifactUpload<'r> {
 }
 
 
-#[get("/?<limit>&<offset>")]
-async fn index(offset: Option<u64>,limit: Option<u64>) -> Json<Vec<Artifact>> {
-    let arts = Artifact::list(limit.unwrap_or(100),offset.unwrap_or(0)).await;
+#[get("/?<limit>&<page>")]
+async fn index(page: Option<usize>,limit: Option<usize>) -> Json<Vec<Artifact>> {
+    let arts = Artifact::list(limit.unwrap_or(100).try_into().unwrap(),page.unwrap_or(0)).await;
     Json(arts.unwrap())
 }
 
