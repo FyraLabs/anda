@@ -12,6 +12,7 @@ use sea_orm::{DatabaseConnection, EntityTrait};
 use sea_orm_rocket::Database;
 mod entity;
 mod artifacts;
+mod backend;
 
 #[get("/")]
 fn index() -> &'static str {

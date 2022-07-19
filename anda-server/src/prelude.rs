@@ -160,6 +160,50 @@ impl Build {
         Build::from_model(res).await
     }
 
+    pub async fn update_status(&self, status: i32) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            status: ActiveValue::Set(status),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Build::from_model(res).await
+    }
+
+    pub async fn tag_compose(&self, compose_id: Uuid) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            compose_id: ActiveValue::Set(Some(compose_id)),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Build::from_model(res).await
+    }
+
+    pub async fn tag_target(&self, target_id: Uuid) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            target_id: ActiveValue::Set(target_id),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Build::from_model(res).await
+    }
+
+    /* pub async fn untag_target(&self) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            target_id: ActiveValue::Set(None),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Build::from_model(res).await
+    } */
+
     /// Gets a build by ID
     pub async fn get(id: Uuid) -> Result<Build> {
         let db = DbPool::get().await;
