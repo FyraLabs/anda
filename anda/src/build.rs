@@ -1,17 +1,16 @@
-use anyhow::{anyhow, Result, Ok};
+use anyhow::{anyhow, Ok, Result};
 use log::debug;
-use tokio::io::AsyncReadExt;
+use reqwest::{multipart, ClientBuilder};
 use serde_derive::Serialize;
-use walkdir::WalkDir;
-use std::{env};
 use std::{
+    collections::HashMap,
+    env,
     path::PathBuf,
     process::{Command, ExitStatus},
-    collections::HashMap,
 };
-use reqwest::{Client, ClientBuilder};
-use reqwest::multipart;
-use tokio::fs::{File, OpenOptions};
+use tokio::fs::File;
+use tokio::io::AsyncReadExt;
+use walkdir::WalkDir;
 trait ExitOkPolyfill {
     fn exit_ok_polyfilled(&self) -> Result<()>;
 }
@@ -26,7 +25,6 @@ impl ExitOkPolyfill for ExitStatus {
     }
 }
 
-
 #[derive(Debug, Clone, Serialize)]
 struct ArtifactUploader {
     pub files: HashMap<String, PathBuf>,
@@ -34,23 +32,24 @@ struct ArtifactUploader {
 
 impl ArtifactUploader {
     pub fn new(files: HashMap<String, PathBuf>) -> Self {
-        Self {
-            files,
-        }
+        Self { files }
     }
 
     pub async fn upload(&self) -> Result<()> {
-        let endpoint = format!("{}/artifacts",env::var("ANDA_ENDPOINT")?);
+        let endpoint = format!("{}/artifacts", env::var("ANDA_ENDPOINT")?);
         let build_id = env::var("ANDA_BUILD_ID")?;
 
         // files is a hashmap of path -> actual file path
         // we need to convert them into a tuple of (path, file)
         // files[path] = actual_path
-        let files: Vec<(String, PathBuf)> = self.files.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let files: Vec<(String, PathBuf)> = self
+            .files
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
         let mut form = multipart::Form::new()
             .percent_encode_noop()
             .text("build_id", build_id);
-
 
         for file in &files {
             // add to array of form data
@@ -72,7 +71,6 @@ impl ArtifactUploader {
 
             //form = form.part(format!("files[{}]", pos.unwrap()), file_part);
             form = form.part(format!("files[{}]", path), file_part);
-
         }
 
         debug!("form: {:#?}", form);
@@ -103,7 +101,6 @@ impl ProjectBuilder {
     }
 
     pub async fn push_folder(&self, folder: PathBuf) -> Result<()> {
-
         let mut hash = HashMap::new();
 
         for entry in WalkDir::new(&folder) {
@@ -122,18 +119,13 @@ impl ProjectBuilder {
         Ok(())
     }
 
-
     pub fn dnf_builddep(&self) -> Result<()> {
         let config = crate::config::load_config(&self.root)?;
 
         let spec_path = config.package.spec.canonicalize()?;
 
         let builddep_exit = runas::Command::new("dnf")
-            .args(&[
-                "builddep",
-                "-y",
-                &spec_path.to_str().unwrap(),
-            ])
+            .args(&["builddep", "-y", &spec_path.to_str().unwrap()])
             .status()?;
 
         builddep_exit.exit_ok_polyfilled()?;
@@ -158,7 +150,11 @@ impl ProjectBuilder {
                 "--define",
                 "_disable_source_fetch 0",
                 "--define",
-                format!("_sourcedir {}", tokio::fs::canonicalize(&self.root).await?.to_str().unwrap()).as_str(),
+                format!(
+                    "_sourcedir {}",
+                    tokio::fs::canonicalize(&self.root).await?.to_str().unwrap()
+                )
+                .as_str(),
             ])
             .current_dir(&self.root)
             .status()?;

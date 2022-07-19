@@ -49,9 +49,7 @@ impl PkgFile {
             let package: Package = serde_yaml::from_value(dict.1.clone()).unwrap();
             packages.push(package);
         }
-        PkgFile {
-            packages,
-        }
+        PkgFile { packages }
     }
 }
 

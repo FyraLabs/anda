@@ -1,13 +1,12 @@
 use anyhow::{Context, Result};
 use serde_derive::Deserialize;
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 #[derive(Deserialize)]
 pub struct AndaConfig {
     pub package: Package,
 }
-
 
 #[derive(Deserialize)]
 pub struct Package {

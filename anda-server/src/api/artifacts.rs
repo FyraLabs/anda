@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use rocket::form::{DataField, Form};
+use rocket::form::Form;
 use rocket::fs::TempFile;
-use rocket::{Route};
-use rocket::{serde::{json::Json, Deserialize}, fs::FileServer, fs::{relative, Options}, State};
+use rocket::Route;
+use rocket::serde::json::Json;
 use crate::prelude::*;
 use rocket::serde::uuid::Uuid;
-use log::{debug, info};
 
 pub(crate) fn routes() -> Vec<Route> {
     routes![

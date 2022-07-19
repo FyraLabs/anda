@@ -1,13 +1,12 @@
-use std::path::PathBuf;
-use clap::{AppSettings, Parser, Subcommand, ArgEnum};
-use log::{debug, error, info, trace};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
+use clap::{AppSettings, ArgEnum, Parser, Subcommand};
 use std::fs;
+use std::path::PathBuf;
 
+mod api;
+mod backend;
 mod build;
 mod config;
-mod backend;
-mod api;
 
 use backend::BackendCommand;
 
@@ -57,7 +56,7 @@ enum Command {
         /// Subcommand to run
         #[clap(subcommand)]
         command: BackendCommand,
-    }
+    },
 }
 
 #[tokio::main]
@@ -81,7 +80,10 @@ async fn main() -> Result<()> {
         }
 
         Command::Build { path } => {
-            println!("Building from {}", fs::canonicalize(path.clone()).unwrap().display());
+            println!(
+                "Building from {}",
+                fs::canonicalize(path.clone()).unwrap().display()
+            );
             //build::start_build(&path)?;
             build::ProjectBuilder::new(path).build().await?;
         }

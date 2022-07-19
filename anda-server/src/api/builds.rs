@@ -1,8 +1,5 @@
-use rocket::{Route};
-use rocket::{serde::{json::Json, Deserialize}, fs::FileServer, fs::{relative, Options}, State};
-use sea_orm::DatabaseConnection;
+use rocket::{Route, serde::{json::Json, uuid::Uuid}};
 use crate::prelude::*;
-use rocket::serde::uuid::Uuid;
 
 pub(crate) fn routes() -> Vec<Route> {
     routes![

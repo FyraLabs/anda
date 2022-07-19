@@ -4,14 +4,12 @@
 //! To test this code, you will need to set up and start the backend first.
 //! See the `anda-server` crate in the Andaman repository for more information.
 
-use anyhow::{anyhow, Result};
-use serde_json::Value;
-use std::env;
-use serde_derive::{Serialize, Deserialize};
+use anyhow::Result;
+use chrono::NaiveDateTime;
 use reqwest::Client;
+use serde_derive::{Deserialize, Serialize};
+use std::env;
 use uuid::Uuid;
-use chrono::{DateTime, Utc, NaiveDateTime};
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Artifact {
@@ -31,7 +29,6 @@ pub struct Build {
     pub timestamp: NaiveDateTime,
     pub compose_id: Option<Uuid>,
 }
-
 
 #[derive(Clone)]
 pub(crate) struct AndaBackend {
