@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result, Ok};
+use curl::easy::{Easy, Form};
 use hyper::client::{Client};
 use log::debug;
 use serde_derive::Serialize;
@@ -45,20 +46,28 @@ impl ArtifactUploader {
         // files[path] = actual_path
         let files: Vec<(String, PathBuf)> = self.files.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
 
-        let mut form = multipart::client::lazy::Multipart::new();
-        let mut form = form.add_text("build_id", build_id);
+        let mut easy = Easy::new();
+        easy.url(&endpoint)?;
+        easy.post(true)?;
+
+        let mut form = Form::new();
+        let mut file_part = form.part("files");
+
+        // let mut form = multipart::client::lazy::Multipart::new();
+        // let mut form = form.add_text("build_id", build_id);
 
         for file in &files {
             // add to array of form data
-            let (path, aa) = file;
-
-            form = form.add_file(path, aa.as_path());
+            let (_, aa) = file;
+            file_part.file(aa);
         }
-        
-        let res = form.client_request(&multipart::server::nickel::nickel::hyper::Client::new(), &endpoint)?;
 
+        file_part.add()?;
 
-        debug!("res: {:#?}", res);
+        easy.httppost(form)?;
+        easy.perform()?;
+
+        debug!("res: {:#?}", easy.response_code()?);
         Ok(())
     }
 }

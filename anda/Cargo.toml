@@ -38,6 +38,7 @@ tabwriter = "1.2.1"
 runas = "0.2.1"
 multipart = { version = "0.18.0", features = ["hyper", "client", "mock"] }
 hyper = { version = "0.14.20", features = ["full"] }
+curl = "0.4.43"
 
 [package.metadata.rpm]
 package = "anda"
