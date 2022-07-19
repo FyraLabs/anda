@@ -55,15 +55,12 @@ impl ArtifactUploader {
         for file in &files {
             // add to array of form data
             let (path, aa) = file;
-
-            let mut openfile = File::open(&aa).await?;
-
             let mut buf = Vec::new();
-            openfile.read(&mut buf).await?;
+            let _ = File::open(&aa).await?.read_to_end(&mut buf).await?;
 
             debug!("adding file: {}", aa.display());
             // add part to form
-            let file_part = multipart::Part::stream(buf)
+            let file_part = multipart::Part::bytes(buf)
                 .file_name(aa.display().to_string())
                 .mime_str("application/octet-stream")?;
 
@@ -75,7 +72,7 @@ impl ArtifactUploader {
 
         }
 
-        debug!("form: {:#?}", form);
+        debug!("form: {:?}", form);
 
         // BUG: Only the files in the top directory are uploaded.
         // Please fix this.
@@ -145,7 +142,7 @@ impl ProjectBuilder {
         // TODO: Move this to a method called `build_rpm` as we support more project types
         let config = crate::config::load_config(&self.root)?;
 
-        self.dnf_builddep()?;
+        //self.dnf_builddep()?;
 
         let rpmbuild_exit = Command::new("rpmbuild")
             .args(vec![
