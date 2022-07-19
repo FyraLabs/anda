@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result, Ok};
-use curl::easy::{Easy, Form};
+use curl::easy::{Easy, Form, Part};
 use hyper::client::{Client};
 use log::debug;
 use serde_derive::Serialize;
@@ -38,6 +38,11 @@ impl ArtifactUploader {
     }
 
     pub async fn upload(&self) -> Result<()> {
+        // For this part, we will be using libcurl to upload the files to the server.
+        // why? because for some reason, reqwest's implementation of multipart forms are kinda broken
+        // I've posted a bug here: https://github.com/seanmonstar/reqwest/issues/1585
+        // Now we will be relying on 2 libraries to interact with the server.
+        // because curl does not have serde serialization.
         let endpoint = format!("{}/artifacts",env::var("ANDA_ENDPOINT")?);
         let build_id = env::var("ANDA_BUILD_ID")?;
 
@@ -48,26 +53,35 @@ impl ArtifactUploader {
 
         let mut easy = Easy::new();
         easy.url(&endpoint)?;
+        easy.verbose(true)?;
         easy.post(true)?;
 
         let mut form = Form::new();
-        let mut file_part = form.part("files");
+        form.part("build_id").contents(build_id.as_bytes()).add()?;
 
         // let mut form = multipart::client::lazy::Multipart::new();
         // let mut form = form.add_text("build_id", build_id);
 
         for file in &files {
             // add to array of form data
-            let (_, aa) = file;
-            file_part.file(aa);
+            let (path, aa) = file;
+            debug!("path: {:?}", path);
+            let filep = &format!("files[{}]", path);
+            debug!("filep: {:?}", filep);
+            let mut f = form.part(filep);
+            f.file(aa);
+            //file_part.file(aa);
+            f.add()?;
         }
 
-        file_part.add()?;
+        //file_part.add()?;
+        //id_part.add()?;
+        debug!("form: {:#?}", form);
 
         easy.httppost(form)?;
         easy.perform()?;
 
-        debug!("res: {:#?}", easy.response_code()?);
+        debug!("res: {:#?}", easy.response_code());
         Ok(())
     }
 }
