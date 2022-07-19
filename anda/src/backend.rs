@@ -1,11 +1,11 @@
-use std::path::PathBuf;
-use clap::{AppSettings, Parser, Subcommand, ArgEnum};
-use log::{debug, error, info, trace};
+use crate::api;
 use anyhow::{anyhow, Result};
+use clap::{AppSettings, ArgEnum, Parser, Subcommand};
+use log::{debug, error, info, trace};
 use std::fs;
 use std::io::Write;
+use std::path::PathBuf;
 use tabwriter::TabWriter;
-use crate::api;
 
 #[derive(Subcommand)]
 pub enum BackendCommand {
@@ -23,7 +23,16 @@ pub(crate) async fn match_subcmd(cmd: &BackendCommand) -> Result<()> {
             writer.write_all(b"ID\tNAME\tBUILD_ID\tTIMESTAMP\n")?;
 
             for artifact in artifacts {
-                writer.write_all(format!("{}\t{}\t{}\t{}\n", artifact.id.simple(), artifact.name, artifact.build_id.simple(), artifact.timestamp.date()).as_bytes())?;
+                writer.write_all(
+                    format!(
+                        "{}\t{}\t{}\t{}\n",
+                        artifact.id.simple(),
+                        artifact.name,
+                        artifact.build_id.simple(),
+                        artifact.timestamp.date()
+                    )
+                    .as_bytes(),
+                )?;
             }
             writer.flush()?;
             let output = String::from_utf8(writer.into_inner()?)?;
