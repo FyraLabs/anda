@@ -1,0 +1,3 @@
+[profile.release]
+incremental = true
+opt-level = "s"

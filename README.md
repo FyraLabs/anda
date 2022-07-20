@@ -4,13 +4,14 @@
 
 # Andaman
 
-Andaman is a package manager and build system that allows you to easily manage dependencies and different kinds of artifacts
+Andaman is a build system that allows you to easily manage dependencies and different kinds of artifacts
 
 It is based on Ultramarine Linux's `umpkg` project, and allows you to easily manage packages from multiple different package managers.
 
 Andaman is planned to have the following features:
 
-- Building, resolving and installing RPM packages
+- Building artifact
+- resolving and installing RPM packages
 - Support for NPM, Cargo and PyPI packages
 - Signing packages
 - Build artifacts for:

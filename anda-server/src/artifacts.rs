@@ -1,12 +1,12 @@
 use anyhow::Result;
-use aws_sdk_s3::output::PutObjectOutput;
-use aws_sdk_s3::types::ByteStream;
-use aws_sdk_s3::{Client, Config, Credentials, Endpoint, Region};
+use aws_sdk_s3::{
+    output::PutObjectOutput,
+    types::ByteStream,
+    {Client, Config, Credentials, Endpoint, Region},
+};
 use lazy_static::lazy_static;
-use std::env;
-use std::path::PathBuf;
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
+use std::{env, path::PathBuf};
+use tokio::{fs::File, io::AsyncReadExt};
 use walkdir::WalkDir;
 
 lazy_static! {
@@ -54,7 +54,8 @@ impl S3Artifact {
         // Read entire file into `bytes`
         file.read(&mut bytes).await?;
         // upload to S3
-        let ret = self.connection
+        let ret = self
+            .connection
             .put_object()
             .key(dest)
             .body(ByteStream::from(bytes))
@@ -73,14 +74,19 @@ impl S3Artifact {
                 let file_path = entry.into_path();
                 // get file name
                 // let file_name = file_path.file_name().unwrap().to_str().unwrap();
-                let real_path = format!("{}/{}", dest, file_path.strip_prefix(&src).unwrap().display());
+                let real_path = format!(
+                    "{}/{}",
+                    dest,
+                    file_path.strip_prefix(&src).unwrap().display()
+                );
                 self.upload_file(&real_path, file_path).await?;
             }
         })
     }
 
     pub async fn get_file(&self, dest: &str) -> Result<ByteStream> {
-        let ret = self.connection
+        let ret = self
+            .connection
             .get_object()
             .key(dest)
             .bucket(BUCKET.as_str())
