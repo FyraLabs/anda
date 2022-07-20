@@ -49,7 +49,10 @@ impl AndaBackend {
 
     pub async fn list_artifacts(&self) -> Result<Vec<Artifact>> {
         let url = format!("{}/artifacts", self.url);
-        let resp = self.client.get(&url).send().await?;
+        let resp = self.client.get(&url)
+        .query(&[("limit", "10")])
+        .send()
+        .await?;
         //println!("{:?}", &resp.json().await?);
         let artifacts: Vec<Artifact> = resp.json().await?;
         Ok(artifacts)
