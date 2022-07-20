@@ -4,9 +4,9 @@
 //! To test this code, you will need to set up and start the backend first.
 //! See the `anda-server` crate in the Andaman repository for more information.
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Ok, Result};
 use chrono::{DateTime, NaiveDateTime, Utc};
-use reqwest::Client;
+use reqwest::{multipart::Form, Client};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 use std::env;
@@ -49,13 +49,65 @@ impl AndaBackend {
 
     pub async fn list_artifacts(&self) -> Result<Vec<Artifact>> {
         let url = format!("{}/artifacts", self.url);
-        let resp = self.client.get(&url)
-        .query(&[("limit", "10")])
-        .send()
-        .await?;
+        let resp = self
+            .client
+            .get(&url)
+            .query(&[("limit", "10")])
+            .send()
+            .await?;
         //println!("{:?}", &resp.json().await?);
         let artifacts: Vec<Artifact> = resp.json().await?;
         Ok(artifacts)
+    }
+
+    pub async fn list_builds(&self) -> Result<Vec<Build>> {
+        let url = format!("{}/builds", self.url);
+        let resp = self
+            .client
+            .get(&url)
+            .query(&[("limit", "10")])
+            .send()
+            .await?;
+        //println!("{:?}", &resp.json().await?);
+        let builds: Vec<Build> = resp.json().await?;
+        Ok(builds)
+    }
+
+    pub async fn get_build(&self, id: Uuid) -> Result<Build> {
+        let url = format!("{}/builds/{}", self.url, id);
+        let resp = self.client.get(&url).send().await?;
+        //println!("{:?}", &resp.json().await?);
+        let build: Build = resp.json().await?;
+        Ok(build)
+    }
+
+    pub async fn get_build_by_target(&self, target_id: Uuid) -> Result<Vec<Build>> {
+        let url = format!("{}/builds/by_target/{}", self.url, target_id);
+        let resp = self.client.get(&url).send().await?;
+        //println!("{:?}", &resp.json().await?);
+        let builds: Vec<Build> = resp.json().await?;
+        Ok(builds)
+    }
+
+    pub async fn get_build_by_project(&self, project_id: Uuid) -> Result<Vec<Build>> {
+        let url = format!("{}/builds/by_project/{}", self.url, project_id);
+        let resp = self.client.get(&url).send().await?;
+        //println!("{:?}", &resp.json().await?);
+        let builds: Vec<Build> = resp.json().await?;
+        Ok(builds)
+    }
+
+    pub async fn update_build_status(&self, id: Uuid, status: i32) -> Result<Build> {
+        let url = format!("{}/builds/update_status", self.url);
+        let form = Form::new()
+            .percent_encode_noop()
+            .text("id", id.to_string())
+            .text("status", status.to_string());
+
+        let resp = self.client.post(&url).multipart(form).send().await?;
+
+        let build: Build = resp.json().await?;
+        Ok(build)
     }
 }
 
@@ -68,6 +120,13 @@ mod test_api {
         // dotenv file must be present in the current directory
         let backend = AndaBackend::new(None);
         let a = backend.list_artifacts().await.unwrap();
+        println!("{:#?}", a);
+    }
+    #[tokio::test]
+    async fn test_update_status() {
+        let backend = AndaBackend::new(None);
+        let id = "64b24bea5d504c64a81518ebec0a063b".parse::<Uuid>().unwrap();
+        let a = backend.update_build_status(id, 1).await.unwrap();
         println!("{:#?}", a);
     }
 }

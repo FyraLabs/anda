@@ -11,6 +11,7 @@ use tabwriter::TabWriter;
 pub enum BackendCommand {
     /// List Andaman Artifacts
     ListArtifacts,
+    ListBuilds,
 }
 
 pub(crate) async fn match_subcmd(cmd: &BackendCommand) -> Result<()> {
@@ -30,6 +31,38 @@ pub(crate) async fn match_subcmd(cmd: &BackendCommand) -> Result<()> {
                         artifact.name,
                         artifact.build_id.simple(),
                         artifact.timestamp
+                    )
+                    .as_bytes(),
+                )?;
+            }
+            writer.flush()?;
+            let output = String::from_utf8(writer.into_inner()?)?;
+            println!("{}", output);
+            Ok(())
+        }
+        BackendCommand::ListBuilds => {
+            let builds = api::AndaBackend::new(None).list_builds().await?;
+
+            let mut writer = TabWriter::new(vec![]);
+
+            writer.write_all(b"ID\tWORKER\tSTATUS\tPROJECT_ID\tTIMESTAMP\tCOMPOSE_ID\n")?;
+
+            for build in builds {
+                writer.write_all(
+                    format!(
+                        "{}\t{}\t{}\t{}\t{}\t{}\n",
+                        build.id.simple(),
+                        build.worker.simple(),
+                        build.status,
+                        build
+                            .project_id
+                            .map(|id| id.simple().to_string())
+                            .unwrap_or("".to_string()),
+                        build.timestamp,
+                        build
+                            .compose_id
+                            .map(|id| id.simple().to_string())
+                            .unwrap_or("".to_string()),
                     )
                     .as_bytes(),
                 )?;
