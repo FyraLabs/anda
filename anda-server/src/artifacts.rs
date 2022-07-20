@@ -1,4 +1,5 @@
 use anyhow::Result;
+use aws_sdk_s3::output::PutObjectOutput;
 use aws_sdk_s3::types::ByteStream;
 use aws_sdk_s3::{Client, Config, Credentials, Endpoint, Region};
 use lazy_static::lazy_static;
@@ -39,7 +40,7 @@ impl S3Artifact {
         })
     }
 
-    pub async fn upload_file(&self, dest: &str, src: PathBuf) -> Result<()> {
+    pub async fn upload_file(&self, dest: &str, src: PathBuf) -> Result<PutObjectOutput> {
         // convert path to absoluate path
         let file_path = src.canonicalize()?;
         println!("Uploading {} to {}", file_path.display(), dest);
@@ -53,7 +54,7 @@ impl S3Artifact {
         // Read entire file into `bytes`
         file.read(&mut bytes).await?;
         // upload to S3
-        self.connection
+        let ret = self.connection
             .put_object()
             .key(dest)
             .body(ByteStream::from(bytes))
@@ -61,7 +62,7 @@ impl S3Artifact {
             .send()
             .await?;
         // self.connection.put_object(path, &bytes).await?;
-        Ok(())
+        Ok(ret)
     }
 
     pub async fn upload_folder(&self, dest: &str, src: PathBuf) -> Result<()> {
@@ -76,6 +77,16 @@ impl S3Artifact {
                 self.upload_file(&real_path, file_path).await?;
             }
         })
+    }
+
+    pub async fn get_file(&self, dest: &str) -> Result<ByteStream> {
+        let ret = self.connection
+            .get_object()
+            .key(dest)
+            .bucket(BUCKET.as_str())
+            .send()
+            .await?;
+        Ok(ret.body)
     }
 }
 

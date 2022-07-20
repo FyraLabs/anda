@@ -1,16 +1,21 @@
 use anyhow::{anyhow, Ok, Result};
-use log::debug;
-use reqwest::{multipart, ClientBuilder};
+use log::{debug, error, warn, info};
+use mime_guess::MimeGuess;
+use reqwest::multipart;
+use reqwest::{Client, ClientBuilder};
 use serde_derive::Serialize;
+use std::env;
+use std::io::{BufRead, BufReader};
+use std::process::Stdio;
 use std::{
     collections::HashMap,
-    env,
     path::PathBuf,
     process::{Command, ExitStatus},
 };
-use tokio::fs::File;
+use tokio::fs::{File, OpenOptions};
 use tokio::io::AsyncReadExt;
 use walkdir::WalkDir;
+
 trait ExitOkPolyfill {
     fn exit_ok_polyfilled(&self) -> Result<()>;
 }
@@ -54,17 +59,15 @@ impl ArtifactUploader {
         for file in &files {
             // add to array of form data
             let (path, aa) = file;
-
-            let mut openfile = File::open(&aa).await?;
-
             let mut buf = Vec::new();
-            openfile.read(&mut buf).await?;
+            let _ = File::open(&aa).await?.read_to_end(&mut buf).await?;
 
             debug!("adding file: {}", aa.display());
+            let mimetype = MimeGuess::from_path(&aa).first_or_octet_stream();
             // add part to form
-            let file_part = multipart::Part::stream(buf)
+            let file_part = multipart::Part::bytes(buf)
                 .file_name(aa.display().to_string())
-                .mime_str("application/octet-stream")?;
+                .mime_str(mimetype.essence_str())?;
 
             // Get a position of the hashmap by matching the key to the path
             //let pos = files.clone().iter().position(|(k, _)| &k == &path);
@@ -73,7 +76,7 @@ impl ArtifactUploader {
             form = form.part(format!("files[{}]", path), file_part);
         }
 
-        debug!("form: {:#?}", form);
+        debug!("form: {:?}", form);
 
         // BUG: Only the files in the top directory are uploaded.
         // Please fix this.
@@ -108,7 +111,6 @@ impl ProjectBuilder {
             if entry.file_type().is_file() {
                 let file_path = entry.into_path();
                 let real_path = file_path.strip_prefix(&folder).unwrap();
-                println!("path: {}", real_path.display());
                 hash.insert(real_path.display().to_string(), file_path);
             }
         }
@@ -137,16 +139,23 @@ impl ProjectBuilder {
         // TODO: Move this to a method called `build_rpm` as we support more project types
         let config = crate::config::load_config(&self.root)?;
 
-        self.dnf_builddep()?;
+        let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or("anda-build".to_string());
 
-        let rpmbuild_exit = Command::new("rpmbuild")
+        // if env var `ANDA_SKIP_BUILDDEP` is set to 1, we skip the builddep step
+        if env::var("ANDA_SKIP_BUILDDEP").unwrap_or_default() != "1" {
+            self.dnf_builddep()?;
+        } else {
+            warn!("builddep step skipped, builds may fail due to missing dependencies!");
+        }
+
+        let mut rpmbuild = Command::new("rpmbuild")
             .args(vec![
                 "-ba",
                 config.package.spec.to_str().unwrap(),
                 "--define",
-                format!("_rpmdir anda-build").as_str(),
+                format!("_rpmdir {}", output_path).as_str(),
                 "--define",
-                format!("_srcrpmdir anda-build").as_str(),
+                format!("_srcrpmdir {}/src", output_path).as_str(),
                 "--define",
                 "_disable_source_fetch 0",
                 "--define",
@@ -157,11 +166,33 @@ impl ProjectBuilder {
                 .as_str(),
             ])
             .current_dir(&self.root)
-            .status()?;
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()?;
 
-        rpmbuild_exit.exit_ok_polyfilled()?;
+        let stdout = rpmbuild.stdout.take().unwrap();
+        let stderr = rpmbuild.stderr.take().unwrap();
+        let reader_out = BufReader::new(stdout);
+        let reader_err = BufReader::new(stderr);
 
-        self.push_folder(PathBuf::from("anda-build")).await?;
+        reader_out.lines().for_each(|line| {
+            info!("rpmbuild:\t{}", line.unwrap());
+        });
+        reader_err.lines().for_each(|line| {
+            info!("rpmbuild:\t{}", line.unwrap());
+        });
+
+        // stream log output from rpmbuild to rust log
+
+        //let rpmbuild_exit_status = rpmbuild.status()?;
+        //rpmbuild_exit_status.exit_ok_polyfilled()?;
+        rpmbuild.wait()?.exit_ok_polyfilled()?;
+
+        // if env var `ANDA_BUILD_ID` is set, we upload the artifacts
+
+        if env::var("ANDA_BUILD_ID").is_ok() {
+            self.push_folder(PathBuf::from(output_path)).await?;
+        }
 
         Ok(())
     }

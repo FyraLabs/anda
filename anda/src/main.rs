@@ -1,5 +1,6 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::{AppSettings, ArgEnum, Parser, Subcommand};
+use log::{debug, error, info, trace};
 use std::fs;
 use std::path::PathBuf;
 
@@ -63,7 +64,7 @@ enum Command {
 async fn main() -> Result<()> {
     // if RUST_LOG is not set, set it to "info"
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "debug");
+        std::env::set_var("RUST_LOG", "info,anda=debug");
     }
 
     pretty_env_logger::init();

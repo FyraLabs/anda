@@ -93,6 +93,7 @@ dependencies = [
  "clap",
  "dotenv",
  "log",
+ "mime_guess",
  "pretty_env_logger",
  "reqwest",
  "runas",

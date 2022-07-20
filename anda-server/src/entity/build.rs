@@ -10,7 +10,7 @@ pub struct Model {
     pub id: Uuid,
     pub worker: Uuid,
     pub status: i32,
-    pub target_id: Uuid,
+    pub target_id: Option<Uuid>,
     pub project_id: Option<Uuid>,
     pub timestamp: DateTime,
     pub compose_id: Option<Uuid>,

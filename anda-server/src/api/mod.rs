@@ -18,9 +18,15 @@
 use rocket::{Request, Route, Data, route};
 use rocket::{serde::{json::Json, Deserialize}, fs::FileServer, fs::{relative, Options}, State};
 use sea_orm::DatabaseConnection;
-use crate::prelude;
+use crate::db_object;
 mod builds;
 mod artifacts;
+
+#[derive(Responder)]
+#[response(status = 412, content_type = "json")]
+pub(crate) struct InvalidPayloadError {
+    pub(crate) message: String,
+}
 
 pub(crate) use self::builds::routes as builds_routes;
 pub(crate) use self::artifacts::routes as artifacts_routes;

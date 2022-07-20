@@ -88,7 +88,7 @@ mod tests {
         let worker = Uuid::new_v4();
         let target = Target::new("test".to_string(), None, 0);
         Target::add(&target).await.unwrap();
-        let build = Build::new(worker, 0, target.id, None);
+        let build = Build::new(worker, 0, None);
         Build::add(&build).await.unwrap();
         let art = Artifact::new(build.id, "test".to_string(), "url".to_string());
 

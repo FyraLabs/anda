@@ -1,3 +1,9 @@
+//! Database helper structs and functions.
+//! This module wraps over the ORM entites created by SeaORM.
+//! This module is used by the server to interact with the database.
+//! You should not need to use this module directly.
+
+
 // This code is licensed under the MIT License.
 // Copyright (c) 2022 the Ultramarine Project and Fyra Labs.
 
@@ -75,6 +81,7 @@ impl Artifact {
 
         let db = DbPool::get().await;
         let artifact = artifact::Entity::find()
+            .order_by_desc(artifact::Column::Timestamp)
             .paginate(db, limit)
             .fetch_page(page)
             .await?;
@@ -113,7 +120,7 @@ pub struct Build {
     pub id: Uuid,
     pub worker: Uuid,
     pub status: i32,
-    pub target_id: Uuid,
+    pub target_id: Option<Uuid>,
     pub project_id: Option<Uuid>,
     pub timestamp: DateTime,
     pub compose_id: Option<Uuid>,
@@ -133,12 +140,12 @@ impl Build {
         })
     }
 
-    pub fn new(worker: Uuid, status: i32, target_id: Uuid, project_id: Option<Uuid>) -> Self {
+    pub fn new(worker: Uuid, status: i32, project_id: Option<Uuid>) -> Self {
         Self {
             id: Uuid::new_v4(),
             worker,
             status,
-            target_id,
+            target_id: None,
             project_id,
             timestamp: Utc::now().naive_utc(),
             compose_id: None,
@@ -157,6 +164,50 @@ impl Build {
             ..Default::default()
         };
         let res = build::ActiveModel::insert(build, db).await?;
+        Build::from_model(res).await
+    }
+
+    pub async fn update_status(&self, status: i32) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            status: ActiveValue::Set(status),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Build::from_model(res).await
+    }
+
+    pub async fn tag_compose(&self, compose_id: Uuid) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            compose_id: ActiveValue::Set(Some(compose_id)),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Build::from_model(res).await
+    }
+
+    pub async fn tag_target(&self, target_id: Uuid) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            target_id: ActiveValue::Set(Some(target_id)),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Build::from_model(res).await
+    }
+
+    pub async fn untag_target(&self) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            target_id: ActiveValue::Set(None),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
         Build::from_model(res).await
     }
 
