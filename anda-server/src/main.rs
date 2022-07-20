@@ -3,37 +3,53 @@ extern crate rocket;
 #[macro_use]
 extern crate rocket_dyn_templates;
 use rocket::fs::FileServer;
-use rocket::http::ContentType;
-use rocket::response::status;
 use rocket_dyn_templates::Template;
 use sea_orm_rocket::Database;
+use serde::Deserialize;
 mod api;
 mod artifacts;
 mod auth;
+mod backend;
 mod db;
 mod db_object;
 mod entity;
 mod pkgs;
 mod repos;
-use sea_orm::{DatabaseConnection, EntityTrait};
-use sea_orm_rocket::Database;
-mod artifacts;
-mod backend;
-mod entity;
+
+// #[derive(Serialize, Deserialize)]
+// struct BuildDisplay {
+//     id: String,
+//     proj: String,
+//     target: String,
+//     comp: String,
+//     status: i32
+// }
 
 #[get("/")]
-fn index() -> Template {
+async fn index() -> Template {
+    let builds = db_object::Build::list(10, 0).await.unwrap_or(vec![]);
+    let artifacts = db_object::Artifact::list(10, 0).await.unwrap_or(vec![]);
+    let projects = db_object::Project::list(10, 0).await.unwrap_or(vec![]);
+    // for build in &builds {
+    //     let id = build.id.simple().to_string();
+    // }
+/*     let builds = builds.iter().map(|build| {
+        BuildDisplay {
+            id: build.id.simple().to_string(),
+            proj: build.project_id.map_or("".to_string(), |uuid| uuid.simple().to_string()),
+            target: build.target_id.map_or("".to_string(), |target| target.simple().to_string()),
+            comp: build.compose_id.map_or("".to_string(), |compose| compose.simple().to_string()),
+            status: build.status
+        }
+    }); */
     Template::render(
         "index",
         context! {
-            foo: 123,
+            builds,
+            artifacts,
+            projects
         },
     )
-}
-
-#[get("/favicon.png")]
-fn favicon() -> (ContentType, &'static Vec<u8>) {
-    (ContentType::PNG, include_bytes!("favicon.png"))
 }
 
 #[launch]

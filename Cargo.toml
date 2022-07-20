@@ -4,5 +4,6 @@ members = [
     "anda",
     "anda-server",
     "migration",
-    "anda-worker"
+    "anda-worker",
+    "anda-web"
 ]

@@ -1,11 +1,62 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title>Andaman Package Builder</title>
-        {{!-- <link rel="icon" type="image/x-icon" href="assets/anda.png"> --}}
+        <title>Andaman Build System</title>
+        <link rel="icon" type="image/x-icon" href="/assets/anda.ico">
     </head>
     <body>
-        <p>hai {{foo}}</p>
+        <h1>Andaman Build System</h1>
+        <div id="builds" class="section">
+            <h2>Builds</h2>
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>Project</th>
+                    <th>Target</th>
+                    <th>Status</th>
+                </tr>
+                {{#each builds ~}}
+                <tr>
+                    <td><a href="/b/{{id}}">{{id}}</a></td>
+                    <td>{{project_id}}</td>
+                    <td>{{target_id}}</td>
+                    <td>{{status}}</td>
+                </tr>
+                {{~/each}}
+            </table>
+        </div>
+        <div id="artifacts" class="section">
+            <h2>Artifacts</h2>
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Build</th>
+                    <th>Time</th>
+                </tr>
+                {{#each artifacts ~}}
+                <tr>
+                    <td><a href="/a/{{id}}">{{name}}</a></td>
+                    <td>{{build}}</td>
+                    <td>{{time}}</td>
+                </tr>
+                {{~/each}}
+            </table>
+        </div>
+        <div id="projects" class="section">
+            <h2>Project</h2>
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Description</th>
+                </tr>
+                {{#each projects ~}}
+                <tr>
+                    <td><a href="/p/{{id}}">{{name}}</a></td>
+                    <td>{{description}}</td>
+                </tr>
+                {{~/each}}
+            </table>
+        </div>
     </body>
-    <link rel="stylesheet" href="index.css">
+    <link rel="stylesheet" href="/static/index.css">
 </html>

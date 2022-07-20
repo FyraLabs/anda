@@ -141,6 +141,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "anda-web"
+version = "0.1.0"
+
+[[package]]
 name = "anda-worker"
 version = "0.1.0"
 

@@ -5,7 +5,7 @@ use rocket::form::Form;
 use rocket::fs::TempFile;
 use rocket::Route;
 use rocket::serde::json::Json;
-use crate::prelude::*;
+use crate::db_object::*;
 use rocket::serde::uuid::Uuid;
 
 pub(crate) fn routes() -> Vec<Route> {
