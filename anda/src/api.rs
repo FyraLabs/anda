@@ -42,7 +42,7 @@ impl AndaBackend {
         let url = url.unwrap_or_else(|| env::var("ANDA_ENDPOINT").expect("ANDA_ENDPOINT not set"));
         AndaBackend {
             client: Client::new(),
-            url: url,
+            url,
         }
     }
 
@@ -50,8 +50,7 @@ impl AndaBackend {
         let url = format!("{}/artifacts", self.url);
         let resp = self.client.get(&url).send().await?;
         //println!("{:?}", &resp.json().await?);
-        let artifacts: Vec<Artifact> = resp.json().await?;
-        Ok(artifacts)
+        Ok(resp.json().await?)
     }
 }
 

@@ -20,8 +20,8 @@ impl DbPool {
 
     pub async fn new() -> Result<DatabaseConnection, DbErr> {
         dotenv().ok();
-        let url = env::var("DATABASE_URL").unwrap();
-        let mut opts = ConnectOptions::new(env::var("DATABASE_URL").unwrap());
+        let url = env::var("DATABASE_URL").unwrap_or_else(|_| panic!("$DATABSE_URL not set"));
+        let mut opts = ConnectOptions::new(url);
         opts
             .max_connections(100)
             .min_connections(5)
