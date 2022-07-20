@@ -1,3 +1,9 @@
+//! Database helper structs and functions.
+//! This module wraps over the ORM entites created by SeaORM.
+//! This module is used by the server to interact with the database.
+//! You should not need to use this module directly.
+
+
 // This code is licensed under the MIT License.
 // Copyright (c) 2022 the Ultramarine Project and Fyra Labs.
 

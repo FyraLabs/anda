@@ -22,5 +22,11 @@ use crate::prelude;
 mod builds;
 mod artifacts;
 
+#[derive(Responder)]
+#[response(status = 412, content_type = "json")]
+pub(crate) struct InvalidPayloadError {
+    pub(crate) message: String,
+}
+
 pub(crate) use self::builds::routes as builds_routes;
 pub(crate) use self::artifacts::routes as artifacts_routes;
