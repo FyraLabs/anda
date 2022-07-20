@@ -64,10 +64,11 @@ impl ArtifactUploader {
             let _ = File::open(&aa).await?.read_to_end(&mut buf).await?;
 
             debug!("adding file: {}", aa.display());
+            let mimetype = MimeGuess::from_path(&aa).first_or_octet_stream();
             // add part to form
             let file_part = multipart::Part::bytes(buf)
                 .file_name(aa.display().to_string())
-                .mime_str("application/octet-stream")?;
+                .mime_str(mimetype.essence_str())?;
 
             // Get a position of the hashmap by matching the key to the path
             //let pos = files.clone().iter().position(|(k, _)| &k == &path);
