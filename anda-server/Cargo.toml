@@ -26,7 +26,6 @@ async-once-cell = "0.4.2"
 chrono = "0.4.19"
 lazy_static = "1.4.0"
 aws-sdk-s3 = "0.15.0"
-aws-config = "0.15.0"
 # Use walkdir for the folder upload function
 # Since S3 automatically creates folders (prefixes), we don't need to recursively upload each folder
 walkdir = "2.3.2"
