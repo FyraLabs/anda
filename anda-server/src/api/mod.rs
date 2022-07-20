@@ -18,7 +18,7 @@
 use rocket::{Request, Route, Data, route};
 use rocket::{serde::{json::Json, Deserialize}, fs::FileServer, fs::{relative, Options}, State};
 use sea_orm::DatabaseConnection;
-use crate::prelude;
+use crate::db_object;
 mod builds;
 mod artifacts;
 

@@ -3,7 +3,7 @@ extern crate rocket;
 use rocket::{serde::{json::Json, Deserialize}, fs::FileServer, fs::{relative, Options}, State};
 
 mod pkgs;
-mod prelude;
+mod db_object;
 mod repos;
 mod auth;
 mod db;

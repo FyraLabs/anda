@@ -11,6 +11,8 @@ use std::path::PathBuf;
 use anyhow::{anyhow, Result};
 use rocket::serde::uuid::Uuid;
 
+use crate::db_object;
+
 
 pub enum BuildMethod {
     Url { url: String },
@@ -64,13 +66,22 @@ impl AndaBackend {
     }
 }
 
+trait S3Object {
+    fn get_url(&self) -> String;
+    fn get(uuid: Uuid) -> Result<Self> where Self: Sized;
+    /// Pull raw data from S3
+    fn pull_bytes(&self) -> Result<Vec<u8>>;
+    /// Upload file to S3
+    fn upload_file(path: String) -> Result<()>;
+
+}
+
 
 // Temporary files for file uploads.
 #[derive(Debug, Clone)]
 pub struct UploadCache {
     pub path: PathBuf,
     pub filename: String,
-
 }
 
 impl UploadCache {
@@ -93,3 +104,7 @@ impl UploadCache {
         Ok(())
     }
 }
+
+
+// Artifact API
+// #[derive(Debug, Clone)]
