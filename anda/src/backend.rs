@@ -29,7 +29,7 @@ pub(crate) async fn match_subcmd(cmd: &BackendCommand) -> Result<()> {
                         artifact.id.simple(),
                         artifact.name,
                         artifact.build_id.simple(),
-                        artifact.timestamp.date()
+                        artifact.timestamp
                     )
                     .as_bytes(),
                 )?;
