@@ -75,6 +75,7 @@ impl Artifact {
 
         let db = DbPool::get().await;
         let artifact = artifact::Entity::find()
+            .order_by_desc(artifact::Column::Timestamp)
             .paginate(db, limit)
             .fetch_page(page)
             .await?;
