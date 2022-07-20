@@ -94,6 +94,7 @@ dependencies = [
  "dotenv",
  "libxml",
  "log",
+ "mime_guess",
  "pretty_env_logger",
  "pubgrub",
  "reqwest",

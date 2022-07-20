@@ -30,7 +30,7 @@ sudo = "0.6.0"
 pubgrub = "0.2.1"
 libxml = "0.3.0"
 # Add macro feature so rust-analyzer finally finds the macros
-tokio ={ version = "1.20.0", features = ["rt-multi-thread", "macros", "fs"] }
+tokio ={ version = "1.20.0", features = ["rt-multi-thread", "macros", "fs", "process"] }
 walkdir = "2.3.2"
 dotenv = "0.15.0"
 uuid = { version = "1.1.2", features = ["serde"] }
@@ -39,6 +39,7 @@ reqwest = { version = "0.11.11", features = ["multipart", "json"] }
 # tabwriter for pretty printing tables
 tabwriter = "1.2.1"
 runas = "0.2.1"
+mime_guess = "2.0.4"
 
 [package.metadata.rpm]
 package = "anda"
