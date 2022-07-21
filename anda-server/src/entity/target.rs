@@ -10,7 +10,7 @@ pub struct Model {
     pub id: Uuid,
     pub name: String,
     pub image: Option<String>,
-    pub arch: i32,
+    pub arch: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter)]

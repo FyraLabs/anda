@@ -112,7 +112,8 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
 
     // process backend request
 
-    let build = Build::new(data.worker, 0, data.project_id).add().await;
+    // todo: move this to backend
+    let build = Build::new(data.worker, 0, data.project_id, "BuildSubmission").add().await;
     Ok(Json(build.unwrap()))
 }
 

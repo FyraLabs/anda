@@ -14,6 +14,7 @@ pub struct Model {
     pub project_id: Option<Uuid>,
     pub timestamp: DateTime,
     pub compose_id: Option<Uuid>,
+    pub build_type: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

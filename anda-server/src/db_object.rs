@@ -13,9 +13,11 @@ use crate::{
 use chrono::offset::Utc;
 use entity::*;
 use sea_orm::{
-    prelude::{DateTime, DateTimeWithTimeZone, Uuid},
+    prelude::{Uuid},
     *,
 };
+
+use chrono::{DateTime, NaiveDateTime, TimeZone};
 
 use db::DbPool;
 
@@ -31,7 +33,7 @@ pub struct Artifact {
     pub name: String,
     pub url: String,
     pub build_id: Uuid,
-    pub timestamp: DateTime,
+    pub timestamp: DateTime<Utc>,
 }
 impl Artifact {
     pub fn new(build_id: Uuid, name: String, url: String) -> Self {
@@ -39,7 +41,7 @@ impl Artifact {
             id: Uuid::new_v4(),
             build_id,
             name,
-            timestamp: Utc::now().naive_utc(),
+            timestamp: Utc::now(),
             url,
         }
     }
@@ -49,7 +51,7 @@ impl Artifact {
             build_id: model.build_id,
             id: model.id,
             name: model.name,
-            timestamp: model.timestamp,
+            timestamp: DateTime::from_utc(model.timestamp, Utc),
             url: model.url,
         })
     }
@@ -60,7 +62,7 @@ impl Artifact {
             id: ActiveValue::Set(self.id),
             build_id: ActiveValue::Set(self.build_id),
             name: ActiveValue::Set(self.name.clone()),
-            timestamp: ActiveValue::Set(self.timestamp),
+            timestamp: ActiveValue::Set(self.timestamp.naive_utc()),
             url: ActiveValue::Set(self.url.clone()),
             ..Default::default()
         };
@@ -95,7 +97,7 @@ impl Artifact {
     }
 
     /// Gets an artifact by the build it was associated with (with Build ID)
-    pub async fn get_by_build_id(build_id: i32) -> Result<Vec<Artifact>> {
+    pub async fn get_by_build_id(build_id: Uuid) -> Result<Vec<Artifact>> {
         let db = DbPool::get().await;
         let artifact = artifact::Entity::find()
             .filter(artifact::Column::BuildId.eq(build_id))
@@ -132,8 +134,9 @@ pub struct Build {
     pub status: i32,
     pub target_id: Option<Uuid>,
     pub project_id: Option<Uuid>,
-    pub timestamp: DateTime,
+    pub timestamp: DateTime<Utc>,
     pub compose_id: Option<Uuid>,
+    pub build_type: String,
 }
 
 impl Build {
@@ -145,20 +148,22 @@ impl Build {
             status: model.status,
             target_id: model.target_id,
             project_id: model.project_id,
-            timestamp: model.timestamp,
+            timestamp: DateTime::from_utc(model.timestamp, Utc),
             compose_id: model.compose_id,
+            build_type: model.build_type,
         })
     }
 
-    pub fn new(worker: Uuid, status: i32, project_id: Option<Uuid>) -> Self {
+    pub fn new(worker: Uuid, status: i32, project_id: Option<Uuid>, build_type: &str) -> Self {
         Self {
             id: Uuid::new_v4(),
             worker,
             status,
             target_id: None,
             project_id,
-            timestamp: Utc::now().naive_utc(),
+            timestamp: Utc::now(),
             compose_id: None,
+            build_type: build_type.to_string(),
         }
     }
 
@@ -169,7 +174,8 @@ impl Build {
             worker: ActiveValue::Set(self.worker),
             status: ActiveValue::Set(self.status),
             target_id: ActiveValue::Set(self.target_id),
-            timestamp: ActiveValue::Set(self.timestamp),
+            timestamp: ActiveValue::Set(self.timestamp.naive_utc()),
+            build_type: ActiveValue::Set(self.build_type.clone()),
             ..Default::default()
         };
         let res = build::ActiveModel::insert(build, db).await?;
@@ -328,7 +334,7 @@ pub struct Compose {
     pub id: Uuid,
     pub r#ref: Option<String>,
     pub project_id: Uuid,
-    pub timestamp: DateTime,
+    pub timestamp: DateTime<Utc>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -336,11 +342,11 @@ pub struct Target {
     pub id: Uuid,
     pub name: String,
     pub image: Option<String>,
-    pub arch: i32,
+    pub arch: String,
 }
 
 impl Target {
-    pub fn new(name: String, image: Option<String>, arch: i32) -> Self {
+    pub fn new(name: String, image: Option<String>, arch: String) -> Self {
         Self {
             id: Uuid::new_v4(),
             name,
@@ -364,7 +370,7 @@ impl Target {
             id: ActiveValue::Set(self.id),
             name: ActiveValue::Set(self.name.clone()),
             image: ActiveValue::Set(self.image.clone()),
-            arch: ActiveValue::Set(self.arch),
+            arch: ActiveValue::Set(self.arch.clone()),
             ..Default::default()
         };
         let res = target::ActiveModel::insert(target, db).await?;
