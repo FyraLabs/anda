@@ -3,7 +3,7 @@ use log::{debug, error, info, warn};
 use mime_guess::MimeGuess;
 use reqwest::multipart;
 use reqwest::{Client, ClientBuilder};
-use serde_derive::Serialize;
+use serde::Serialize;
 use std::env;
 use std::io::{BufRead, BufReader};
 use std::process::Stdio;
