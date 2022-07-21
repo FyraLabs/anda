@@ -223,7 +223,7 @@ impl MigrationTrait for Migration {
 
 /// Learn more at https://docs.rs/sea-query#iden
 #[derive(Iden)]
-enum Project {
+pub enum Project {
     Table,
     Id,
     Name,
@@ -231,13 +231,13 @@ enum Project {
 }
 
 #[derive(Iden)]
-enum User {
+pub enum User {
     Table,
     Id,
 }
 
 #[derive(Iden)]
-enum Compose {
+pub enum Compose {
     Table,
     Id,
     Ref,
@@ -246,7 +246,7 @@ enum Compose {
 }
 
 #[derive(Iden)]
-enum Target {
+pub enum Target {
     Table,
     Id,
     Name,
@@ -256,7 +256,7 @@ enum Target {
 }
 
 #[derive(Iden)]
-enum Build {
+pub enum Build {
     Table,
     Id,
     ProjectId,
@@ -265,10 +265,11 @@ enum Build {
     Status,
     Worker,
     Timestamp,
+    BuildType,
 }
 
 #[derive(Iden)]
-enum Artifact {
+pub enum Artifact {
     Table,
     BuildId,
     Id,
