@@ -8,7 +8,6 @@ edition = "2021"
 [dependencies]
 log = "0.4.17"
 rocket = { version = "0.5.0-rc.2", features = ["json", "uuid"] }
-rocket_dyn_templates = { version = "0.1.0-rc.2", features = ["handlebars"] }
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 serde_yaml = "0.8.24"
