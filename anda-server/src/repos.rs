@@ -1,7 +1,7 @@
 use crate::db_object::Build;
+use anyhow::{anyhow, Result};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use anyhow::{anyhow, Result};
 #[derive(Clone, Debug)]
 pub enum Repo {
     RPM {
@@ -21,27 +21,15 @@ pub enum Repo {
 
 impl Repo {
     pub fn new_rpm(id: String, builds: Vec<Build>) -> Repo {
-        Repo::RPM {
-            id,
-            builds,
-        }
+        Repo::RPM { id, builds }
     }
     pub fn new_image(id: String, builds: Vec<Build>) -> Repo {
-        Repo::Image {
-            id,
-            builds,
-        }
+        Repo::Image { id, builds }
     }
     pub fn new_ostree(id: String, refs: Vec<String>, template: String) -> Repo {
-        Repo::OSTree {
-            id,
-            refs,
-            template,
-        }
+        Repo::OSTree { id, refs, template }
     }
-    pub fn generate(&self) {
-
-    }
+    pub fn generate(&self) {}
 }
 
 /// Image repositories
@@ -51,18 +39,16 @@ impl Repo {
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ImageRepo {
     pub project: String,
-    pub images: Vec<Image>
+    pub images: Vec<Image>,
 }
 
 impl ImageRepo {
     pub fn new(project: String, images: Vec<Image>) -> ImageRepo {
-        ImageRepo {
-            project,
-            images
-        }
+        ImageRepo { project, images }
     }
     pub fn from_json(json: &Value) -> Result<ImageRepo> {
-        let repo: ImageRepo = serde_json::from_value(json.clone()).expect("Failed to deserialize JSON");
+        let repo: ImageRepo =
+            serde_json::from_value(json.clone()).expect("Failed to deserialize JSON");
         Ok(repo)
     }
     pub fn from_file(path: &str) -> Result<ImageRepo> {
@@ -80,7 +66,6 @@ impl ImageRepo {
     }
 }
 
-
 /// Image metadata
 /// This is the metadata for an image.
 /// Works similarly to what the package metadata in an RPM repository is.
@@ -92,7 +77,6 @@ pub struct Image {
     pub arch: String,
     pub checksum: String,
 }
-
 
 #[cfg(test)]
 mod test {

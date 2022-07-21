@@ -12,7 +12,7 @@ struct Build {
     id: String,
     proj: String,
     tag: String,
-    status: String
+    status: String,
 }
 
 impl Component for Model {
@@ -37,15 +37,20 @@ impl Component for Model {
     fn view(&self, ctx: &Context<Self>) -> Html {
         // This gives us a component's "`Scope`" which allows us to send messages, etc to the component.
         let link = ctx.link();
-        let builds: Vec<Build> = vec![];  // get builds here
-        let builds = builds.iter().map(|b| html! {
-            <tr>
-                <th>{ &b.id }</th>
-                <th>{ &b.proj }</th>
-                <th>{ &b.tag }</th>
-                <th>{ &b.status }</th>
-            </tr>
-        }).collect::<Html>();
+        let builds: Vec<Build> = vec![]; // get builds here
+        let builds = builds
+            .iter()
+            .map(|b| {
+                html! {
+                    <tr>
+                        <th>{ &b.id }</th>
+                        <th>{ &b.proj }</th>
+                        <th>{ &b.tag }</th>
+                        <th>{ &b.status }</th>
+                    </tr>
+                }
+            })
+            .collect::<Html>();
         html! {
             // <div>
             //     <button onclick={link.callback(|_| Msg::AddOne)}>{ "+1" }</button>

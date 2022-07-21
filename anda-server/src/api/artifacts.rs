@@ -1,19 +1,15 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::db_object::*;
 use rocket::form::Form;
 use rocket::fs::TempFile;
-use rocket::Route;
 use rocket::serde::json::Json;
-use crate::db_object::*;
 use rocket::serde::uuid::Uuid;
+use rocket::Route;
 
 pub(crate) fn routes() -> Vec<Route> {
-    routes![
-        index,
-        get,
-        upload,
-    ]
+    routes![index, get, upload,]
 }
 
 #[derive(FromForm)]
@@ -24,10 +20,9 @@ pub struct ArtifactUpload<'r> {
     files: HashMap<String, TempFile<'r>>,
 }
 
-
 #[get("/?<limit>&<page>")]
-async fn index(page: Option<usize>,limit: Option<usize>) -> Json<Vec<Artifact>> {
-    let arts = Artifact::list(limit.unwrap_or(100).try_into().unwrap(),page.unwrap_or(0)).await;
+async fn index(page: Option<usize>, limit: Option<usize>) -> Json<Vec<Artifact>> {
+    let arts = Artifact::list(limit.unwrap_or(100).try_into().unwrap(), page.unwrap_or(0)).await;
     Json(arts.unwrap())
 }
 
@@ -43,7 +38,6 @@ async fn get(id: Uuid) -> Option<Json<Artifact>> {
 // Upload artifact (entire folders) with form data
 #[post("/", data = "<data>")]
 async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
-
     // Get the build ID
     let build_id = data.build_id;
     println!("Build ID: {}", build_id);
@@ -60,9 +54,11 @@ async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
 
         // Upload the file to S3
 
-        let dest_path = format!("artifacts/{}/{}",build_id, name);
+        let dest_path = format!("artifacts/{}/{}", build_id, name);
 
-        obj.upload_file(&dest_path, PathBuf::from(file.path().unwrap())).await.expect("Failed to upload file");
+        obj.upload_file(&dest_path, PathBuf::from(file.path().unwrap()))
+            .await
+            .expect("Failed to upload file");
 
         // Create an artifact object to store in the database
         let artifact = Artifact::new(build_id, name.to_string(), dest_path.to_string());
@@ -75,9 +71,7 @@ async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
     }
 
     Json(results)
-
 }
-
 
 #[cfg(test)]
 mod tests {

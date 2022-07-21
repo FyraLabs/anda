@@ -16,7 +16,6 @@ mod repos;
 
 #[launch]
 async fn rocket() -> _ {
-
     rocket::build()
         .attach(db::Db::init())
         .mount("/builds", api::builds_routes())

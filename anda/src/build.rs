@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Ok, Result};
-use log::{debug, error, warn, info};
+use log::{debug, error, info, warn};
 use mime_guess::MimeGuess;
 use reqwest::multipart;
 use reqwest::{Client, ClientBuilder};

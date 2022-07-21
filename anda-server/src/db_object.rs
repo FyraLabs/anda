@@ -3,14 +3,19 @@
 //! This module is used by the server to interact with the database.
 //! You should not need to use this module directly.
 
-
 // This code is licensed under the MIT License.
 // Copyright (c) 2022 the Ultramarine Project and Fyra Labs.
 
-use entity::*;
-use sea_orm::{*, prelude::{DateTimeWithTimeZone, DateTime, Uuid}};
-use crate::{entity::{artifact, build, project, target}, db};
+use crate::{
+    db,
+    entity::{artifact, build, project, target},
+};
 use chrono::offset::Utc;
+use entity::*;
+use sea_orm::{
+    prelude::{DateTime, DateTimeWithTimeZone, Uuid},
+    *,
+};
 
 use db::DbPool;
 
@@ -19,7 +24,6 @@ use anyhow::{anyhow, Result};
 use futures::future;
 
 use serde_derive::{Deserialize, Serialize};
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Artifact {
@@ -30,14 +34,13 @@ pub struct Artifact {
     pub timestamp: DateTime,
 }
 impl Artifact {
-
     pub fn new(build_id: Uuid, name: String, url: String) -> Self {
         Self {
             id: Uuid::new_v4(),
             build_id,
             name,
             timestamp: Utc::now().naive_utc(),
-            url
+            url,
         }
     }
 
@@ -78,7 +81,6 @@ impl Artifact {
 
     /// Lists all available artifact
     pub async fn list(limit: usize, page: usize) -> Result<Vec<Artifact>> {
-
         let db = DbPool::get().await;
         let artifact = artifact::Entity::find()
             .order_by_desc(artifact::Column::Timestamp)
@@ -86,7 +88,10 @@ impl Artifact {
             .fetch_page(page)
             .await?;
         // Marshall the types from our internal representation to the actual DB representation.
-        Ok(artifact.into_iter().map(|artifact| Artifact::from_model(artifact).unwrap()).collect())
+        Ok(artifact
+            .into_iter()
+            .map(|artifact| Artifact::from_model(artifact).unwrap())
+            .collect())
     }
 
     /// Gets an artifact by the build it was associated with (with Build ID)
@@ -98,7 +103,10 @@ impl Artifact {
             .await
             .unwrap();
         // Marshall the types from our internal representation to the actual DB representation.
-        Ok(artifact.into_iter().map(|artifact| Artifact::from_model(artifact).unwrap()).collect())
+        Ok(artifact
+            .into_iter()
+            .map(|artifact| Artifact::from_model(artifact).unwrap())
+            .collect())
     }
 
     /// Searches for an artifact
@@ -110,9 +118,11 @@ impl Artifact {
             .await
             .unwrap();
         // Marshall the types from our internal representation to the actual DB representation.
-        Ok(artifact.into_iter().map(|artifact| Artifact::from_model(artifact).unwrap()).collect())
+        Ok(artifact
+            .into_iter()
+            .map(|artifact| Artifact::from_model(artifact).unwrap())
+            .collect())
     }
-
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -151,7 +161,6 @@ impl Build {
             compose_id: None,
         }
     }
-
 
     pub async fn add(&self) -> Result<Build> {
         let db = DbPool::get().await;
@@ -230,11 +239,9 @@ impl Build {
             .await?;
 
         Ok(
-            future::try_join_all(
-                build.into_iter().map(|build| {
-                    Build::from_model(build)
-                })
-            ).await.unwrap()
+            future::try_join_all(build.into_iter().map(|build| Build::from_model(build)))
+                .await
+                .unwrap(),
         )
     }
     pub async fn get_by_target_id(target_id: Uuid) -> Result<Vec<Build>> {
@@ -245,14 +252,11 @@ impl Build {
             .all(db)
             .await?;
         Ok(
-            future::try_join_all(
-                build.into_iter().map(|build| {
-                    Build::from_model(build)
-                })
-            ).await.unwrap()
+            future::try_join_all(build.into_iter().map(|build| Build::from_model(build)))
+                .await
+                .unwrap(),
         )
     }
-
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -263,7 +267,6 @@ pub struct Project {
 }
 
 impl Project {
-
     fn new(name: &str, description: Option<&str>) -> Project {
         // The resulting project is not ready for use, and does not have an ID.
         Project {
@@ -310,15 +313,14 @@ impl Project {
             .paginate(db, limit)
             .fetch_page(page)
             .await?;
-        Ok(
-            future::try_join_all(
-                project.into_iter().map(|project| {
-                    Project::from_model(project)
-                })
-            ).await.unwrap()
+        Ok(future::try_join_all(
+            project
+                .into_iter()
+                .map(|project| Project::from_model(project)),
         )
+        .await
+        .unwrap())
     }
-
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -343,7 +345,7 @@ impl Target {
             id: Uuid::new_v4(),
             name,
             image,
-            arch
+            arch,
         }
     }
 
