@@ -6,10 +6,13 @@
 
 // TODO: Actually send kubernetes job to the server.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, time::SystemTime};
 
 use anyhow::{anyhow, Result};
+use aws_sdk_s3::types::{ByteStream,DateTime};
+//use aws_smithy_types::DateTime;
 use rocket::serde::uuid::Uuid;
+use tokio::{fs::File, io::AsyncReadExt};
 
 use crate::{
     artifacts::{S3Artifact, BUCKET, S3_ENDPOINT},
@@ -49,6 +52,8 @@ impl AndaBackend {
         match &self.method {
             BuildMethod::Url { url } => {
                 println!("Building from url: {}", url);
+
+                //crate::kubernetes::dispatch_build(id, image);
             }
             BuildMethod::SrcFile { path, build_type } => {
                 println!("Building from src file: {}", path.display());
@@ -69,7 +74,9 @@ trait S3Object {
     where
         Self: Sized;
     /// Pull raw data from S3
-    fn pull_bytes(&self) -> Result<Vec<u8>>;
+    async fn pull_bytes(&self) -> Result<ByteStream>
+    where
+        Self: Sized;
     /// Upload file to S3
     async fn upload_file(self, path: PathBuf) -> Result<Self>
     where
@@ -155,17 +162,118 @@ impl S3Object for BuildCache {
 
         Ok(BuildCache { id: uuid, filename })
     }
-    fn pull_bytes(&self) -> Result<Vec<u8>> {
+
+
+    async fn pull_bytes(&self) -> Result<ByteStream>
+    where
+        Self: Sized,
+    {
         // Get from S3
-        Ok(vec![])
+        todo!()
     }
 
     async fn upload_file(self, path: PathBuf) -> Result<Self> {
+        let file_path = path.canonicalize()?;
+        let mut file = File::open(file_path).await?;
+        let metadata = file.metadata().await?;
+        let mut bytes = vec![0; metadata.len() as usize];
+        file.read(&mut bytes).await?;
+
         let obj = crate::artifacts::S3Artifact::new()?;
         let dest_path = format!("build_cache/{}/{}", self.id.simple(), self.filename);
+        let chrono_time = chrono::Utc::now() + chrono::Duration::days(7);
+        //let aws_time = DateTime::from_chrono_utc(chrono_time);
+        // convert chrono time to system time
+        let sys_time = SystemTime::from(chrono_time);
+        obj.connection
+            .put_object()
+            .bucket(BUCKET.as_str())
+            .key(dest_path.as_str())
+            // 7 days
+            .expires(DateTime::from(sys_time))
+            .send()
+            .await?;
+        println!("Uploaded {}", dest_path);
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Artifact {
+    pub id: Uuid,
+    pub filename: String,
+    pub path: String,
+}
+
+impl Artifact {
+    pub fn new(filename: String, path: String) -> Self {
+        dotenv::dotenv().ok();
+        Self {
+            id: Uuid::new_v4(),
+            filename,
+            path,
+        }
+    }
+
+    pub async fn get_for_build(&self, build_id: Uuid) -> Result<Vec<Self>> {
+
+
+        let arts = crate::db_object::Artifact::get_by_build_id(build_id).await?;
+
+        Ok(arts.iter().map(|art| {
+            Self {
+                id: art.id,
+                filename: art.name.clone().split("/").last().unwrap().to_string(),
+                path: art.name.clone(),
+            }
+        }).collect())
+    }
+
+    pub async fn metadata(&self) -> Result<crate::db_object::Artifact> {
+        crate::db_object::Artifact::get(self.id).await
+    }
+}
+
+#[async_trait]
+impl S3Object for Artifact {
+    fn get_url(&self) -> String {
+        // get url from S3
+        format!(
+            "{endpoint}/{bucket}/artifacts/{id_simple}/{filename}",
+            endpoint = S3_ENDPOINT.as_str(),
+            bucket = BUCKET.as_str(),
+            id_simple = self.id.simple(),
+            filename = self.filename
+        )
+    }
+    async fn upload_file(self, path: PathBuf) -> Result<Self> {
+        let obj = crate::artifacts::S3Artifact::new()?;
+        let dest_path = format!("artifacts/{}/{}", self.id.simple(), self.filename);
         let _ = obj.upload_file(&dest_path, path.to_owned()).await?;
         println!("Uploaded {}", dest_path);
         Ok(self)
+    }
+    async fn pull_bytes(&self) -> Result<ByteStream> {
+        // Get from S3
+
+        let s3 = crate::artifacts::S3Artifact::new()?;
+        s3.get_file(&self.path).await
+    }
+
+    async fn get(uuid: Uuid) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        // Query the database for the artifact with the given uuid.
+        let artifact_meta = crate::db_object::Artifact::get(uuid).await?;
+
+        let filepath = artifact_meta.name.clone();
+        let filename = filepath.split("/").last().unwrap();
+        let id = artifact_meta.id;
+
+
+
+        Ok(Artifact { id, filename: filename.to_string(), path: filepath })
     }
 }
 

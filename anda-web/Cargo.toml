@@ -7,3 +7,12 @@ edition = "2021"
 
 [dependencies]
 yew = "0.19.3"
+reqwest = { version = "0.11.11", features = ["json"] }
+serde = "1.0.140"
+async-trait = "0.1.56"
+tokio = { version = "1.20.0", features = ["macros"] }
+wasm-bindgen-futures = "0.4.31"
+yew-hooks = "0.1.56"
+
+[build-dependencies]
+dotenv-build = "0.1"

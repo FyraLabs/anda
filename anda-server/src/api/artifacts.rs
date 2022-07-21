@@ -80,9 +80,9 @@ mod tests {
     #[tokio::test]
     async fn test_new_artifact() {
         let worker = Uuid::new_v4();
-        let target = Target::new("test".to_string(), None, 0);
+        let target = Target::new("test".to_string(), None, "noarch".to_string());
         Target::add(&target).await.unwrap();
-        let build = Build::new(worker, 0, None);
+        let build = Build::new(worker, 0, None, "test");
         Build::add(&build).await.unwrap();
         let art = Artifact::new(build.id, "test".to_string(), "url".to_string());
 

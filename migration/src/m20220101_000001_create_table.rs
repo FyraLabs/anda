@@ -246,7 +246,7 @@ enum Compose {
 }
 
 #[derive(Iden)]
-enum Target {
+pub(crate) enum Target {
     Table,
     Id,
     Name,
@@ -256,7 +256,7 @@ enum Target {
 }
 
 #[derive(Iden)]
-enum Build {
+pub(crate) enum Build {
     Table,
     Id,
     ProjectId,
@@ -265,6 +265,7 @@ enum Build {
     Status,
     Worker,
     Timestamp,
+    BuildType,
 }
 
 #[derive(Iden)]

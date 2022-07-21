@@ -50,7 +50,7 @@ impl MigrationTrait for Migration {
             .alter_table(
                 sea_query::Table::alter()
                     .table(Build::Table)
-                    .add_column(ColumnDef::new(Build::BuildType).string().not_null())
+                    .modify_column(ColumnDef::new(Build::BuildType).string().not_null())
                     .to_owned(),
             )
             .await?;

@@ -5,13 +5,14 @@ use async_once_cell::OnceCell;
 use futures::{stream, Stream, StreamExt, TryStreamExt};
 use k8s_openapi::api::{
     batch::v1::{Job, JobSpec, JobStatus},
-    core::v1::{Container, PodSpec, PodTemplateSpec},
+    core::v1::{Container, PodSpec, PodTemplateSpec, Pod},
 };
 use kube::{
-    api::{ListParams, ObjectMeta, PostParams},
+    api::{ListParams, ObjectMeta, PostParams, LogParams},
     runtime::watcher,
     Api, Client,
 };
+use bytes::Bytes;
 
 use crate::db_object::Build;
 
@@ -19,6 +20,7 @@ pub struct K8S;
 
 static CLIENT: OnceCell<Client> = OnceCell::new();
 static JOBS: OnceCell<Api<Job>> = OnceCell::new();
+static PODS: OnceCell<Api<Pod>> = OnceCell::new();
 
 impl K8S {
     async fn client() -> Client {
@@ -30,6 +32,11 @@ impl K8S {
 
     async fn jobs() -> &'static Api<Job> {
         JOBS.get_or_init(async { Api::default_namespaced(K8S::client().await) })
+            .await
+    }
+
+    async fn pods() -> &'static Api<Pod> {
+        PODS.get_or_init(async { Api::default_namespaced(K8S::client().await) })
             .await
     }
 }
@@ -53,11 +60,15 @@ pub async fn dispatch_build(id: String, image: String) -> Result<()> {
                 spec: Some(PodSpec {
                     containers: vec![Container {
                         image: Some(image),
+
                         ..Default::default()
                     }],
                     ..Default::default()
                 }),
-                metadata: None,
+                metadata: Some(ObjectMeta {
+                    name: Some(format!("build-pod-{}", id)),
+                    ..ObjectMeta::default()
+                }),
             },
             ..Default::default()
         }),
@@ -103,4 +114,23 @@ async fn watch_jobs() -> impl Stream<Item = BuildStatusEvent> {
         }
         _ => stream::iter(vec![]),
     })
+}
+
+pub async fn get_logs(id: String) -> Result<impl Stream<Item = Result<Bytes, kube::Error>>, kube::Error> {
+    let jobs = K8S::jobs().await;
+    let pods = K8S::pods().await;
+    
+    // let job = jobs.get(format!("build-{}", id).as_str()).await?;
+ 
+    // if let Some(spec) = job.spec {
+        // if let Some(template) = spec.template {
+            // template.
+        // }
+        
+    // }
+
+    pods.log_stream(format!("build-pod-{}", id).as_str(), &LogParams {
+        follow: true,
+        ..Default::default()
+    }).await
 }
