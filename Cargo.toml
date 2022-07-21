@@ -3,6 +3,6 @@
 members = [
     "anda",
     "anda-server",
-    "migration",
+    "anda-db-migration",
     "anda-web"
 ]
