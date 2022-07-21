@@ -25,6 +25,7 @@ lazy_static! {
             ))
             .build()
     );
+    pub static ref S3_ENDPOINT: String = env::var("S3_ENDPOINT").unwrap();
     pub static ref BUCKET: String = env::var("S3_BUCKET").unwrap();
 }
 

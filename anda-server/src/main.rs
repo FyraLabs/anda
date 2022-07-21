@@ -54,10 +54,6 @@ async fn index() -> Template {
 
 #[launch]
 async fn rocket() -> _ {
-    match db::setup_db().await {
-        Ok(db) => db,
-        Err(e) => panic!("{}", e),
-    };
 
     rocket::build()
         .attach(db::Db::init())

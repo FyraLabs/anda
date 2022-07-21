@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use anyhow::{anyhow, Result};
 use rocket::serde::uuid::Uuid;
 
-use crate::{db_object, artifacts::{S3Artifact, BUCKET}};
+use crate::{db_object, artifacts::{S3Artifact, BUCKET, S3_ENDPOINT}};
 
 
 pub enum BuildMethod {
@@ -72,8 +72,7 @@ trait S3Object {
     /// Pull raw data from S3
     fn pull_bytes(&self) -> Result<Vec<u8>>;
     /// Upload file to S3
-    fn upload_file(path: String) -> Result<()>;
-
+    async fn upload_file(self, path: PathBuf) -> Result<Self> where Self: Sized;
 }
 
 
@@ -105,6 +104,7 @@ impl UploadCache {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct BuildCache {
     pub id: Uuid,
     pub filename: String,
@@ -122,8 +122,15 @@ impl BuildCache {
 #[async_trait]
 impl S3Object for BuildCache {
     fn get_url(&self) -> String {
-        format!("https://s3.amazonaws.com/andaman-build-cache/{}", self.filename)
+        // get url from S3
+        format!("{endpoint}/{bucket}/build_cache/{id_simple}/{filename}",
+            endpoint = S3_ENDPOINT.as_str(),
+            bucket = BUCKET.as_str(),
+            id_simple = self.id.simple(),
+            filename = self.filename
+        )
     }
+
     async fn get(uuid: Uuid) -> Result<Self> where Self: Sized {
         // List all files in S3
         let obj = S3Artifact::new()?.connection;
@@ -140,15 +147,23 @@ impl S3Object for BuildCache {
 
         println!("Found build cache: {}", filename);
 
-        Ok(BuildCache::new("".to_string()))
+        Ok(BuildCache {
+            id: uuid,
+            filename,
+        })
     }
     fn pull_bytes(&self) -> Result<Vec<u8>> {
         // Get from S3
         Ok(vec![])
     }
-    fn upload_file(path: String) -> Result<()> {
-        // Upload to S3
-        Ok(())
+
+
+    async fn upload_file(self, path: PathBuf) -> Result<Self> {
+        let obj = crate::artifacts::S3Artifact::new()?;
+        let dest_path = format!("build_cache/{}/{}", self.id.simple(), self.filename);
+        let _ = obj.upload_file(&dest_path, path.to_owned()).await?;
+        println!("Uploaded {}", dest_path);
+        Ok(self)
     }
 }
 
@@ -162,6 +177,7 @@ mod test_super {
     async fn get_obj() {
         let uuid = Uuid::parse_str("3e17f157e9cf4871896bc908265ec41b").unwrap();
         let obj = BuildCache::get(uuid).await.unwrap();
+        println!("{:?}", obj);
 
     }
 }
