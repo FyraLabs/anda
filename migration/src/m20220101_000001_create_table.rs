@@ -196,34 +196,35 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(Table::drop().table(Project::Table).to_owned())
-            .await?;
-
-        manager
-            .drop_table(Table::drop().table(User::Table).to_owned())
-            .await?;
-
-        manager
-            .drop_table(Table::drop().table(Compose::Table).to_owned())
-            .await?;
-
-        manager
-            .drop_table(Table::drop().table(Target::Table).to_owned())
-            .await?;
-
-        manager
-            .drop_table(Table::drop().table(Build::Table).to_owned())
-            .await?;
-
-        manager
             .drop_table(Table::drop().table(Artifact::Table).to_owned())
+            .await?;
+
+        manager
+        .drop_table(Table::drop().table(Build::Table).to_owned())
+        .await?;
+
+        manager
+        .drop_table(Table::drop().table(Target::Table).to_owned())
+        .await?;
+
+        manager
+        .drop_table(Table::drop().table(Compose::Table).to_owned())
+        .await?;
+
+        manager
+        .drop_table(Table::drop().table(User::Table).to_owned())
+        .await?;
+
+
+        manager
+            .drop_table(Table::drop().table(Project::Table).to_owned())
             .await
     }
 }
 
 /// Learn more at https://docs.rs/sea-query#iden
 #[derive(Iden)]
-pub enum Project {
+enum Project {
     Table,
     Id,
     Name,
@@ -231,13 +232,13 @@ pub enum Project {
 }
 
 #[derive(Iden)]
-pub enum User {
+enum User {
     Table,
     Id,
 }
 
 #[derive(Iden)]
-pub enum Compose {
+enum Compose {
     Table,
     Id,
     Ref,
@@ -246,7 +247,7 @@ pub enum Compose {
 }
 
 #[derive(Iden)]
-pub enum Target {
+enum Target {
     Table,
     Id,
     Name,
@@ -256,7 +257,7 @@ pub enum Target {
 }
 
 #[derive(Iden)]
-pub enum Build {
+enum Build {
     Table,
     Id,
     ProjectId,
@@ -265,11 +266,10 @@ pub enum Build {
     Status,
     Worker,
     Timestamp,
-    BuildType,
 }
 
 #[derive(Iden)]
-pub enum Artifact {
+enum Artifact {
     Table,
     BuildId,
     Id,
