@@ -23,7 +23,7 @@ use anyhow::{anyhow, Result};
 
 use futures::future;
 
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Artifact {

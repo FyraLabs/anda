@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use serde_derive::Deserialize;
+use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
 

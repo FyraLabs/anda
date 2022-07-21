@@ -1,6 +1,6 @@
 use std::{fs::File, io::Read};
 
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 
 #[derive(Debug, Serialize, Deserialize)]
