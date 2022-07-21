@@ -200,21 +200,20 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
-        .drop_table(Table::drop().table(Build::Table).to_owned())
-        .await?;
+            .drop_table(Table::drop().table(Build::Table).to_owned())
+            .await?;
 
         manager
-        .drop_table(Table::drop().table(Target::Table).to_owned())
-        .await?;
+            .drop_table(Table::drop().table(Target::Table).to_owned())
+            .await?;
 
         manager
-        .drop_table(Table::drop().table(Compose::Table).to_owned())
-        .await?;
+            .drop_table(Table::drop().table(Compose::Table).to_owned())
+            .await?;
 
         manager
-        .drop_table(Table::drop().table(User::Table).to_owned())
-        .await?;
-
+            .drop_table(Table::drop().table(User::Table).to_owned())
+            .await?;
 
         manager
             .drop_table(Table::drop().table(Project::Table).to_owned())
