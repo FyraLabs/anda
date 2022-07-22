@@ -138,7 +138,9 @@ impl ProjectPacker {
             }
         }
 
-        tar.unpack(&workdir).unwrap();
+
+
+        tar.unpack("anda").map_err(|e| PackerError::Other(e.to_string()))?;
 
         let old_pwd = std::env::current_dir().unwrap();
 

@@ -13,6 +13,8 @@ mod error;
 
 use backend::BackendCommand;
 
+use crate::util::ProjectPacker;
+
 #[derive(Parser)]
 #[clap(about, version)]
 #[clap(global_setting = AppSettings::DeriveDisplayOrder)]
@@ -53,6 +55,11 @@ enum Command {
         /// If not specified, the current directory is used
         #[clap(value_name = "ANDA_PROJECT_PATH", default_value = ".")]
         path: PathBuf,
+
+        /// Working directory for the build
+        /// If not specified, the current directory is used
+        #[clap(short,long,value_name = "ANDA_WORKDIR")]
+        workdir: Option<PathBuf>,
     },
     /// Subcommand for interacting with the build system
     Backend {
@@ -92,7 +99,28 @@ async fn main() -> Result<()> {
             println!("Removing {}", packages.join(", "));
         }
 
-        Command::Build { path } => {
+        Command::Build { path, workdir } => {
+
+            // check if path is file
+            if path.is_file() {
+                info!("path is a file, calling builder");
+
+                if path.file_name().unwrap().to_str().unwrap().ends_with(".andasrc.tar.gz") {
+                    debug!("path is an andasrc tarball package, calling unpacker");
+                    ProjectPacker::unpack_and_build(&path, workdir).await.map_err(|e| {
+                        error!("{:?}", e);
+                        anyhow!("{:?}", e)
+                    })?;
+                }
+
+
+
+                else {
+                    // error and exit
+                    //error!("path is not a valid build source! Please either use an andasrc tarball or a valid anda project directory");
+                    anyhow::bail!("path is not a valid build source! Please either use an andasrc tarball or a valid anda project directory.");
+                }
+            }
             println!(
                 "Building from {}",
                 fs::canonicalize(path.clone()).unwrap().display()
