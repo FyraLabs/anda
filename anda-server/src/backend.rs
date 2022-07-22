@@ -64,7 +64,7 @@ impl AndaBackend {
                 // match file extension
                 if filename.ends_with("src.rpm") {
                     // call rpmbuild backend
-                } else if filename.ends_with("andasrc.tar.gz") {
+                } else if filename.ends_with("andasrc.tar") {
                     // We have an andaman tarball.
                 }
             }
