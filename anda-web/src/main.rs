@@ -33,7 +33,7 @@ fn builds_table() -> Html {
 
     html! {
         <div id="builds" class="section">
-            <Table>
+            <Table<SharedTableModel<builds::Build>> >
                 <tr>
                     <th>{ "ID" }</th>
                     <th>{ "Project" }</th>
