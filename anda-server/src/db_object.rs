@@ -12,10 +12,7 @@ use crate::{
 };
 use chrono::offset::Utc;
 use entity::*;
-use sea_orm::{
-    prelude::{Uuid},
-    *,
-};
+use sea_orm::{prelude::Uuid, *};
 
 use chrono::{DateTime, NaiveDateTime, TimeZone};
 
@@ -130,7 +127,6 @@ impl Artifact {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Build {
     pub id: Uuid,
-    pub worker: Uuid,
     pub status: i32,
     pub target_id: Option<Uuid>,
     pub project_id: Option<Uuid>,
@@ -144,7 +140,6 @@ impl Build {
     async fn from_model(model: build::Model) -> Result<Build> {
         Ok(Build {
             id: model.id,
-            worker: model.worker,
             status: model.status,
             target_id: model.target_id,
             project_id: model.project_id,
@@ -154,10 +149,9 @@ impl Build {
         })
     }
 
-    pub fn new(worker: Uuid, status: i32, project_id: Option<Uuid>, build_type: &str) -> Self {
+    pub fn new(status: i32, project_id: Option<Uuid>, build_type: &str) -> Self {
         Self {
             id: Uuid::new_v4(),
-            worker,
             status,
             target_id: None,
             project_id,
@@ -171,7 +165,6 @@ impl Build {
         let db = DbPool::get().await;
         let build = build::ActiveModel {
             id: ActiveValue::Set(self.id),
-            worker: ActiveValue::Set(self.worker),
             status: ActiveValue::Set(self.status),
             target_id: ActiveValue::Set(self.target_id),
             timestamp: ActiveValue::Set(self.timestamp.naive_utc()),

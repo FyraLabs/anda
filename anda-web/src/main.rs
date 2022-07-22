@@ -2,14 +2,13 @@ use yew::prelude::*;
 pub mod artifacts;
 pub mod builds;
 pub mod projects;
+use log::{debug, info};
+use patternfly_yew::{Title, Table};
 use reqwasm::http::Request;
 use yew_hooks::use_async;
-//use wasm_bindgen_futures::spawn_local;
-use log::{info, debug};
 
 #[function_component(BuildsTable)]
 fn builds_table() -> Html {
-    let mut loading = false;
     let builds = use_state(|| vec![]);
     {
         let builds = builds.clone();
@@ -17,12 +16,10 @@ fn builds_table() -> Html {
             move |_| {
                 let builds = builds.clone();
                 wasm_bindgen_futures::spawn_local(async move {
-                    let fetched_builds =
-                        Request::get(&format!("/api/builds/?{}&{}", 10, 0))
-                            .send()
-                            .await
-                            .unwrap();
-
+                    let fetched_builds = Request::get(&format!("/api/builds/?{}&{}", 10, 0))
+                        .send()
+                        .await
+                        .unwrap();
                     let a = &fetched_builds.text().await.unwrap();
                     info!("{}", a);
                     let fetched_builds = serde_json::from_str::<Vec<builds::Build>>(&a).unwrap();
@@ -36,15 +33,15 @@ fn builds_table() -> Html {
 
     html! {
         <div id="builds" class="section">
-                <table class="table-auto w-full">
-                    <tr>
-                        <th class="px-4 py-2">{ "ID" }</th>
-                        <th class="px-4 py-2">{ "Project" }</th>
-                        <th class="px-4 py-2">{ "Target" }</th>
-                        <th class="px-4 py-2">{ "Status" }</th>
-                    </tr>
-                    <tbody>{ builds::Build::format({(*builds).clone()}) }</tbody>
-                </table>
+            <Table>
+                <tr>
+                    <th>{ "ID" }</th>
+                    <th>{ "Project" }</th>
+                    <th>{ "Target" }</th>
+                    <th>{ "Status" }</th>
+                </tr>
+                <tbody>{ builds::Build::format({(*builds).clone()}) }</tbody>
+            </Table>
         </div>
     }
 }
@@ -76,15 +73,15 @@ fn artifacts_table() -> Html {
 
     html! {
         <div id="artifacts" class="section">
-                <table class="table-auto w-full">
-                    <tr>
-                        <th class="px-4 py-2">{ "ID" }</th>
-                        <th class="px-4 py-2">{ "Name" }</th>
-                        <th class="px-4 py-2">{ "Build" }</th>
-                        <th class="px-4 py-2">{ "Timestamp" }</th>
-                    </tr>
-                    <tbody>{ artifacts::Artifact::format((*artifacts).clone()) }</tbody>
-                </table>
+            <Table>
+                <tr>
+                    <th>{ "ID" }</th>
+                    <th>{ "Name" }</th>
+                    <th>{ "Build" }</th>
+                    <th>{ "Timestamp" }</th>
+                </tr>
+                <tbody>{ artifacts::Artifact::format((*artifacts).clone()) }</tbody>
+            </Table>
         </div>
     }
 }
@@ -101,21 +98,23 @@ fn projects_table() -> Html {
         <div id="projects" class="section">
             if projects.loading { <p>{ "Loading..." }</p> }
             if let Some(data) = &projects.data {
-                <table class="table-auto w-full">
-                    <tr>
-                        <th class="px-4 py-2">{ "ID" }</th>
-                        <th class="px-4 py-2">{ "Name" }</th>
-                        <th class="px-4 py-2">{"Description"}</th>
-                    </tr>
-                    <tbody>{ projects::Project::format(data.clone()) }</tbody>
-                </table>
+                <tr>
+                    <th>{ "ID" }</th>
+                    <th>{ "Name" }</th>
+                    <th>{"Description"}</th>
+                </tr>
+                <tbody>{ projects::Project::format(data.clone()) }</tbody>
             }
             if let Some(error) = &projects.error { { error } }
         </div>
     }
 }
 
-pub enum Msg {}
+pub enum Msg {
+    // BuildReqFinish(Vec<builds::Build>),
+    // ArtifactReqFinish(Vec<artifacts::Artifact>),
+    // ProjectReqFinish(Vec<projects::Project>)
+}
 pub struct Main {}
 
 impl Component for Main {
@@ -128,12 +127,7 @@ impl Component for Main {
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         // match msg {
-        //     Msg::AddOne => {
-        //         self.value += 1;
-        //         // the value has changed so we need to
-        //         // re-render for it to appear on the page
-        //         true
-        //     }
+        //     _ => {}
         // }
         true
     }
@@ -144,41 +138,14 @@ impl Component for Main {
         //spawn_local();
         //wasm_bindgen_futures::spawn_local(future)
         html! {
-            // <div>
-            //     <button onclick={link.callback(|_| Msg::AddOne)}>{ "+1" }</button>
-            //     <p>{ self.value }</p>
-            // </div>
             <>
-            <h1 class="self-center w-full">{ "Andaman Build System" }</h1>
+            <Title>{ "Andaman Build System" }</Title>
             <div>
-                <h1>{"Builds"}</h1>
+                <Title level={Level::H2}>{ "Builds" }</Title>
                 <BuildsTable/>
-                /* <div id="artifacts" class="section">
-                    <h2>{ "Artifacts" }</h2>
-                    <table>
-                        <tr>
-                            <th>{ "ID" }</th>
-                            <th>{ "Name" }</th>
-                            <th>{ "Build" }</th>
-                            <th>{ "Timestamp" }</th>
-                        </tr>
-                        { artifacts }
-                    </table>
-                </div> */
-                <h1>{"Artifacts"}</h1>
+                <Title level={Level::H2}>{ "Artifacts" }</Title>
                 <ArtifactsTable/>
-                /* <div id="projects" class="section">
-                    <h2>{ "Projects" }</h2>
-                    <table>
-                        <tr>
-                            <th>{ "ID" }</th>
-                            <th>{ "Name" }</th>
-                            <th>{ "Description" }</th>
-                        </tr>
-                        { projects }
-                    </table>
-                </div> */
-                <h1>{"Projects"}</h1>
+                <Title level={Level::H2}>{ "Projects" }</Title>
                 <ProjectsTable/>
             </div>
             </>

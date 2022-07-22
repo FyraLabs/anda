@@ -32,14 +32,13 @@ impl Artifact {
             .iter()
             .map(|a| {
                 html! {
-                    <a href={ format!("/a/{}", &a.id) }>
+                    
                         <tr>
-                            <th>{ &a.id.simple() }</th>
+                            <th><a href={ format!("/a/{}", &a.id) }>{ &a.id.simple() }</a></th>
                             <th>{ &a.name }</th>
                             <th>{ &a.build_id.simple() }</th>
                             <th>{ &a.timestamp }</th>
                         </tr>
-                    </a>
                 }
             })
             .collect::<Html>()

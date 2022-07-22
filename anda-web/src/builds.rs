@@ -1,5 +1,4 @@
 use std::sync::Arc;
-
 use serde::Deserialize;
 use yew::prelude::*;
 use reqwasm::http::Request;
@@ -24,8 +23,8 @@ impl Build {
         )).send().await?
         .json::<Vec<Build>>().await?)
     }
-    pub(crate) fn format(builds: Vec<Build>) -> Html {
 
+    pub(crate) fn format(builds: Vec<Build>) -> Html {
         builds
             .iter()
             .map(|b| {
@@ -33,14 +32,12 @@ impl Build {
                 let proj = b.proj.map_or("".to_string(), |p| p.simple().to_string());
                 let tag = b.tag.map_or("".to_string(), |t| t.simple().to_string());
                 html! {
-                    <a href={ format!("/b/{}", &b.id) }>
-                        <tr class="hover:shadow-xl">
-                            <th>{ &b.id.simple() }</th>
-                            <th>{ proj }</th>
-                            <th>{ &b.status }</th>
-                            <th>{ tag }</th>
-                        </tr>
-                    </a>
+                    <tr class="hover:shadow-xl">
+                        <th><a href={ format!("/b/{}", &b.id) }>{ &b.id.simple() }</a></th>
+                        <th>{ proj }</th>
+                        <th>{ &b.status }</th>
+                        <th>{ tag }</th>
+                    </tr>
                 }
             })
             .collect::<Html>()

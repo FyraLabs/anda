@@ -44,7 +44,6 @@ async fn get_by_target(target_id: Uuid) -> Option<Json<Vec<Build>>> {
 
 #[derive(FromForm)]
 pub struct BuildSubmission<'r> {
-    worker: Uuid,
     project_id: Option<Uuid>,
     url: Option<String>,
     src_file: Option<TempFile<'r>>,
@@ -118,7 +117,7 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
     // process backend request
 
     // todo: move this to backend
-    let build = Build::new(data.worker, 0, data.project_id, "BuildSubmission")
+    let build = Build::new(0, data.project_id, "BuildSubmission")
         .add()
         .await;
     Ok(Json(build.unwrap()))

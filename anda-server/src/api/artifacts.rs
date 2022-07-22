@@ -1,13 +1,11 @@
+use crate::{backend::S3Object, db_object::*};
+use rocket::{
+    form::Form,
+    fs::TempFile,
+    serde::{json::Json, uuid::Uuid},
+    Route,
+};
 use std::collections::HashMap;
-use std::path::PathBuf;
-
-use crate::backend::S3Object;
-use crate::db_object::*;
-use rocket::form::Form;
-use rocket::fs::TempFile;
-use rocket::serde::json::Json;
-use rocket::serde::uuid::Uuid;
-use rocket::Route;
 
 pub(crate) fn routes() -> Vec<Route> {
     routes![index, get, upload,]
@@ -79,12 +77,17 @@ mod tests {
         let worker = Uuid::new_v4();
         let target = Target::new("test".to_string(), None, "noarch".to_string());
         Target::add(&target).await.unwrap();
-        let build = Build::new(worker, 0, None, "test");
+        let build = Build::new(0, None, "test");
         Build::add(&build).await.unwrap();
-        /* let art = Artifact::new(build.id, "test".to_string(), "url".to_string());
+        let art = Artifact::new(
+            Uuid::new_v4(),
+            build.id,
+            "test".to_string(),
+            "url".to_string(),
+        );
 
         let test = Artifact::add(&art).await.unwrap();
 
-        println!("{:?}", test); */
+        println!("{:?}", test);
     }
 }
