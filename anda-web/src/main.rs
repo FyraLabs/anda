@@ -151,6 +151,7 @@ impl Component for Main {
             <>
             <h1 class="self-center w-full">{ "Andaman Build System" }</h1>
             <div>
+                <h1>{"Builds"}</h1>
                 <BuildsTable/>
                 /* <div id="artifacts" class="section">
                     <h2>{ "Artifacts" }</h2>
@@ -164,6 +165,7 @@ impl Component for Main {
                         { artifacts }
                     </table>
                 </div> */
+                <h1>{"Artifacts"}</h1>
                 <ArtifactsTable/>
                 /* <div id="projects" class="section">
                     <h2>{ "Projects" }</h2>
@@ -176,6 +178,8 @@ impl Component for Main {
                         { projects }
                     </table>
                 </div> */
+                <h1>{"Projects"}</h1>
+                <ProjectsTable/>
             </div>
             </>
         }
