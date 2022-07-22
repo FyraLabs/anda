@@ -25,7 +25,9 @@ toml = "0.5.9"
 serde_json = "1.0.13"
 serde_yaml = "0.8.24"
 anyhow = "1.0.58"# Add macro feature so rust-analyzer finally finds the macros
-tokio ={ version = "1.20.0", features = ["rt-multi-thread", "macros", "fs", "process"] }
+tokio = { version = "1.20.0", features = ["rt-multi-thread", "macros", "fs", "process"] }
+tokio-tar = "0.3.0"
+tokio-stream = "0.1.9"
 walkdir = "2.3.2"
 dotenv = "0.15.0"
 uuid = { version = "1.1.2", features = ["serde"] }
@@ -35,10 +37,10 @@ reqwest = { version = "0.11.11", features = ["multipart", "json"] }
 tabwriter = "1.2.1"
 runas = "0.2.1"
 mime_guess = "2.0.4"
-tar = "0.4.38"
-flate2 = "1.0.24"
 gitignore = "1.0.7"
 proc-macro2 = "1.0.40"
+async-compression = { version = "0.3.14", features = ["flate2", "tokio", "gzip", "zstd"] }
+
 
 [package.metadata.rpm]
 package = "anda"

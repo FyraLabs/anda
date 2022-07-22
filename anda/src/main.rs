@@ -105,7 +105,7 @@ async fn main() -> Result<()> {
             if path.is_file() {
                 info!("path is a file, calling builder");
 
-                if path.file_name().unwrap().to_str().unwrap().ends_with(".andasrc.tar.gz") {
+                if path.file_name().unwrap().to_str().unwrap().ends_with(".andasrc.tar") {
                     debug!("path is an andasrc tarball package, calling unpacker");
                     ProjectPacker::unpack_and_build(&path, workdir).await.map_err(|e| {
                         error!("{:?}", e);
@@ -125,11 +125,6 @@ async fn main() -> Result<()> {
                 "Building from {}",
                 fs::canonicalize(path.clone()).unwrap().display()
             );
-            //build::start_build(&path)?;
-            build::ProjectBuilder::new(path).build().await.map_err(|e| {
-                error!("{}", e);
-                e
-            }).unwrap();
         }
 
         Command::Backend { command } => {
@@ -144,7 +139,7 @@ async fn main() -> Result<()> {
                 })?.display()
             );
             //build::start_build(&path)?;
-            let p = util::ProjectPacker::pack(&path, output).unwrap();
+            let p = util::ProjectPacker::pack(&path, output).await.unwrap();
 
             println!("Packed to {}", p.display());
         }

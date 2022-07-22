@@ -4,10 +4,5 @@ members = [
     "anda",
     "anda-server",
     "migration",
-]
-# We want to exclude the webapp from the workspace, because currently,
-# cargo will rebuild everything if you switch build targets.
-# and since rust-analyzer runs cargo check everytime we save, it gets real slow.
-exclude = [
     "anda-web"
 ]
