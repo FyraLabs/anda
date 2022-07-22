@@ -18,7 +18,7 @@ pub struct Artifact {
     pub name: String,
     pub url: String,
     pub build_id: Uuid,
-    pub timestamp: NaiveDateTime,
+    pub timestamp: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -27,7 +27,7 @@ pub struct Build {
     pub worker: Uuid,
     pub status: i32,
     pub project_id: Option<Uuid>,
-    pub timestamp: NaiveDateTime,
+    pub timestamp: DateTime<Utc>,
     pub compose_id: Option<Uuid>,
 }
 

@@ -1,4 +1,5 @@
-use crate::backend::{AndaBackend, UploadCache};
+use crate::backend::S3Object;
+use crate::backend::{AndaBackend, BuildCache};
 use crate::db_object::*;
 use rocket::form::Form;
 use rocket::fs::TempFile;
@@ -14,7 +15,8 @@ pub(crate) fn routes() -> Vec<Route> {
         get_by_target,
         submit,
         update_status,
-        tag_compose
+        tag_compose,
+        tag,
     ]
 }
 
@@ -84,25 +86,28 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
             // src_file build
             //let backend = AndaBackend::new_src_file(data.src_file.as_ref().unwrap(), data.build_type.as_ref().unwrap());
             // upload the file to S3
-            UploadCache::new(
+            let cache = BuildCache::new(
+                data.src_file
+                    .as_ref()
+                    .unwrap()
+                    .raw_name()
+                    .unwrap()
+                    .dangerous_unsafe_unsanitized_raw()
+                    .to_string(),
+            )
+            .upload_file(
                 data.src_file
                     .as_ref()
                     .unwrap()
                     .path()
                     .unwrap()
                     .to_path_buf(),
-                data.src_file
-                    .as_ref()
-                    .unwrap()
-                    .raw_name()
-                    .unwrap()
-                    // Rocket thinks this is unsafe, but for us, this is exactly what we want. We'll be using S3 anyway.
-                    .dangerous_unsafe_unsanitized_raw()
-                    .to_string(),
             )
-            .upload()
-            .await
-            .unwrap();
+            .await.unwrap();
+
+            // send file to backend for processing
+            AndaBackend::new_src_file(data.src_file.as_ref().unwrap().path().unwrap().to_path_buf(), cache.filename).build().await.unwrap();
+
         }
         _ => {
             // return error: invalid form: neither url nor src_file is not empty
@@ -113,7 +118,9 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
     // process backend request
 
     // todo: move this to backend
-    let build = Build::new(data.worker, 0, data.project_id, "BuildSubmission").add().await;
+    let build = Build::new(data.worker, 0, data.project_id, "BuildSubmission")
+        .add()
+        .await;
     Ok(Json(build.unwrap()))
 }
 
@@ -145,8 +152,24 @@ struct BuildTagCompose {
 async fn tag_compose(data: Form<BuildTagCompose>) -> Json<Build> {
     let build = Build::get(data.id)
         .await
-        .expect("Failed to update build status")
+        .expect("Failed to tag build to compose")
         .tag_compose(data.tag)
+        .await;
+    Json(build.unwrap())
+}
+
+#[derive(FromForm)]
+struct BuildTagTarget {
+    id: Uuid,
+    tag: Uuid,
+}
+
+#[post("/tag", data = "<data>")]
+async fn tag(data: Form<BuildTagTarget>) -> Json<Build> {
+    let build = Build::get(data.id)
+        .await
+        .expect("Failed to tag build")
+        .tag_target(data.tag)
         .await;
     Json(build.unwrap())
 }

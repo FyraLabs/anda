@@ -9,19 +9,19 @@
 use std::{path::PathBuf, time::SystemTime};
 
 use anyhow::{anyhow, Result};
-use aws_sdk_s3::types::{ByteStream,DateTime};
+use aws_sdk_s3::types::{ByteStream, DateTime};
 //use aws_smithy_types::DateTime;
 use rocket::serde::uuid::Uuid;
 use tokio::{fs::File, io::AsyncReadExt};
 
 use crate::{
-    artifacts::{S3Artifact, BUCKET, S3_ENDPOINT},
     db_object,
+    s3_object::{S3Artifact, BUCKET, S3_ENDPOINT},
 };
 
 pub enum BuildMethod {
     Url { url: String },
-    SrcFile { path: PathBuf, build_type: String },
+    SrcFile { path: PathBuf, filename: String },
 }
 
 pub struct AndaBackend {
@@ -32,11 +32,11 @@ impl AndaBackend {
     pub fn new(method: BuildMethod) -> Self {
         AndaBackend { method }
     }
-    pub fn new_src_file<T: Into<String>>(path: PathBuf, build_type: T) -> Self {
+    pub fn new_src_file<T: Into<String>>(path: PathBuf, filename: T) -> Self {
         AndaBackend {
             method: BuildMethod::SrcFile {
-                path: PathBuf::new(),
-                build_type: "".to_string(),
+                path,
+                filename: filename.into(),
             },
         }
     }
@@ -55,8 +55,18 @@ impl AndaBackend {
 
                 //crate::kubernetes::dispatch_build(id, image);
             }
-            BuildMethod::SrcFile { path, build_type } => {
-                println!("Building from src file: {}", path.display());
+            BuildMethod::SrcFile { path, filename } => {
+                println!("Building from src file: {:?}", path);
+                println!("actual filename: {}", filename);
+
+
+                // now check what kind of file it is, so we can determine which build backend to use.
+                // match file extension
+                if filename.ends_with("src.rpm") {
+                    // call rpmbuild backend
+                } else if filename.ends_with("andasrc.tar.gz") {
+                    // We have an andaman tarball.
+                }
             }
         }
         Ok(())
@@ -68,7 +78,7 @@ impl AndaBackend {
     }
 }
 #[async_trait]
-trait S3Object {
+pub trait S3Object {
     fn get_url(&self) -> String;
     async fn get(uuid: Uuid) -> Result<Self>
     where
@@ -98,7 +108,7 @@ impl UploadCache {
 
     pub async fn upload(&self) -> Result<()> {
         // Upload to S3 or whatever
-        let obj = crate::artifacts::S3Artifact::new()?;
+        let obj = crate::s3_object::S3Artifact::new()?;
 
         let dest_path = format!("build_cache/{}/{}", Uuid::new_v4().simple(), self.filename);
 
@@ -163,7 +173,6 @@ impl S3Object for BuildCache {
         Ok(BuildCache { id: uuid, filename })
     }
 
-
     async fn pull_bytes(&self) -> Result<ByteStream>
     where
         Self: Sized,
@@ -179,7 +188,7 @@ impl S3Object for BuildCache {
         let mut bytes = vec![0; metadata.len() as usize];
         file.read(&mut bytes).await?;
 
-        let obj = crate::artifacts::S3Artifact::new()?;
+        let obj = crate::s3_object::S3Artifact::new()?;
         let dest_path = format!("build_cache/{}/{}", self.id.simple(), self.filename);
         let chrono_time = chrono::Utc::now() + chrono::Duration::days(7);
         //let aws_time = DateTime::from_chrono_utc(chrono_time);
@@ -203,30 +212,35 @@ pub struct Artifact {
     pub id: Uuid,
     pub filename: String,
     pub path: String,
+    pub build_id: Uuid,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
 impl Artifact {
-    pub fn new(filename: String, path: String) -> Self {
+    pub fn new(filename: String, path: String, build_id: Uuid) -> Self {
         dotenv::dotenv().ok();
         Self {
             id: Uuid::new_v4(),
             filename,
             path,
+            build_id,
+            timestamp: chrono::Utc::now(),
         }
     }
 
     pub async fn get_for_build(&self, build_id: Uuid) -> Result<Vec<Self>> {
-
-
         let arts = crate::db_object::Artifact::get_by_build_id(build_id).await?;
 
-        Ok(arts.iter().map(|art| {
-            Self {
+        Ok(arts
+            .iter()
+            .map(|art| Self {
                 id: art.id,
                 filename: art.name.clone().split("/").last().unwrap().to_string(),
                 path: art.name.clone(),
-            }
-        }).collect())
+                build_id: art.build_id,
+                timestamp: art.timestamp,
+            })
+            .collect())
     }
 
     pub async fn metadata(&self) -> Result<crate::db_object::Artifact> {
@@ -247,16 +261,28 @@ impl S3Object for Artifact {
         )
     }
     async fn upload_file(self, path: PathBuf) -> Result<Self> {
-        let obj = crate::artifacts::S3Artifact::new()?;
-        let dest_path = format!("artifacts/{}/{}", self.id.simple(), self.filename);
+        let obj = crate::s3_object::S3Artifact::new()?;
+        let dest_path = format!("artifacts/{}/{}", self.id.simple(), self.path);
         let _ = obj.upload_file(&dest_path, path.to_owned()).await?;
+        // now update the database
+        crate::db_object::Artifact::new(
+            self.id,
+            self.build_id,
+            dest_path
+                .strip_prefix(&format!("artifacts/{}/", self.id.simple()))
+                .unwrap()
+                .to_string(),
+            self.get_url(),
+        )
+        .add().await?;
+
         println!("Uploaded {}", dest_path);
         Ok(self)
     }
     async fn pull_bytes(&self) -> Result<ByteStream> {
         // Get from S3
 
-        let s3 = crate::artifacts::S3Artifact::new()?;
+        let s3 = crate::s3_object::S3Artifact::new()?;
         s3.get_file(&self.path).await
     }
 
@@ -268,12 +294,16 @@ impl S3Object for Artifact {
         let artifact_meta = crate::db_object::Artifact::get(uuid).await?;
 
         let filepath = artifact_meta.name.clone();
-        let filename = filepath.split("/").last().unwrap();
+        let filename = filepath.strip_prefix("artifacts/").unwrap().to_string();
         let id = artifact_meta.id;
 
-
-
-        Ok(Artifact { id, filename: filename.to_string(), path: filepath })
+        Ok(Artifact {
+            id,
+            filename: filename.to_string(),
+            path: filepath,
+            build_id: artifact_meta.build_id,
+            timestamp: artifact_meta.timestamp,
+        })
     }
 }
 

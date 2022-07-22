@@ -6,7 +6,7 @@ use sea_orm_rocket::Database;
 use serde::Deserialize;
 
 mod api;
-mod artifacts;
+mod s3_object;
 mod auth;
 mod backend;
 mod db;

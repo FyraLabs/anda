@@ -36,9 +36,9 @@ pub struct Artifact {
     pub timestamp: DateTime<Utc>,
 }
 impl Artifact {
-    pub fn new(build_id: Uuid, name: String, url: String) -> Self {
+    pub fn new(art_id: Uuid, build_id: Uuid, name: String, url: String) -> Self {
         Self {
-            id: Uuid::new_v4(),
+            id: art_id,
             build_id,
             name,
             timestamp: Utc::now(),

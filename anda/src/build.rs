@@ -1,6 +1,7 @@
-use anyhow::{anyhow, Ok, Result};
+use anyhow::{anyhow, Result};
 use log::{debug, error, info, warn};
 use mime_guess::MimeGuess;
+use pretty_env_logger::env_logger::Builder;
 use reqwest::multipart;
 use reqwest::{Client, ClientBuilder};
 use serde::Serialize;
@@ -15,6 +16,8 @@ use std::{
 use tokio::fs::{File, OpenOptions};
 use tokio::io::AsyncReadExt;
 use walkdir::WalkDir;
+
+use crate::error::BuilderError;
 
 trait ExitOkPolyfill {
     fn exit_ok_polyfilled(&self) -> Result<()>;
@@ -121,8 +124,11 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub fn dnf_builddep(&self) -> Result<()> {
-        let config = crate::config::load_config(&self.root)?;
+    pub fn dnf_builddep(&self) -> Result<(), BuilderError> {
+        let config = crate::config::load_config(&self.root).map_err(|e| {
+            error!("{}", e);
+            BuilderError::Project(e)
+        })?;
 
         let spec_path = config.package.spec.canonicalize()?;
 
@@ -135,7 +141,7 @@ impl ProjectBuilder {
     }
 
     ///  Builds an Andaman project.
-    pub async fn build(&self) -> Result<()> {
+    pub async fn build(&self) -> Result<(), BuilderError> {
         // TODO: Move this to a method called `build_rpm` as we support more project types
         let config = crate::config::load_config(&self.root)?;
 
@@ -191,6 +197,7 @@ impl ProjectBuilder {
         // if env var `ANDA_BUILD_ID` is set, we upload the artifacts
 
         if env::var("ANDA_BUILD_ID").is_ok() {
+            info!("uploading artifacts...");
             self.push_folder(PathBuf::from(output_path)).await?;
         }
 

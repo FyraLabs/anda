@@ -3,6 +3,8 @@ use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::error::ProjectError;
+
 #[derive(Deserialize)]
 pub struct AndaConfig {
     pub package: Package,
@@ -15,9 +17,14 @@ pub struct Package {
     pub description: Option<String>,
 }
 
-pub fn load_config(root: &PathBuf) -> Result<AndaConfig> {
+pub fn load_config(root: &PathBuf) -> Result<AndaConfig, ProjectError> {
     let config_path = root.join("anda.toml");
-    let config: AndaConfig = toml::from_str(
+
+    if !config_path.exists() {
+        return Err(ProjectError::NoManifest);
+    }
+
+    let config = toml::from_str(
         std::fs::read_to_string(config_path)
             .with_context(|| {
                 format!(
@@ -26,7 +33,11 @@ pub fn load_config(root: &PathBuf) -> Result<AndaConfig> {
                 )
             })?
             .as_str(),
-    )?;
+    );
 
-    Ok(config)
+    match config {
+        Ok(config) => Ok(config),
+        Err(e) => Err(ProjectError::InvalidManifest),
+    }
+
 }

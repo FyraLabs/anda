@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::backend::S3Object;
 use crate::db_object::*;
 use rocket::form::Form;
 use rocket::fs::TempFile;
@@ -44,30 +45,26 @@ async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
     // Get the files
     let files = &data.files;
 
-    let obj = crate::artifacts::S3Artifact::new().unwrap();
-
     let mut results = Vec::new();
 
     // for each file in the hashmap, print the name and path
     for (name, file) in files.iter() {
         println!("{}: {}", name, file.path().unwrap().display());
+        let artifact = crate::backend::Artifact::new(
+            file.raw_name()
+                .unwrap()
+                .dangerous_unsafe_unsanitized_raw()
+                .to_string(),
+            name.to_string(),
+            build_id,
+        )
+        .upload_file(file.path().unwrap().to_path_buf())
+        .await
+        .unwrap();
 
         // Upload the file to S3
-
-        let dest_path = format!("artifacts/{}/{}", build_id, name);
-
-        obj.upload_file(&dest_path, PathBuf::from(file.path().unwrap()))
-            .await
-            .expect("Failed to upload file");
-
-        // Create an artifact object to store in the database
-        let artifact = Artifact::new(build_id, name.to_string(), dest_path.to_string());
-
-        // Store the artifact in the database
-        let artifact_ret = artifact.add().await;
-
         // Add the artifact to the results vector
-        results.push(artifact_ret.expect("Failed to add artifact"));
+        results.push(artifact.metadata().await.unwrap());
     }
 
     Json(results)
@@ -84,10 +81,10 @@ mod tests {
         Target::add(&target).await.unwrap();
         let build = Build::new(worker, 0, None, "test");
         Build::add(&build).await.unwrap();
-        let art = Artifact::new(build.id, "test".to_string(), "url".to_string());
+        /* let art = Artifact::new(build.id, "test".to_string(), "url".to_string());
 
         let test = Artifact::add(&art).await.unwrap();
 
-        println!("{:?}", test);
+        println!("{:?}", test); */
     }
 }

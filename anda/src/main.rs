@@ -8,6 +8,8 @@ mod api;
 mod backend;
 mod build;
 mod config;
+mod util;
+mod error;
 
 use backend::BackendCommand;
 
@@ -49,7 +51,7 @@ enum Command {
     Build {
         /// Path to the project
         /// If not specified, the current directory is used
-        #[clap(value_name = "PROJECT_PATH", default_value = ".")]
+        #[clap(value_name = "ANDA_PROJECT_PATH", default_value = ".")]
         path: PathBuf,
     },
     /// Subcommand for interacting with the build system
@@ -58,6 +60,16 @@ enum Command {
         #[clap(subcommand)]
         command: BackendCommand,
     },
+    Pack {
+        /// Path to the project.
+        /// If not specified, the current directory is used
+        #[clap(value_name = "ANDA_PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// optional name of the package to pack
+        #[clap(short, long, value_name = "ANDA_PACK_OUTPUT")]
+        output: Option<String>,
+    }
 }
 
 #[tokio::main]
@@ -86,11 +98,27 @@ async fn main() -> Result<()> {
                 fs::canonicalize(path.clone()).unwrap().display()
             );
             //build::start_build(&path)?;
-            build::ProjectBuilder::new(path).build().await?;
+            build::ProjectBuilder::new(path).build().await.map_err(|e| {
+                error!("{}", e);
+                e
+            }).unwrap();
         }
 
         Command::Backend { command } => {
             backend::match_subcmd(&command).await?;
+        }
+        Command::Pack { path, output } => {
+            println!(
+                "Packing from {}",
+                fs::canonicalize(path.clone()).map_err(|e| {
+                    error!("{}", e);
+                    e
+                })?.display()
+            );
+            //build::start_build(&path)?;
+            let p = util::ProjectPacker::pack(&path, output).unwrap();
+
+            println!("Packed to {}", p.display());
         }
     };
 
