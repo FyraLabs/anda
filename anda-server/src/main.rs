@@ -20,6 +20,6 @@ mod repos;
 async fn rocket() -> _ {
     rocket::build()
         .attach(db::Db::init())
-        .mount("/builds", api::builds_routes())
-        .mount("/artifacts", api::artifacts_routes())
+        .mount("/api/builds", api::builds_routes())
+        .mount("/api/artifacts", api::artifacts_routes())
 }

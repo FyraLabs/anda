@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 use yew::prelude::*;
+use reqwasm::http::Request;
 
 #[derive(Deserialize, Clone)]
 pub(crate) struct Project {
@@ -11,13 +12,12 @@ pub(crate) struct Project {
 }
 
 impl Project {
-    pub(crate) async fn list(limit: usize, page: usize) -> Result<Vec<Project>, Arc<reqwest::Error>> {
-        Ok(reqwest::get(format!(
-            "{}/projects/?{}&{}",
-            env!("ANDA_ENDPOINT"),
+    pub(crate) async fn list(limit: usize, page: usize) -> Result<Vec<Project>, Arc<reqwasm::Error>> {
+        Ok(Request::get(&format!(
+            "/projects/?{}&{}", 
             limit,
             page
-        ))
+        )).send()
         .await?
         .json::<Vec<Project>>()
         .await?)

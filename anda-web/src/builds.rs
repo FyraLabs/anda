@@ -2,38 +2,43 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 use yew::prelude::*;
-
+use reqwasm::http::Request;
+use uuid::Uuid;
 #[derive(Deserialize, Clone)]
 pub(crate) struct Build {
-    pub id: String,
+    pub id: Uuid,
     #[serde(rename = "project_id")]
-    pub proj: String,
+    pub proj: Option<Uuid>,
     #[serde(rename = "target_id")]
-    pub tag: String,
-    pub status: String,
+    pub tag: Option<Uuid>,
+    pub status: usize,
 }
 
 impl Build {
-    pub(crate) async fn list(limit: usize, page: usize) -> Result<Vec<Build>, Arc<reqwest::Error>> {
-        Ok(reqwest::get(format!(
+    pub(crate) async fn list(limit: usize, page: usize) -> Result<Vec<Build>, Arc<reqwasm::Error>> {
+        Ok(Request::get(&format!(
             "{}/builds/?{}&{}",
             env!("ANDA_ENDPOINT"),
             limit,
             page
-        )).await?
+        )).send().await?
         .json::<Vec<Build>>().await?)
     }
     pub(crate) fn format(builds: Vec<Build>) -> Html {
+
         builds
             .iter()
             .map(|b| {
+                // unwrap project_id and then simplify it, or use a blank string if it's None
+                let proj = b.proj.map_or("".to_string(), |p| p.simple().to_string());
+                let tag = b.tag.map_or("".to_string(), |t| t.simple().to_string());
                 html! {
                     <a href={ format!("/b/{}", &b.id) }>
                         <tr class="hover:shadow-xl">
-                            <th>{ &b.id }</th>
-                            <th>{ &b.proj }</th>
-                            <th>{ &b.tag }</th>
+                            <th>{ &b.id.simple() }</th>
+                            <th>{ proj }</th>
                             <th>{ &b.status }</th>
+                            <th>{ tag }</th>
                         </tr>
                     </a>
                 }
