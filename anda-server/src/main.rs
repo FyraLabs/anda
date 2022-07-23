@@ -2,6 +2,7 @@
 extern crate rocket;
 #[macro_use]
 use rocket::fs::FileServer;
+use rocket::{Build, Rocket};
 use sea_orm_rocket::Database;
 use serde::Deserialize;
 
@@ -17,7 +18,7 @@ mod pkgs;
 mod repos;
 
 #[launch]
-async fn rocket() -> _ {
+async fn rocket() -> Rocket<Build> {
     rocket::build()
         .attach(db::Db::init())
         .mount("/builds", api::builds_routes())

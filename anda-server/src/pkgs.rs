@@ -1,4 +1,3 @@
-use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_xml_rs::from_str;
 use serde_yaml::Value;
@@ -14,7 +13,7 @@ pub async fn repo_exists(name: &str) -> bool {
             return true;
         }
     }
-    return false;
+    false
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -79,7 +79,7 @@ pub enum UrlType {
 
 async fn _parse_metalink() {
     let resp = r#"<metalink><files><file name="repomd.xml"><size>6285</size><verification><hash type="md5">hash</hash></verification><resources maxconnections="1"><url protocol="http" type="http" location="JP" preference="100">link</url></resources></file></files></metalink>"#;
-    let metalink: Metalink = from_str(&resp).unwrap();
+    let metalink: Metalink = from_str(resp).unwrap();
     assert_eq!(&metalink.files.files[0].name, "repomd.xml");
 }
 

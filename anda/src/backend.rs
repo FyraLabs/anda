@@ -1,10 +1,10 @@
 use crate::api;
-use anyhow::{anyhow, Result};
-use clap::{AppSettings, ArgEnum, Parser, Subcommand};
-use log::{debug, error, info, trace};
-use std::fs;
+use anyhow::Result;
+use clap::Subcommand;
+//use log::{debug, error, info, trace};
+
 use std::io::Write;
-use std::path::PathBuf;
+
 use tabwriter::TabWriter;
 
 #[derive(Subcommand)]
@@ -57,12 +57,12 @@ pub(crate) async fn match_subcmd(cmd: &BackendCommand) -> Result<()> {
                         build
                             .project_id
                             .map(|id| id.simple().to_string())
-                            .unwrap_or("".to_string()),
+                            .unwrap_or_else(|| "".to_string()),
                         build.timestamp,
                         build
                             .compose_id
                             .map(|id| id.simple().to_string())
-                            .unwrap_or("".to_string()),
+                            .unwrap_or_else(|| "".to_string()),
                     )
                     .as_bytes(),
                 )?;

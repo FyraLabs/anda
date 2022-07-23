@@ -11,10 +11,10 @@ use crate::{
     entity::{artifact, build, project, target},
 };
 use chrono::offset::Utc;
-use entity::*;
+
 use sea_orm::{prelude::Uuid, *};
 
-use chrono::{DateTime, NaiveDateTime, TimeZone};
+use chrono::DateTime;
 
 use db::DbPool;
 
@@ -61,7 +61,6 @@ impl Artifact {
             name: ActiveValue::Set(self.name.clone()),
             timestamp: ActiveValue::Set(self.timestamp.naive_utc()),
             url: ActiveValue::Set(self.url.clone()),
-            ..Default::default()
         };
         let ret = artifact::ActiveModel::insert(model, db).await?;
         Artifact::from_model(ret)
@@ -73,7 +72,7 @@ impl Artifact {
         let artifact = artifact::Entity::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(anyhow!("Artifact not found"))?;
+            .ok_or_else(|| anyhow!("Artifact not found"))?;
         // Marshall the types from our internal representation to the actual DB representation.
         Ok(Artifact::from_model(artifact).unwrap())
     }
@@ -225,7 +224,7 @@ impl Build {
         let build = build::Entity::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(anyhow!("Build not found"))?;
+            .ok_or_else(|| anyhow!("Build not found"))?;
         Ok(Build::from_model(build).await.unwrap())
     }
 
@@ -238,7 +237,7 @@ impl Build {
             .await?;
 
         Ok(
-            future::try_join_all(build.into_iter().map(|build| Build::from_model(build)))
+            future::try_join_all(build.into_iter().map(Build::from_model))
                 .await
                 .unwrap(),
         )
@@ -251,7 +250,7 @@ impl Build {
             .all(db)
             .await?;
         Ok(
-            future::try_join_all(build.into_iter().map(|build| Build::from_model(build)))
+            future::try_join_all(build.into_iter().map(Build::from_model))
                 .await
                 .unwrap(),
         )
@@ -281,7 +280,6 @@ impl Project {
             id: ActiveValue::Set(self.id),
             name: ActiveValue::Set(self.name.clone()),
             description: ActiveValue::Set(self.description.clone()),
-            ..Default::default()
         };
         let res = project::ActiveModel::insert(project, db).await?;
         Project::from_model(res).await
@@ -302,7 +300,7 @@ impl Project {
         let project = project::Entity::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(anyhow!("Project not found"))?;
+            .ok_or_else(|| anyhow!("Project not found"))?;
         Ok(Project::from_model(project).await.unwrap())
     }
 
@@ -315,7 +313,7 @@ impl Project {
         Ok(future::try_join_all(
             project
                 .into_iter()
-                .map(|project| Project::from_model(project)),
+                .map(Project::from_model),
         )
         .await
         .unwrap())
@@ -364,7 +362,6 @@ impl Target {
             name: ActiveValue::Set(self.name.clone()),
             image: ActiveValue::Set(self.image.clone()),
             arch: ActiveValue::Set(self.arch.clone()),
-            ..Default::default()
         };
         let res = target::ActiveModel::insert(target, db).await?;
         Ok(Target::from_model(res))
