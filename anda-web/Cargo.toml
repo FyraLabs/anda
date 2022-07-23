@@ -20,6 +20,7 @@ console_error_panic_hook = "0.1.7"
 wasm-logger = "0.2.0"
 log = "0.4.17"
 uuid = { version = "1.1.2", features = ["serde"] }
+indexmap = "=1.6.2"
 
 [build-dependencies]
 dotenv-build = "0.1"

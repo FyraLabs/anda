@@ -1,9 +1,11 @@
-use std::sync::Arc;
-use serde::Deserialize;
-use yew::prelude::*;
+use patternfly_yew::{ColumnIndex, SharedTableModel, Span, TableRenderer};
 use reqwasm::http::Request;
+use serde::Deserialize;
+use std::sync::Arc;
 use uuid::Uuid;
-#[derive(Deserialize, Clone)]
+use yew::prelude::*;
+
+#[derive(Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct Build {
     pub id: Uuid,
     #[serde(rename = "project_id")]
@@ -20,8 +22,11 @@ impl Build {
             env!("ANDA_ENDPOINT"),
             limit,
             page
-        )).send().await?
-        .json::<Vec<Build>>().await?)
+        ))
+        .send()
+        .await?
+        .json::<Vec<Build>>()
+        .await?)
     }
 
     pub(crate) fn format(builds: Vec<Build>) -> Html {
@@ -41,5 +46,28 @@ impl Build {
                 }
             })
             .collect::<Html>()
+    }
+}
+
+pub(crate) struct BuildTable {
+    model4: SharedTableModel<Build>,
+}
+
+impl TableRenderer for BuildTable {
+    fn render(&self, column: ColumnIndex) -> Html {
+        match column.index {
+            0 => html! { <a href={ format!("/b/{}", &self.id) }>{ &self.id.simple() }</a> },
+            1 => html! { { &self.model4.proj } },
+            2 => html! { { &self.status } },
+            3 => html! { { &self.tag } },
+            _ => html! {},
+        }
+    }
+    fn render_details(&self) -> Vec<Span> {
+        vec![Span::max(html! {
+            <>
+                { "So many details for " }{ "idk" }
+            </>
+        })]
     }
 }

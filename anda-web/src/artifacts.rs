@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
+use reqwasm::http::Request;
 use serde::Deserialize;
 use uuid::Uuid;
 use yew::prelude::*;
-use reqwasm::http::Request;
 
-
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug, PartialEq)]
 pub struct Artifact {
     pub id: Uuid,
     pub name: String,
@@ -16,7 +15,10 @@ pub struct Artifact {
 }
 
 impl Artifact {
-    pub(crate) async fn list(limit: usize, page: usize) -> Result<Vec<Artifact>, Arc<reqwasm::Error>> {
+    pub(crate) async fn list(
+        limit: usize,
+        page: usize,
+    ) -> Result<Vec<Artifact>, Arc<reqwasm::Error>> {
         Ok(Request::get(&format!(
             "{}/artifacts/?{}&{}",
             env!("ANDA_ENDPOINT"),
@@ -25,14 +27,15 @@ impl Artifact {
         ))
         .send()
         .await?
-        .json::<Vec<Artifact>>().await?)
+        .json::<Vec<Artifact>>()
+        .await?)
     }
     pub(crate) fn format(artifacts: Vec<Artifact>) -> Html {
         artifacts
             .iter()
             .map(|a| {
                 html! {
-                    
+
                         <tr>
                             <th><a href={ format!("/a/{}", &a.id) }>{ &a.id.simple() }</a></th>
                             <th>{ &a.name }</th>

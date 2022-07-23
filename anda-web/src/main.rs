@@ -3,7 +3,7 @@ pub mod artifacts;
 pub mod builds;
 pub mod projects;
 use log::{debug, info};
-use patternfly_yew::{Title, Table};
+use patternfly_yew::{Level, SharedTableModel, Table, TableColumn, TableHeader, Title};
 use reqwasm::http::Request;
 use yew_hooks::use_async;
 
@@ -31,17 +31,20 @@ fn builds_table() -> Html {
         );
     }
 
+    let header = html_nested! {
+        <TableHeader>
+            <TableColumn label="ID"/>
+            <TableColumn label="Project"/>
+            <TableColumn label="Target"/>
+            <TableColumn label="Status"/>
+        </TableHeader>
+    };
+
+    let model: SharedTableModel<_> = builds.into();
+
     html! {
         <div id="builds" class="section">
-            <Table<SharedTableModel<builds::Build>> >
-                <tr>
-                    <th>{ "ID" }</th>
-                    <th>{ "Project" }</th>
-                    <th>{ "Target" }</th>
-                    <th>{ "Status" }</th>
-                </tr>
-                <tbody>{ builds::Build::format({(*builds).clone()}) }</tbody>
-            </Table>
+            <Table<SharedTableModel<builds::Build>> caption="Random caption" header={header} entries={model} />
         </div>
     }
 }
@@ -71,17 +74,20 @@ fn artifacts_table() -> Html {
         );
     }
 
+    let header = html_nested! {
+        <TableHeader>
+            <TableColumn label="ID"/>
+            <TableColumn label="Name"/>
+            <TableColumn label="Build"/>
+            <TableColumn label="Timestamp"/>
+        </TableHeader>
+    };
+
+    let model: SharedTableModel<_> = artifacts.into();
+
     html! {
-        <div id="artifacts" class="section">
-            <Table>
-                <tr>
-                    <th>{ "ID" }</th>
-                    <th>{ "Name" }</th>
-                    <th>{ "Build" }</th>
-                    <th>{ "Timestamp" }</th>
-                </tr>
-                <tbody>{ artifacts::Artifact::format((*artifacts).clone()) }</tbody>
-            </Table>
+        <div id="builds" class="section">
+            <Table<SharedTableModel<artifacts::Artifact>> caption="Random caption 2" header={header} entries={model} />
         </div>
     }
 }
