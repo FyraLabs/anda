@@ -1,25 +1,17 @@
 use crate::error::PackerError;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use log::{debug, info};
-use std::collections::HashSet;
-use tokio::fs::File;
-use std::path::{Path, PathBuf};
-use std::{fs, io};
+use std::{collections::HashSet, path::Path};
+use tokio::{fs::File, io::AsyncReadExt};
+use std::path::PathBuf;
+use std::io;
 use tokio_tar::{Archive,Builder as TarBuilder};
 use walkdir::WalkDir;
-use async_compression::tokio::bufread::GzipDecoder;
-use tokio::io::{BufReader, AsyncReadExt};
-use async_compression::tokio::bufread::GzipEncoder;
-use async_compression::tokio::{
-    bufread::ZstdDecoder,
-    write::ZstdEncoder,
-};
-use tokio_stream::StreamExt;
 
 pub struct ProjectPacker;
 
 impl ProjectPacker {
-    pub async fn pack(path: &PathBuf, output: Option<String>) -> Result<PathBuf, PackerError> {
+    pub async fn pack(path: &Path, output: Option<String>) -> Result<PathBuf, PackerError> {
         // get folder name of path
         // check if path is folder
         if !path.is_dir() {
@@ -47,10 +39,10 @@ impl ProjectPacker {
             PathBuf::from(tarball_path)
         };
 
-        let mut tarball = File::create(&tarball_path).await?;
+        let tarball = File::create(&tarball_path).await?;
 
 
-        ///let enc = GzipEncoder::new(tarball);
+        //let enc = GzipEncoder::new(tarball);
 
         let mut tar = TarBuilder::new(tarball);
 
@@ -112,7 +104,6 @@ impl ProjectPacker {
             // set current directory to path
 
 
-            // spawn a thread to add file to tarball
             tar.append_path(file.as_path()).await?;
         }
 
@@ -120,7 +111,7 @@ impl ProjectPacker {
         tar.finish().await.unwrap();
         std::env::set_current_dir(old_dir).unwrap();
 
-        Ok(PathBuf::from(tarball_path))
+        Ok(tarball_path)
     }
 
     pub async fn unpack_and_build(path: &PathBuf, workdir: Option<PathBuf>) -> Result<(), PackerError> {
@@ -137,9 +128,7 @@ impl ProjectPacker {
         let workdir = if let Some(workdir) = workdir {
             workdir
         } else {
-            let workdir = PathBuf::from("/tmp/anda");
-
-            workdir
+            PathBuf::from("/tmp/anda")
         };
 
         if workdir.exists() {
@@ -152,9 +141,7 @@ impl ProjectPacker {
                 if input.trim() == "y" {
                     std::fs::remove_dir_all(&workdir).unwrap();
                 } else {
-                    return Err(PackerError::Path(format!(
-                        "workdir already exists, please delete it manually"
-                    )));
+                    return Err(PackerError::Path("workdir already exists, please delete it manually".to_string()));
                 }
             }
         }
@@ -163,7 +150,7 @@ impl ProjectPacker {
 
 
         tar.unpack(workdir.as_path()).await?;
-        let old_pwd = std::env::current_dir().unwrap();
+        //let old_pwd = std::env::current_dir().unwrap();
 
 
         std::env::set_current_dir(&workdir).unwrap();

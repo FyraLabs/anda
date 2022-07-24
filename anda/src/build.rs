@@ -133,7 +133,7 @@ impl ProjectBuilder {
         let spec_path = config.package.spec.canonicalize()?;
 
         let builddep_exit = runas::Command::new("dnf")
-            .args(&["builddep", "-y", &spec_path.to_str().unwrap()])
+            .args(&["builddep", "-y", spec_path.to_str().unwrap()])
             .status()?;
 
         builddep_exit.exit_ok_polyfilled()?;
@@ -145,7 +145,7 @@ impl ProjectBuilder {
         // TODO: Move this to a method called `build_rpm` as we support more project types
         let config = crate::config::load_config(&self.root)?;
 
-        let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or("anda-build".to_string());
+        let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
 
         // if env var `ANDA_SKIP_BUILDDEP` is set to 1, we skip the builddep step
         if env::var("ANDA_SKIP_BUILDDEP").unwrap_or_default() != "1" {

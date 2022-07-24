@@ -5,8 +5,6 @@
       <sourceFolder url="file://$MODULE_DIR$/anda-server/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/anda/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/anda/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/libsolv/libsolv-bind/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/libsolv/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/anda-web/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/migration/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

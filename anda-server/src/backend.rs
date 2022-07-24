@@ -8,16 +8,13 @@
 
 use std::{path::PathBuf, time::SystemTime};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use aws_sdk_s3::types::{ByteStream, DateTime};
 //use aws_smithy_types::DateTime;
 use rocket::serde::uuid::Uuid;
 use tokio::{fs::File, io::AsyncReadExt};
 
-use crate::{
-    db_object,
-    s3_object::{S3Artifact, BUCKET, S3_ENDPOINT},
-};
+use crate::s3_object::{S3Artifact, BUCKET, S3_ENDPOINT};
 
 pub enum BuildMethod {
     Url { url: String },
@@ -64,8 +61,10 @@ impl AndaBackend {
                 // match file extension
                 if filename.ends_with("src.rpm") {
                     // call rpmbuild backend
+                    panic!("rpmbuild backend not implemented yet");
                 } else if filename.ends_with("andasrc.tar") {
                     // We have an andaman tarball.
+                    todo!();
                 }
             }
         }
@@ -75,6 +74,7 @@ impl AndaBackend {
     // Builds a project from a URL (e.g. github)
     pub fn build_url(&self) {
         // check if file is valid
+        todo!();
     }
 }
 #[async_trait]
@@ -186,7 +186,7 @@ impl S3Object for BuildCache {
         let mut file = File::open(file_path).await?;
         let metadata = file.metadata().await?;
         let mut bytes = vec![0; metadata.len() as usize];
-        file.read(&mut bytes).await?;
+        file.read_buf(&mut bytes).await?;
 
         let obj = crate::s3_object::S3Artifact::new()?;
         let dest_path = format!("build_cache/{}/{}", self.id.simple(), self.filename);

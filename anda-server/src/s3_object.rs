@@ -53,7 +53,7 @@ impl S3Artifact {
         // convert to &[u8]
         let mut bytes = vec![0; metadata.len() as usize];
         // Read entire file into `bytes`
-        file.read(&mut bytes).await?;
+        file.read_buf(&mut bytes).await?;
         // upload to S3
         let ret = self
             .connection
