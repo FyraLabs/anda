@@ -12,8 +12,6 @@ mod db;
 mod db_object;
 mod entity;
 mod kubernetes;
-mod pkgs;
-mod repos;
 mod s3_object;
 
 #[get("/<_file..>")]

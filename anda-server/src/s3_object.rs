@@ -35,7 +35,7 @@ pub struct S3Artifact {
 
 impl S3Artifact {
     pub fn new() -> Result<S3Artifact> {
-        dotenv::dotenv().ok();
+        dotenv::dotenv()?;
         Ok(S3Artifact {
             connection: CLIENT.clone(),
         })
