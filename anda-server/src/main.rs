@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate rocket;
+use std::path::PathBuf;
+
 #[macro_use]
 use rocket::fs::FileServer;
 use rocket::{Build, Rocket};
@@ -7,7 +9,6 @@ use sea_orm_rocket::Database;
 use serde::Deserialize;
 
 mod api;
-mod s3_object;
 mod auth;
 mod backend;
 mod db;
@@ -16,6 +17,12 @@ mod entity;
 mod kubernetes;
 mod pkgs;
 mod repos;
+mod s3_object;
+
+#[get("/<_file..>")]
+async fn index(_file: PathBuf) -> std::io::Result<rocket::fs::NamedFile> {
+    rocket::fs::NamedFile::open(std::path::Path::new("dist").join("index.html")).await
+}
 
 #[launch]
 async fn rocket() -> Rocket<Build> {
@@ -24,6 +31,7 @@ async fn rocket() -> Rocket<Build> {
         .mount("/builds", api::builds_routes())
         .mount("/artifacts", api::artifacts_routes())
         .mount("/projects", api::projects_routes())
-        //.mount("/", FileServer::from("dist"))
-        //.mount("/app", FileServer::from("dist"))
+        .mount("/app", routes![index])
+        //.mount("/assets", FileServer::from("dist/assets"))
+        .mount("/", FileServer::from("dist"))
 }
