@@ -1,11 +1,11 @@
-use crate::backend::{AndaBackend, BuildCache};
-use crate::backend::{BuildMethod, S3Object, Build};
-use rocket::form::Form;
-use rocket::fs::TempFile;
-use rocket::http::Status;
-use rocket::serde::json::Json;
-use rocket::serde::uuid::Uuid;
-use rocket::Route;
+use crate::backend::{AndaBackend, Build, BuildCache, BuildMethod, S3Object};
+use rocket::{
+    form::Form,
+    fs::TempFile,
+    http::Status,
+    serde::{json::Json, uuid::Uuid},
+    Route,
+};
 
 pub(crate) fn routes() -> Vec<Route> {
     routes![
@@ -85,25 +85,24 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
             // src_file build
             //let backend = AndaBackend::new_src_file(data.src_file.as_ref().unwrap(), data.build_type.as_ref().unwrap());
             // upload the file to S3
-            let cache = BuildCache::new(
+            BuildCache::new(
                 data.src_file
                     .as_ref()
-                    .unwrap()
+                    .ok_or(Status::InternalServerError)?
                     .raw_name()
-                    .unwrap()
+                    .ok_or(Status::InternalServerError)?
                     .dangerous_unsafe_unsanitized_raw()
                     .to_string(),
             )
             .upload_file(
                 data.src_file
                     .as_ref()
-                    .unwrap()
+                    .ok_or(Status::InternalServerError)?
                     .path()
-                    .unwrap()
+                    .ok_or(Status::InternalServerError)?
                     .to_path_buf(),
             )
-            .await
-            .unwrap();
+            .await.map_err(|_| Status::InternalServerError)?;
 
             // send file to backend for processing
 
@@ -111,16 +110,16 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
                 path: data
                     .src_file
                     .as_ref()
-                    .unwrap()
+                    .ok_or(Status::InternalServerError)?
                     .path()
-                    .unwrap()
+                    .ok_or(Status::InternalServerError)?
                     .to_path_buf(),
                 filename: data
                     .src_file
                     .as_ref()
-                    .unwrap()
+                    .ok_or(Status::InternalServerError)?
                     .raw_name()
-                    .unwrap()
+                    .ok_or(Status::InternalServerError)?
                     .dangerous_unsafe_unsanitized_raw()
                     .to_string(),
             };
@@ -133,7 +132,9 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
 
     // process backend request
 
-    let build = AndaBackend::new_build(build, data.project_id).await.unwrap();
+    let build = AndaBackend::new_build(build, data.project_id)
+        .await
+        .unwrap();
 
     Ok(Json(build))
 }

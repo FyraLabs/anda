@@ -73,7 +73,7 @@ impl AndaBackend {
     pub async fn build(&self) -> Result<()> {
         match &self.method {
             BuildMethod::Url { url } => {
-                self.build_url(url);
+                self.build_url(url)?;
 
                 //crate::kubernetes::dispatch_build(id, image);
             }

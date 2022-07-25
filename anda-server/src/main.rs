@@ -2,11 +2,8 @@
 extern crate rocket;
 use std::path::PathBuf;
 
-#[macro_use]
-use rocket::fs::FileServer;
-use rocket::{Build, Rocket};
+use rocket::{Build, Rocket, fs::FileServer};
 use sea_orm_rocket::Database;
-use serde::Deserialize;
 
 mod api;
 mod auth;

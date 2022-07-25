@@ -1,7 +1,0 @@
-[build]
-target = "anda-web/index.html"
-
-
-[[proxy]]
-rewrite = "/api/"
-backend = "http://localhost:8000"

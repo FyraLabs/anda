@@ -11,10 +11,8 @@ use crate::{
     entity::{artifact, build, project, target},
 };
 use anyhow::{anyhow, Result};
-use chrono::offset::Utc;
-use chrono::DateTime;
+use chrono::{offset::Utc, DateTime};
 use db::DbPool;
-use futures::future;
 use sea_orm::{prelude::Uuid, *};
 use serde::{Deserialize, Serialize};
 
@@ -26,6 +24,19 @@ pub struct Artifact {
     pub build_id: Uuid,
     pub timestamp: DateTime<Utc>,
 }
+
+impl From<artifact::Model> for Artifact {
+    fn from(model: artifact::Model) -> Self {
+        Artifact {
+            build_id: model.build_id,
+            id: model.id,
+            name: model.name,
+            timestamp: DateTime::from_utc(model.timestamp, Utc),
+            url: model.url,
+        }
+    }
+}
+
 impl Artifact {
     pub fn new(art_id: Uuid, build_id: Uuid, name: String, url: String) -> Self {
         Self {
@@ -35,16 +46,6 @@ impl Artifact {
             timestamp: Utc::now(),
             url,
         }
-    }
-
-    fn from_model(model: artifact::Model) -> Result<Artifact> {
-        Ok(Artifact {
-            build_id: model.build_id,
-            id: model.id,
-            name: model.name,
-            timestamp: DateTime::from_utc(model.timestamp, Utc),
-            url: model.url,
-        })
     }
 
     pub async fn add(&self) -> Result<Artifact> {
@@ -57,7 +58,7 @@ impl Artifact {
             url: ActiveValue::Set(self.url.clone()),
         };
         let ret = artifact::ActiveModel::insert(model, db).await?;
-        Artifact::from_model(ret)
+        Ok(Artifact::from(ret))
     }
 
     /// Gets an artifact by ID
@@ -68,7 +69,7 @@ impl Artifact {
             .await?
             .ok_or_else(|| anyhow!("Artifact not found"))?;
         // Marshall the types from our internal representation to the actual DB representation.
-        Ok(Artifact::from_model(artifact).unwrap())
+        Ok(Artifact::from(artifact))
     }
 
     /// Lists all available artifact
@@ -80,10 +81,7 @@ impl Artifact {
             .fetch_page(page)
             .await?;
         // Marshall the types from our internal representation to the actual DB representation.
-        Ok(artifact
-            .into_iter()
-            .map(|artifact| Artifact::from_model(artifact).unwrap())
-            .collect())
+        Ok(artifact.into_iter().map(Artifact::from).collect())
     }
 
     /// Gets an artifact by the build it was associated with (with Build ID)
@@ -92,17 +90,13 @@ impl Artifact {
         let artifact = artifact::Entity::find()
             .filter(artifact::Column::BuildId.eq(build_id))
             .all(db)
-            .await
-            .unwrap();
+            .await?;
         // Marshall the types from our internal representation to the actual DB representation.
-        Ok(artifact
-            .into_iter()
-            .map(|artifact| Artifact::from_model(artifact).unwrap())
-            .collect())
+        Ok(artifact.into_iter().map(Artifact::from).collect())
     }
 
     /// Searches for an artifact
-    pub async fn search(query: &str) -> Result<Vec<Artifact>> {
+    pub async fn search(query: &str) -> Vec<Artifact> {
         let db = DbPool::get().await;
         let artifact = artifact::Entity::find()
             .filter(artifact::Column::Name.like(query))
@@ -110,10 +104,7 @@ impl Artifact {
             .await
             .unwrap();
         // Marshall the types from our internal representation to the actual DB representation.
-        Ok(artifact
-            .into_iter()
-            .map(|artifact| Artifact::from_model(artifact).unwrap())
-            .collect())
+        artifact.into_iter().map(Artifact::from).collect()
     }
 }
 
@@ -142,10 +133,9 @@ impl From<crate::backend::Build> for Build {
     }
 }
 
-impl Build {
-    /// Import from ORM model
-    async fn from_model(model: build::Model) -> Result<Build> {
-        Ok(Build {
+impl From<build::Model> for Build {
+    fn from(model: build::Model) -> Self {
+        Build {
             id: model.id,
             status: model.status,
             target_id: model.target_id,
@@ -153,9 +143,11 @@ impl Build {
             timestamp: DateTime::from_utc(model.timestamp, Utc),
             compose_id: model.compose_id,
             build_type: model.build_type,
-        })
+        }
     }
+}
 
+impl Build {
     pub fn new(status: i32, project_id: Option<Uuid>, build_type: &str) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -179,7 +171,7 @@ impl Build {
             ..Default::default()
         };
         let res = build::ActiveModel::insert(build, db).await?;
-        Build::from_model(res).await
+        Ok(Build::from(res))
     }
 
     pub async fn update_status(&self, status: i32) -> Result<Build> {
@@ -190,7 +182,7 @@ impl Build {
             ..Default::default()
         };
         let res = build::ActiveModel::update(build, db).await?;
-        Build::from_model(res).await
+        Ok(Build::from(res))
     }
 
     pub async fn update_type(&self, build_type: &str) -> Result<Build> {
@@ -201,7 +193,7 @@ impl Build {
             ..Default::default()
         };
         let res = build::ActiveModel::update(build, db).await?;
-        Build::from_model(res).await
+        Ok(Build::from(res))
     }
 
     pub async fn tag_compose(&self, compose_id: Uuid) -> Result<Build> {
@@ -212,7 +204,7 @@ impl Build {
             ..Default::default()
         };
         let res = build::ActiveModel::update(build, db).await?;
-        Build::from_model(res).await
+        Ok(Build::from(res))
     }
 
     pub async fn tag_target(&self, target_id: Uuid) -> Result<Build> {
@@ -223,7 +215,7 @@ impl Build {
             ..Default::default()
         };
         let res = build::ActiveModel::update(build, db).await?;
-        Build::from_model(res).await
+        Ok(Build::from(res))
     }
 
     pub async fn untag_target(&self) -> Result<Build> {
@@ -234,7 +226,7 @@ impl Build {
             ..Default::default()
         };
         let res = build::ActiveModel::update(build, db).await?;
-        Build::from_model(res).await
+        Ok(Build::from(res))
     }
 
     /// Gets a build by ID
@@ -244,7 +236,7 @@ impl Build {
             .one(db)
             .await?
             .ok_or_else(|| anyhow!("Build not found"))?;
-        Ok(Build::from_model(build).await.unwrap())
+        Ok(Build::from(build))
     }
 
     pub async fn list(limit: usize, page: usize) -> Result<Vec<Build>> {
@@ -255,11 +247,7 @@ impl Build {
             .fetch_page(page)
             .await?;
 
-        Ok(
-            future::try_join_all(build.into_iter().map(Build::from_model))
-                .await
-                .unwrap(),
-        )
+        Ok(build.into_iter().map(Build::from).collect())
     }
     pub async fn get_by_target_id(target_id: Uuid) -> Result<Vec<Build>> {
         let db = DbPool::get().await;
@@ -268,11 +256,7 @@ impl Build {
             .filter(build::Column::TargetId.eq(target_id))
             .all(db)
             .await?;
-        Ok(
-            future::try_join_all(build.into_iter().map(Build::from_model))
-                .await
-                .unwrap(),
-        )
+        Ok(build.into_iter().map(Build::from).collect())
     }
 
     pub async fn get_by_project_id(project_id: Uuid) -> Result<Vec<Build>> {
@@ -282,11 +266,7 @@ impl Build {
             .filter(build::Column::ProjectId.eq(project_id))
             .all(db)
             .await?;
-        Ok(
-            future::try_join_all(build.into_iter().map(Build::from_model))
-                .await
-                .unwrap(),
-        )
+        Ok(build.into_iter().map(Build::from).collect())
     }
 }
 
@@ -295,6 +275,16 @@ pub struct Project {
     pub id: Uuid,
     pub name: String,
     pub description: String,
+}
+
+impl From<project::Model> for Project {
+    fn from(model: project::Model) -> Self {
+        Project {
+            id: model.id,
+            name: model.name,
+            description: model.description,
+        }
+    }
 }
 
 impl Project {
@@ -315,16 +305,7 @@ impl Project {
             description: ActiveValue::Set(self.description.clone()),
         };
         let res = project::ActiveModel::insert(project, db).await?;
-        Project::from_model(res).await
-    }
-
-    /// Import from ORM model
-    async fn from_model(model: project::Model) -> Result<Project> {
-        Ok(Project {
-            id: model.id,
-            name: model.name,
-            description: model.description,
-        })
+        Ok(Project::from(res))
     }
 
     /// Gets a project by ID
@@ -334,7 +315,7 @@ impl Project {
             .one(db)
             .await?
             .ok_or_else(|| anyhow!("Project not found"))?;
-        Ok(Project::from_model(project).await.unwrap())
+        Ok(Project::from(project))
     }
 
     pub async fn list(limit: usize, page: usize) -> Result<Vec<Project>> {
@@ -343,11 +324,7 @@ impl Project {
             .paginate(db, limit)
             .fetch_page(page)
             .await?;
-        Ok(
-            future::try_join_all(project.into_iter().map(Project::from_model))
-                .await
-                .unwrap(),
-        )
+        Ok(project.into_iter().map(Project::from).collect())
     }
 
     pub async fn update_name(&self, name: String) -> Result<Project> {
@@ -358,7 +335,7 @@ impl Project {
             ..Default::default()
         };
         let res = project::ActiveModel::update(project, db).await?;
-        Project::from_model(res).await
+        Ok(Project::from(res))
     }
 
     pub async fn update_description(&self, description: String) -> Result<Project> {
@@ -369,7 +346,7 @@ impl Project {
             ..Default::default()
         };
         let res = project::ActiveModel::update(project, db).await?;
-        Project::from_model(res).await
+        Ok(Project::from(res))
     }
 
     pub async fn delete(&self) -> Result<()> {

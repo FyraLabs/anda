@@ -2,19 +2,19 @@ use anyhow::{anyhow, Result};
 use log::{debug, error, info, warn};
 use mime_guess::MimeGuess;
 use pretty_env_logger::env_logger::Builder;
-use reqwest::multipart;
-use reqwest::{Client, ClientBuilder};
+use reqwest::{multipart, Client, ClientBuilder};
 use serde::Serialize;
-use std::env;
-use std::io::{BufRead, BufReader};
-use std::process::Stdio;
 use std::{
     collections::HashMap,
+    env,
+    io::{BufRead, BufReader},
     path::PathBuf,
-    process::{Command, ExitStatus},
+    process::{Command, ExitStatus, Stdio},
 };
-use tokio::fs::{File, OpenOptions};
-use tokio::io::AsyncReadExt;
+use tokio::{
+    fs::{File, OpenOptions},
+    io::AsyncReadExt,
+};
 use walkdir::WalkDir;
 
 use crate::error::BuilderError;
@@ -63,7 +63,7 @@ impl ArtifactUploader {
             // add to array of form data
             let (path, aa) = file;
             let mut buf = Vec::new();
-            let _ = File::open(&aa).await?.read_to_end(&mut buf).await?;
+            File::open(&aa).await?.read_to_end(&mut buf).await?;
 
             debug!("adding file: {}", aa.display());
             let mimetype = MimeGuess::from_path(&aa).first_or_octet_stream();
@@ -85,8 +85,7 @@ impl ArtifactUploader {
         // Please fix this.
 
         let res = ClientBuilder::new()
-            .build()
-            .unwrap()
+            .build()?
             .post(&endpoint)
             .multipart(form)
             .send()
@@ -113,7 +112,7 @@ impl ProjectBuilder {
             let entry = entry?;
             if entry.file_type().is_file() {
                 let file_path = entry.into_path();
-                let real_path = file_path.strip_prefix(&folder).unwrap();
+                let real_path = file_path.strip_prefix(&folder)?;
                 hash.insert(real_path.display().to_string(), file_path);
             }
         }
@@ -167,7 +166,12 @@ impl ProjectBuilder {
                 "--define",
                 format!(
                     "_sourcedir {}",
-                    tokio::fs::canonicalize(&self.root).await?.to_str().unwrap()
+                    tokio::fs::canonicalize(&self.root)
+                        .await?
+                        .to_str()
+                        .ok_or_else(|| BuilderError::Other(
+                            "invalid unicode for path".to_string()
+                        ))?
                 )
                 .as_str(),
             ])
@@ -176,8 +180,8 @@ impl ProjectBuilder {
             .stdout(Stdio::piped())
             .spawn()?;
 
-        let stdout = rpmbuild.stdout.take().unwrap();
-        let stderr = rpmbuild.stderr.take().unwrap();
+        let stdout = rpmbuild.stdout.take().expect("Can't get stdout");
+        let stderr = rpmbuild.stderr.take().expect("Can't get stderr");
         let reader_out = BufReader::new(stdout);
         let reader_err = BufReader::new(stderr);
 
@@ -185,7 +189,7 @@ impl ProjectBuilder {
             info!("rpmbuild:\t{}", line.unwrap());
         });
         reader_err.lines().for_each(|line| {
-            info!("rpmbuild:\t{}", line.unwrap());
+            warn!("rpmbuild:\t{}", line.unwrap());
         });
 
         // stream log output from rpmbuild to rust log

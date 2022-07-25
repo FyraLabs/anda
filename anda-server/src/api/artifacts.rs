@@ -5,6 +5,7 @@ use rocket::{
     serde::{json::Json, uuid::Uuid},
     Route,
 };
+use log::debug;
 use std::collections::HashMap;
 
 pub(crate) fn routes() -> Vec<Route> {
@@ -21,48 +22,44 @@ pub struct ArtifactUpload<'r> {
 
 #[get("/?<limit>&<page>")]
 async fn index(page: Option<usize>, limit: Option<usize>) -> Json<Vec<Artifact>> {
-    let arts = Artifact::list(limit.unwrap_or(100), page.unwrap_or(0)).await;
-    Json(arts.unwrap())
+    Json(
+        Artifact::list(limit.unwrap_or(100), page.unwrap_or(0))
+            .await
+            .expect("Failed to list artifacts"),
+    )
 }
 
 #[get("/<id>", rank = 5)]
 async fn get(id: Uuid) -> Option<Json<Artifact>> {
     //NOTE: ID is a path string to the file, so we probably need to see if Rocket can handle escaping slashes
-    match Artifact::get(id).await {
-        Ok(art) => Some(Json(art)),
-        Err(_) => None,
-    }
+    Artifact::get(id).await.ok().map(Json)
 }
 
 // Upload artifact (entire folders) with form data
 #[post("/", data = "<data>")]
 async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
-    // Get the build ID
-    let build_id = data.build_id;
-    println!("Build ID: {}", build_id);
-    // Get the files
-    let files = &data.files;
-
+    debug!("Build ID: {}", data.build_id);
     let mut results = Vec::new();
 
     // for each file in the hashmap, print the name and path
-    for (name, file) in files.iter() {
-        println!("{}: {}", name, file.path().unwrap().display());
-        let artifact = crate::backend::Artifact::new(
-            file.raw_name()
-                .unwrap()
-                .dangerous_unsafe_unsanitized_raw()
-                .to_string(),
-            name.to_string(),
-            build_id,
-        )
-        .upload_file(file.path().unwrap().to_path_buf())
-        .await
-        .unwrap();
-
-        // Upload the file to S3
-        // Add the artifact to the results vector
-        results.push(artifact.metadata().await.unwrap());
+    for (name, file) in data.files.iter() {
+        debug!("{}: {}", name, file.path().expect("No file path").display());
+        results.push(
+            crate::backend::Artifact::new(
+                file.raw_name()
+                    .expect("No filename")
+                    .dangerous_unsafe_unsanitized_raw()
+                    .to_string(),
+                name.to_string(),
+                data.build_id,
+            )
+            .upload_file(file.path().unwrap().to_path_buf())
+            .await
+            .expect("Failed to upload build file to S3")
+            .metadata()
+            .await
+            .expect("Failed to get metadata"),
+        );
     }
 
     Json(results)
