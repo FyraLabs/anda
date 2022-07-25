@@ -1,15 +1,16 @@
 import { useHandleSignInCallback } from "@logto/react";
-import { useRouter } from "next/router";
 
-const Callback = () => {
-  const router = useRouter();
+const AuthCallback = () => {
   const { isLoading } = useHandleSignInCallback(() => {
-    router.push("/");
+    // Navigate to root path when finished
   });
 
+  // When it's working in progress
   if (isLoading) {
     return <div>Redirecting...</div>;
   }
+
+  return <h1></h1>;
 };
 
-export default Callback;
+export default AuthCallback;
