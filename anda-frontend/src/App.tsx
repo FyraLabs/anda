@@ -3,6 +3,7 @@ import {
   ReactLocation,
   Route,
   DefaultGenerics,
+  Outlet,
 } from "@tanstack/react-location";
 import { useDarkMode } from "usehooks-ts";
 import Landing from "./pages/Landing";
@@ -10,6 +11,10 @@ import { LogtoProvider, LogtoConfig } from "@logto/react";
 import AuthCallback from "./pages/AuthCallback";
 import Home from "./pages/Home";
 import Project from "./pages/Project";
+import Navbar from "./components/Navbar";
+import About from "./pages/Project/About";
+import Composes from "./pages/Project/Composes";
+import Artifacts from "./pages/Project/Artifacts";
 
 const config: LogtoConfig = {
   endpoint: "https://accounts.fyralabs.com",
@@ -28,14 +33,34 @@ const routes: Route<DefaultGenerics>[] = [
   },
   {
     path: "/app",
+    element: (
+      <>
+        <Navbar />
+        <Outlet />
+      </>
+    ),
     children: [
       {
         path: "/home",
         element: <Home />,
       },
       {
-        path: "/project",
+        path: "/projects/:id",
         element: <Project />,
+        children: [
+          {
+            path: "/about",
+            element: <About />,
+          },
+          {
+            path: "/composes",
+            element: <Composes />,
+          },
+          {
+            path: "/artifacts",
+            element: <Artifacts />,
+          },
+        ],
       },
     ],
   },

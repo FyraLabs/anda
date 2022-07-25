@@ -25,7 +25,7 @@ const Landing = () => {
               Sign Up
             </button>
             <Link
-              className="rounded-lg text-fuchsia-400 bg-fuchsia-600 px-6 py-2.5 font-medium text-xs shadow-md hover:bg-fuchsia-800 transition bg-opacity-40"
+              className="rounded-lg text-fuchsia-600 dark:text-fuchsia-400 bg-fuchsia-400 px-6 py-2.5 font-medium text-xs shadow-md dark:hover:bg-fuchsia-800 hover:bg-fuchsia-300 transition bg-opacity-40"
               to="/app/home"
             >
               Explore
