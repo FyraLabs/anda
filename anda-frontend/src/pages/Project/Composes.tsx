@@ -1,7 +1,7 @@
 const Composes = () => {
   return (
     <>
-      <p className="text-3xl font-medium mb-3">Composes</p>
+      <p className="text-3xl font-medium mb-3 text-gray-200">Composes</p>
 
       <div className="flex divide-y-[1px] divide-neutral-800 flex-col">
         <div className="flex gap-5 items-center py-2">

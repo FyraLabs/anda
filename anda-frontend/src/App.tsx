@@ -15,6 +15,7 @@ import Navbar from "./components/Navbar";
 import About from "./pages/Project/About";
 import Composes from "./pages/Project/Composes";
 import Artifacts from "./pages/Project/Artifacts";
+import User from "./pages/User";
 
 const config: LogtoConfig = {
   endpoint: "https://accounts.fyralabs.com",
@@ -45,20 +46,29 @@ const routes: Route<DefaultGenerics>[] = [
         element: <Home />,
       },
       {
-        path: "/projects/:id",
-        element: <Project />,
+        path: "/:user",
         children: [
           {
-            path: "/about",
-            element: <About />,
+            path: "/",
+            element: <User />,
           },
           {
-            path: "/composes",
-            element: <Composes />,
-          },
-          {
-            path: "/artifacts",
-            element: <Artifacts />,
+            path: "/:project",
+            element: <Project />,
+            children: [
+              {
+                path: "/about",
+                element: <About />,
+              },
+              {
+                path: "/composes",
+                element: <Composes />,
+              },
+              {
+                path: "/artifacts",
+                element: <Artifacts />,
+              },
+            ],
           },
         ],
       },

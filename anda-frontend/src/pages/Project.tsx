@@ -13,9 +13,9 @@ import { faDocker } from "@fortawesome/free-brands-svg-icons";
 
 const Project = () => {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col dark:text-gray-300">
       <div className="flex h-full flex-1 items-stretch">
-        <div className="p-5 flex flex-col light:bg-neutral-100 dark:bg-neutral-900 w-72 gap-2 dark:text-gray-300">
+        <div className="p-5 flex flex-col light:bg-neutral-100 dark:bg-neutral-900 w-72 gap-2">
           <p className="text-xl text-gray-400 font-medium">
             <span>lleyton</span> / <span className="text-white">neko</span>
           </p>
