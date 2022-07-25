@@ -10,6 +10,7 @@ pub(crate) fn routes() -> Vec<Route> {
     routes![
         index,
         get,
+        new,
     ]
 }
 
