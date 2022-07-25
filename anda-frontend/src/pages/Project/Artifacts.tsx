@@ -9,7 +9,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 const Artifacts = () => {
   return (
     <>
-      <p className="text-3xl font-medium mb-3 text-gray-200">Artifacts</p>
+      <p className="text-3xl font-bold mb-3 text-gray-200">Artifacts</p>
 
       <div className="flex divide-y-[1px] divide-neutral-800 flex-col">
         <div className="flex gap-5 items-center py-2">

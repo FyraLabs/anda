@@ -1,7 +1,7 @@
 const About = () => {
   return (
     <>
-      <p className="text-3xl font-medium mb-3 text-gray-200">About</p>
+      <p className="text-3xl font-bold mb-3 text-gray-200">About</p>
 
       <div className="space-y-2">
         <p>

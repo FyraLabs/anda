@@ -17,7 +17,7 @@ const User = () => {
       <div className="flex flex-row items-center gap-5">
         <div className="rounded-full bg-teal-500 h-16 w-16"></div>
         <div className="flex flex-col">
-          <h1 className="text-3xl font-medium text-gray-200">lleyton</h1>
+          <h1 className="text-3xl font-bold text-gray-200">lleyton</h1>
 
           <p>
             Hi! My name is Lleyton Gray. I'm a developer from Los Angeles
