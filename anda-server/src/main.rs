@@ -24,4 +24,6 @@ async fn rocket() -> Rocket<Build> {
         .mount("/builds", api::builds_routes())
         .mount("/artifacts", api::artifacts_routes())
         .mount("/projects", api::projects_routes())
+        //.mount("/", FileServer::from("dist"))
+        //.mount("/app", FileServer::from("dist"))
 }

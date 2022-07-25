@@ -141,6 +141,7 @@ dependencies = [
  "kube",
  "lazy_static",
  "log",
+ "npm_rs",
  "num",
  "num-derive",
  "num-traits",
@@ -2366,6 +2367,15 @@ checksum = "a8903e5a29a317527874d0402f867152a3d21c908bb0b933e416c65e301d4c36"
 dependencies = [
  "memchr",
  "minimal-lexical",
+]
+
+[[package]]
+name = "npm_rs"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f664b3447458ff1c5fee7043990271072bccbd1300f151b2ae84fb461b442824"
+dependencies = [
+ "cfg-if",
 ]
 
 [[package]]
