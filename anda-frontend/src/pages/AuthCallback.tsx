@@ -1,16 +1,17 @@
 import { useHandleSignInCallback } from "@logto/react";
+import { useNavigate } from "@tanstack/react-location";
 
 const AuthCallback = () => {
+  const navigate = useNavigate();
   const { isLoading } = useHandleSignInCallback(() => {
-    // Navigate to root path when finished
+    navigate({ to: "/app/home", replace: true });
   });
 
-  // When it's working in progress
   if (isLoading) {
     return <div>Redirecting...</div>;
   }
 
-  return <h1></h1>;
+  return <></>;
 };
 
 export default AuthCallback;

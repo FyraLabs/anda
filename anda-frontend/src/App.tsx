@@ -4,19 +4,12 @@ import {
   Route,
   DefaultGenerics,
 } from "@tanstack/react-location";
-import { createTheme, NextUIProvider } from "@nextui-org/react";
 import { useDarkMode } from "usehooks-ts";
-import Home from "./pages/Home";
+import Landing from "./pages/Landing";
 import { LogtoProvider, LogtoConfig } from "@logto/react";
 import AuthCallback from "./pages/AuthCallback";
-
-const lightTheme = createTheme({
-  type: "light",
-});
-
-const darkTheme = createTheme({
-  type: "dark",
-});
+import Home from "./pages/Home";
+import Project from "./pages/Project";
 
 const config: LogtoConfig = {
   endpoint: "https://accounts.fyralabs.com",
@@ -27,22 +20,33 @@ const location = new ReactLocation();
 const routes: Route<DefaultGenerics>[] = [
   {
     path: "/",
-    element: <Home />,
+    element: <Landing />,
   },
   {
     path: "/callback",
     element: <AuthCallback />,
   },
+  {
+    path: "/app",
+    children: [
+      {
+        path: "/home",
+        element: <Home />,
+      },
+      {
+        path: "/project",
+        element: <Project />,
+      },
+    ],
+  },
 ];
 
 const App = () => {
-  const darkMode = useDarkMode(false);
+  const darkMode = useDarkMode(true);
 
   return (
     <LogtoProvider config={config}>
-      <NextUIProvider theme={darkMode.isDarkMode ? darkTheme : lightTheme}>
-        <Router location={location} routes={routes} />
-      </NextUIProvider>
+      <Router location={location} routes={routes} />
     </LogtoProvider>
   );
 };
