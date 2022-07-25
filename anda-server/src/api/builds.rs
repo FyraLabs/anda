@@ -27,18 +27,12 @@ async fn index(page: Option<usize>, limit: Option<usize>) -> Json<Vec<Build>> {
 
 #[get("/<id>")]
 async fn get(id: Uuid) -> Option<Json<Build>> {
-    match Build::get(id).await {
-        Ok(build) => Some(Json(build)),
-        Err(_) => None,
-    }
+    Build::get(id).await.map(Json).ok()
 }
 
 #[get("/by_target/<target_id>")]
 async fn get_by_target(target_id: Uuid) -> Option<Json<Vec<Build>>> {
-    match Build::get_by_target_id(target_id).await {
-        Ok(builds) => Some(Json(builds)),
-        Err(_) => None,
-    }
+    Build::get_by_target_id(target_id).await.map(Json).ok()
 }
 
 #[derive(FromForm)]

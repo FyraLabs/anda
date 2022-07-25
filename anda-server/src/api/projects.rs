@@ -21,8 +21,19 @@ async fn index(page: Option<usize>, limit: Option<usize>) -> Json<Vec<Project>> 
 
 #[get("/<id>")]
 async fn get(id: Uuid) -> Option<Json<Project>> {
-    match Project::get(id).await {
-        Ok(project) => Some(Json(project)),
-        Err(_) => None,
-    }
+    Project::get(id).await.map(Json).ok()
+}
+
+#[derive(FromForm)]
+struct ProjectNew {
+    name: String,
+    description: Option<String>
+}
+
+
+#[post("/", data = "<data>")]
+async fn new(data: Form<ProjectNew>) -> Result<(), Status> {
+    let project = Project::new(data.name.clone(), data.description.clone());
+    project.add().await.map_err(|_| Status::InternalServerError)?;
+    Ok(())
 }
