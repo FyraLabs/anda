@@ -10,18 +10,12 @@ use crate::{
     db,
     entity::{artifact, build, project, target},
 };
-use chrono::offset::Utc;
-
-use sea_orm::{prelude::Uuid, *};
-
-use chrono::DateTime;
-
-use db::DbPool;
-
 use anyhow::{anyhow, Result};
-
+use chrono::offset::Utc;
+use chrono::DateTime;
+use db::DbPool;
 use futures::future;
-
+use sea_orm::{prelude::Uuid, *};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -349,13 +343,11 @@ impl Project {
             .paginate(db, limit)
             .fetch_page(page)
             .await?;
-        Ok(future::try_join_all(
-            project
-                .into_iter()
-                .map(Project::from_model),
+        Ok(
+            future::try_join_all(project.into_iter().map(Project::from_model))
+                .await
+                .unwrap(),
         )
-        .await
-        .unwrap())
     }
 
     pub async fn update_name(&self, name: String) -> Result<Project> {
@@ -368,7 +360,6 @@ impl Project {
         let res = project::ActiveModel::update(project, db).await?;
         Project::from_model(res).await
     }
-
 
     pub async fn update_description(&self, description: String) -> Result<Project> {
         let db = DbPool::get().await;
