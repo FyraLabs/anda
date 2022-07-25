@@ -34,11 +34,12 @@ const routes: Route<DefaultGenerics>[] = [
   },
   {
     path: "/app",
+    // TODO: is there a better way?
     element: (
-      <>
+      <div className="min-h-screen flex flex-col">
         <Navbar />
         <Outlet />
-      </>
+      </div>
     ),
     children: [
       {
