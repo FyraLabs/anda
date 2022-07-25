@@ -105,7 +105,7 @@ async fn main() -> Result<()> {
             if path.is_file() {
                 info!("path is a file, calling builder");
 
-                if path.file_name().unwrap().to_str().unwrap().ends_with(".andasrc.tar") {
+                if path.file_name().unwrap().to_str().unwrap().ends_with(".andasrc.zip") {
                     debug!("path is an andasrc tarball package, calling unpacker");
                     ProjectPacker::unpack_and_build(&path, workdir).await.map_err(|e| {
                         error!("{:?}", e);

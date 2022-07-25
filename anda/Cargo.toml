@@ -40,7 +40,7 @@ mime_guess = "2.0.4"
 gitignore = "1.0.7"
 proc-macro2 = "1.0.40"
 async-compression = { version = "0.3.14", features = ["flate2", "tokio", "gzip"] }
-async_zip = "0.0.8"
+async_zip = { git = "https://github.com/Majored/rs-async-zip.git", branch = "main" }
 
 
 [package.metadata.rpm]

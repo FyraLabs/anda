@@ -1,12 +1,15 @@
 use crate::error::PackerError;
-use anyhow::Result;
+use anyhow::{ Result};
 use log::{debug, info};
-use std::{collections::HashSet, path::Path};
-use tokio::{fs::File, io::AsyncReadExt};
-use std::path::PathBuf;
-use std::io;
-use tokio_tar::{Archive,Builder as TarBuilder};
+use std::collections::HashSet;
+use tokio::fs::File;
+use std::path::{ PathBuf, Path};
+use std::{fs, io};
 use walkdir::WalkDir;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use async_zip::write::{EntryOptions, ZipFileWriter};
+use async_zip::read::seek::ZipFileReader;
+use async_zip::Compression;
 
 pub struct ProjectPacker;
 
@@ -32,19 +35,20 @@ impl ProjectPacker {
         let folder_name = path.clone();
         let folder_name = folder_name.file_name().unwrap().to_str().unwrap();
 
-        let tarball_path = if let Some(output) = output {
+        let packfile_path = if let Some(output) = output {
             PathBuf::from(output)
         } else {
-            let tarball_path = format!("/tmp/{}.andasrc.tar", folder_name);
-            PathBuf::from(tarball_path)
+            let packfile_name = format!("/tmp/{}.andasrc.zip", folder_name);
+            PathBuf::from(packfile_name)
         };
 
-        let tarball = File::create(&tarball_path).await?;
+        let mut packfile = File::create(&packfile_path).await?;
 
 
-        //let enc = GzipEncoder::new(tarball);
 
-        let mut tar = TarBuilder::new(tarball);
+        let mut writer = ZipFileWriter::new(&mut packfile);
+
+        //let mut tar = TarBuilder::new(packfile);
 
         // parse gitignore file
         let gitignore_path = path.join(".gitignore");
@@ -79,7 +83,7 @@ impl ProjectPacker {
             }
         }
 
-        tar.follow_symlinks(true);
+        //tar.follow_symlinks(true);
         // if gitignore and andaignore files don't exists, add all files in folder
         if !andaignore_path.exists() && !gitignore_path.exists() {
             WalkDir::new(&path)
@@ -104,26 +108,34 @@ impl ProjectPacker {
             // set current directory to path
 
 
-            tar.append_path(file.as_path()).await?;
+            if file.is_file() {
+                // spawn a thread to add file to tarball
+                let opts = EntryOptions::new(
+                    file.to_str().unwrap().to_string(),
+                    Compression::Zstd,
+                );
+
+                // read data from file to buf
+                let mut file = File::open(file).await?;
+                //let metadata = file.metadata().await?;
+                let mut buf = vec![];
+                file.read_to_end(&mut buf).await?;
+                // add file to zip pack
+                writer.write_entry_whole(opts, &buf).await.unwrap();
+            }
         }
 
         debug!("Finishing pack");
-        tar.finish().await.unwrap();
+        //tar.finish().await.unwrap();
+        writer.close().await.unwrap();
         std::env::set_current_dir(old_dir).unwrap();
 
-        Ok(tarball_path)
+        Ok(packfile_path)
     }
 
     pub async fn unpack_and_build(path: &PathBuf, workdir: Option<PathBuf>) -> Result<(), PackerError> {
-        let mut tarball = File::open(path).await?;
-
-        let mut buf = Vec::new();
-
-        tarball.read_to_end(&mut buf).await?;
-
         //let tar = GzipDecoder::new(buf.as_slice());
 
-        let mut tar = Archive::new(buf.as_slice());
 
         let workdir = if let Some(workdir) = workdir {
             workdir
@@ -132,14 +144,13 @@ impl ProjectPacker {
         };
 
         if workdir.exists() {
-            debug!("removing {}", workdir.display());
             // check if it's the default temp dir
             if !workdir.to_str().unwrap().contains("/tmp/") {
                 info!("workdir already exists, do you want to delete it? (y/N)");
                 let mut input = String::new();
                 io::stdin().read_line(&mut input)?;
                 if input.trim() == "y" {
-                    std::fs::remove_dir_all(&workdir).unwrap();
+                    fs::remove_dir_all(&workdir).unwrap();
                 } else {
                     return Err(PackerError::Path("workdir already exists, please delete it manually".to_string()));
                 }
@@ -147,18 +158,49 @@ impl ProjectPacker {
         }
 
 
+        let mut packfile = File::open(path).await?;
+        let mut reader = ZipFileReader::new(&mut packfile).await.unwrap();
+
+        // turn zip file reader into zipentryreaders
 
 
-        tar.unpack(workdir.as_path()).await?;
+        let entry_count = reader.entries().len();
+
+        for index in 0..entry_count {
+            let i = reader.entry_reader(index).await.unwrap();
+            let entry = i.entry();
+
+            if entry.dir() {
+                continue;
+            }
+
+            debug!("{}", entry.name());
+
+            // create parent directories if needed
+            let mut path = workdir.clone();
+            path.push(entry.name());
+            let parent = path.parent().unwrap();
+            if !parent.exists() {
+                fs::create_dir_all(parent).unwrap();
+            }
+            let buf = i.read_to_end_crc().await.unwrap();
+
+            // write files to disk
+            let mut file = File::create(path).await?;
+            file.write_all(&buf).await?;
+        }
+
+
+        // extract zip file to workdir
+
         //let old_pwd = std::env::current_dir().unwrap();
 
 
         std::env::set_current_dir(&workdir).unwrap();
 
         // print current dir
-        println!("{}", std::env::current_dir().unwrap().display());
+        debug!("{}", std::env::current_dir().unwrap().display());
         // execute anda build internally
-        //async_compression::tokio::bufread::
         crate::build::ProjectBuilder::new(workdir).build().await?;
 
         Ok(())
