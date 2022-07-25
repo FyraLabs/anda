@@ -46,8 +46,9 @@ We want to create a stable, robust, and scalable build system that is easy to us
 Andaman is a build system written in Rust, and is powered by the following components:
 
 - [Minio](https://min.io) (and S3 powered by the AWS Rust SDK) for storing artifacts
-- [Rocket](https://rocket.rs) for the REST API server
-- [Yew](https://yew.rs) for the web dashboard
+- [Rocket](https://rocket.rs) for the server
+- [React](https://reactjs.org) for the web interface
+- [TailwindCSS](https://tailwindcss.com) for the web interface
 - [RPM](https://rpm.org) the RPM package manager for building RPM packages
 - [DNF](https://github.com/rpm-software-management/dnf) for resolving RPM packages and installing them (until we have a proper RPM frontend)
 - [Kubernetes](https://kubernetes.io) for build orchestration
