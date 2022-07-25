@@ -37,7 +37,7 @@ pub fn load_config(root: &PathBuf) -> Result<AndaConfig, ProjectError> {
 
     match config {
         Ok(config) => Ok(config),
-        Err(e) => Err(ProjectError::InvalidManifest),
+        Err(_) => Err(ProjectError::InvalidManifest),
     }
 
 }

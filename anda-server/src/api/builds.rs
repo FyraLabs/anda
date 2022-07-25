@@ -1,6 +1,5 @@
-use crate::backend::S3Object;
 use crate::backend::{AndaBackend, BuildCache};
-use crate::db_object::*;
+use crate::backend::{BuildMethod, S3Object, Build};
 use rocket::form::Form;
 use rocket::fs::TempFile;
 use rocket::http::Status;
@@ -75,11 +74,12 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
         return Err(Status::PreconditionRequired);
     };
 
+    let build: BuildMethod;
     match build_type {
         0 => {
-            let backend = AndaBackend::new_url(data.url.as_ref().unwrap());
-
-            backend.build().await.unwrap();
+            build = BuildMethod::Url {
+                url: data.url.as_ref().unwrap().to_string(),
+            };
         }
         1 => {
             // src_file build
@@ -102,25 +102,40 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
                     .unwrap()
                     .to_path_buf(),
             )
-            .await.unwrap();
+            .await
+            .unwrap();
 
             // send file to backend for processing
-            AndaBackend::new_src_file(data.src_file.as_ref().unwrap().path().unwrap().to_path_buf(), cache.filename).build().await.unwrap();
 
+            build = BuildMethod::SrcFile {
+                path: data
+                    .src_file
+                    .as_ref()
+                    .unwrap()
+                    .path()
+                    .unwrap()
+                    .to_path_buf(),
+                filename: data
+                    .src_file
+                    .as_ref()
+                    .unwrap()
+                    .raw_name()
+                    .unwrap()
+                    .dangerous_unsafe_unsanitized_raw()
+                    .to_string(),
+            };
         }
         _ => {
             // return error: invalid form: neither url nor src_file is not empty
-            return Err(Status::PreconditionRequired);
+            return Err(Status::BadRequest);
         }
     }
 
     // process backend request
 
-    // todo: move this to backend
-    let build = Build::new(0, data.project_id, "BuildSubmission")
-        .add()
-        .await;
-    Ok(Json(build.unwrap()))
+    let build = AndaBackend::new_build(build, data.project_id).await.unwrap();
+
+    Ok(Json(build))
 }
 
 #[derive(FromForm)]
@@ -134,7 +149,7 @@ async fn update_status(data: Form<BuildUpdateStatus>) -> Json<Build> {
     let build = Build::get(data.id)
         .await
         .expect("Failed to update build status")
-        .update_status(data.status)
+        .update_status(num::FromPrimitive::from_i32(data.status).unwrap())
         .await;
     Json(build.unwrap())
 }
@@ -168,7 +183,7 @@ async fn tag(data: Form<BuildTagTarget>) -> Json<Build> {
     let build = Build::get(data.id)
         .await
         .expect("Failed to tag build")
-        .tag_target(data.tag)
+        .tag(data.tag)
         .await;
     Json(build.unwrap())
 }

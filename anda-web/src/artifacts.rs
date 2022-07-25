@@ -63,7 +63,7 @@ impl Artifact {
         ArtifactDisplay {
             id: a.id.as_simple().to_string(),
             build_id: a.build_id.as_simple().to_string(),
-            name: a.name,
+            name: a.name.clone(),
             timestamp: &a.timestamp,
         }
     }

@@ -134,6 +134,20 @@ pub struct Build {
     pub build_type: String,
 }
 
+impl From<crate::backend::Build> for Build {
+    fn from(build: crate::backend::Build) -> Self {
+        Self {
+            id: build.id,
+            status: build.status as i32,
+            target_id: build.target_id,
+            project_id: build.project_id,
+            timestamp: build.timestamp,
+            compose_id: build.compose_id,
+            build_type: build.build_type,
+        }
+    }
+}
+
 impl Build {
     /// Import from ORM model
     async fn from_model(model: build::Model) -> Result<Build> {
@@ -179,6 +193,17 @@ impl Build {
         let build = build::ActiveModel {
             id: ActiveValue::Set(self.id),
             status: ActiveValue::Set(status),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Build::from_model(res).await
+    }
+
+    pub async fn update_type(&self, build_type: &str) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            build_type: ActiveValue::Set(build_type.to_string()),
             ..Default::default()
         };
         let res = build::ActiveModel::update(build, db).await?;
@@ -255,6 +280,20 @@ impl Build {
                 .unwrap(),
         )
     }
+
+    pub async fn get_by_project_id(project_id: Uuid) -> Result<Vec<Build>> {
+        let db = DbPool::get().await;
+        let build = build::Entity::find()
+            .order_by(build::Column::Timestamp, Order::Desc)
+            .filter(build::Column::ProjectId.eq(project_id))
+            .all(db)
+            .await?;
+        Ok(
+            future::try_join_all(build.into_iter().map(Build::from_model))
+                .await
+                .unwrap(),
+        )
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -265,16 +304,16 @@ pub struct Project {
 }
 
 impl Project {
-    fn new(name: &str, description: Option<&str>) -> Project {
+    pub fn new<S: Into<String>>(id: Uuid, name: S, description: Option<S>) -> Project {
         // The resulting project is not ready for use, and does not have an ID.
         Project {
-            id: Uuid::new_v4(),
-            name: name.to_string(),
-            description: description.unwrap_or("").to_string(),
+            id,
+            name: name.into(),
+            description: description.map(|s| s.into()).unwrap_or_default(),
         }
     }
 
-    async fn add(&self) -> Result<Project> {
+    pub async fn add(&self) -> Result<Project> {
         let db = DbPool::get().await;
         let project = project::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -317,6 +356,40 @@ impl Project {
         )
         .await
         .unwrap())
+    }
+
+    pub async fn update_name(&self, name: String) -> Result<Project> {
+        let db = DbPool::get().await;
+        let project = project::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            name: ActiveValue::Set(name),
+            ..Default::default()
+        };
+        let res = project::ActiveModel::update(project, db).await?;
+        Project::from_model(res).await
+    }
+
+
+    pub async fn update_description(&self, description: String) -> Result<Project> {
+        let db = DbPool::get().await;
+        let project = project::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            description: ActiveValue::Set(description),
+            ..Default::default()
+        };
+        let res = project::ActiveModel::update(project, db).await?;
+        Project::from_model(res).await
+    }
+
+    pub async fn delete(&self) -> Result<()> {
+        let db = DbPool::get().await;
+        // check if project exists
+        let _ = project::Entity::find_by_id(self.id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Project not found"))?;
+        project::Entity::delete_by_id(self.id).exec(db).await?;
+        Ok(())
     }
 }
 

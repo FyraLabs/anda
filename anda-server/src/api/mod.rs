@@ -17,17 +17,9 @@
 //!     rocket::build().mount("/hello", vec![hi_route])
 //! }
 //! ```
-use crate::db_object;
-use rocket::{
-    fs::FileServer,
-    fs::{relative, Options},
-    serde::{json::Json, Deserialize},
-    State,
-};
-use rocket::{route, Data, Request, Route};
-use sea_orm::DatabaseConnection;
 mod artifacts;
 mod builds;
+mod projects;
 
 #[derive(Responder)]
 #[response(status = 412, content_type = "json")]
@@ -37,3 +29,4 @@ pub(crate) struct InvalidPayloadError {
 
 pub(crate) use self::artifacts::routes as artifacts_routes;
 pub(crate) use self::builds::routes as builds_routes;
+pub(crate) use self::projects::routes as projects_routes;
