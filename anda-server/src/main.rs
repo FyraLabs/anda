@@ -23,4 +23,5 @@ async fn rocket() -> Rocket<Build> {
         .attach(db::Db::init())
         .mount("/builds", api::builds_routes())
         .mount("/artifacts", api::artifacts_routes())
+        .mount("/projects", api::projects_routes())
 }
