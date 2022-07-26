@@ -63,6 +63,12 @@ fn index(_file: PathBuf) -> Option<RawHtml<Cow<'static, [u8]>>> {
   Some(RawHtml(Cow::from(asset)))
 }
 
+#[get("/callback/<_file..>")]
+fn callback(_file: PathBuf) -> Option<RawHtml<Cow<'static, [u8]>>> {
+  let asset = Asset::get("index.html")?;
+  Some(RawHtml(Cow::from(asset)))
+}
+
 #[get("/")]
 fn root() -> Option<RawHtml<Cow<'static, [u8]>>> {
   let asset = Asset::get("index.html")?;
@@ -106,5 +112,5 @@ async fn rocket() -> Rocket<Build> {
         .mount("/projects", api::projects_routes())
         .mount("/app", routes![index])
         //.mount("/assets", FileServer::from("dist/assets"))
-        .mount("/", routes![dist, root])
+        .mount("/", routes![dist, root, callback])
 }
