@@ -1,19 +1,34 @@
 use crate::error::PackerError;
-use anyhow::{ Result};
+use anyhow::Result;
+use async_zip::read::seek::ZipFileReader;
+use async_zip::write::{EntryOptions, ZipFileWriter};
+use async_zip::Compression;
+use git2::Repository;
 use log::{debug, info};
 use std::collections::HashSet;
-use tokio::fs::File;
-use std::path::{ PathBuf, Path};
+use std::path::{Path, PathBuf};
 use std::{fs, io};
-use walkdir::WalkDir;
+use tokio::fs::{File};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use async_zip::write::{EntryOptions, ZipFileWriter};
-use async_zip::read::seek::ZipFileReader;
-use async_zip::Compression;
-
+use walkdir::WalkDir;
 pub struct ProjectPacker;
 
 impl ProjectPacker {
+    pub async fn pack_git(url: &str) -> Result<PathBuf> {
+        // parse url and get the repo slug
+        let repo_slug = url.split('/').last().unwrap();
+
+        //let tempdir = tempfile::tempdir().unwrap();
+        let tempdir = PathBuf::from("/tmp/anda-packer");
+        let git_url = tempdir.join(repo_slug);
+
+        fs::create_dir_all(&git_Wurl)?;
+
+        let repo = Repository::clone_recurse(url, git_url)?;
+
+        Ok(Self::pack(repo.path(), None).await.unwrap())
+    }
+
     pub async fn pack(path: &Path, output: Option<String>) -> Result<PathBuf, PackerError> {
         // get folder name of path
         // check if path is folder
@@ -43,8 +58,6 @@ impl ProjectPacker {
         };
 
         let mut packfile = File::create(&packfile_path).await?;
-
-
 
         let mut writer = ZipFileWriter::new(&mut packfile);
 
@@ -107,13 +120,9 @@ impl ProjectPacker {
 
             // set current directory to path
 
-
             if file.is_file() {
                 // spawn a thread to add file to tarball
-                let opts = EntryOptions::new(
-                    file.to_str().unwrap().to_string(),
-                    Compression::Zstd,
-                );
+                let opts = EntryOptions::new(file.to_str().unwrap().to_string(), Compression::Zstd);
 
                 // read data from file to buf
                 let mut file = File::open(file).await?;
@@ -133,9 +142,11 @@ impl ProjectPacker {
         Ok(packfile_path)
     }
 
-    pub async fn unpack_and_build(path: &PathBuf, workdir: Option<PathBuf>) -> Result<(), PackerError> {
+    pub async fn unpack_and_build(
+        path: &PathBuf,
+        workdir: Option<PathBuf>,
+    ) -> Result<(), PackerError> {
         //let tar = GzipDecoder::new(buf.as_slice());
-
 
         let workdir = if let Some(workdir) = workdir {
             workdir
@@ -152,17 +163,17 @@ impl ProjectPacker {
                 if input.trim() == "y" {
                     fs::remove_dir_all(&workdir).unwrap();
                 } else {
-                    return Err(PackerError::Path("workdir already exists, please delete it manually".to_string()));
+                    return Err(PackerError::Path(
+                        "workdir already exists, please delete it manually".to_string(),
+                    ));
                 }
             }
         }
-
 
         let mut packfile = File::open(path).await?;
         let mut reader = ZipFileReader::new(&mut packfile).await.unwrap();
 
         // turn zip file reader into zipentryreaders
-
 
         let entry_count = reader.entries().len();
 
@@ -190,11 +201,9 @@ impl ProjectPacker {
             file.write_all(&buf).await?;
         }
 
-
         // extract zip file to workdir
 
         //let old_pwd = std::env::current_dir().unwrap();
-
 
         std::env::set_current_dir(&workdir).unwrap();
 

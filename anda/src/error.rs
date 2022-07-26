@@ -72,6 +72,7 @@ pub enum PackerError {
     Path(String),
     Io(std::io::Error),
     Other(String),
+    Git(git2::Error),
 }
 
 

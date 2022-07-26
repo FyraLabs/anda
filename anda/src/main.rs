@@ -131,6 +131,24 @@ async fn main() -> Result<()> {
             backend::match_subcmd(&command).await?;
         }
         Command::Pack { path, output } => {
+            // check if path is a git url
+
+            let path_str = path.to_str().unwrap();
+
+            if path_str.starts_with("http") ||
+            path_str.starts_with("git://") ||
+            path_str.starts_with("ssh") ||
+            path_str.starts_with("git@") &&
+            path_str.ends_with(".git") {
+                info!("path is a git url, calling packer");
+                ProjectPacker::pack_git(path_str).await.map_err(|e| {
+                    error!("{:?}", e);
+                    anyhow!("{:?}", e)
+                })?;
+            }
+
+
+
             println!(
                 "Packing from {}",
                 fs::canonicalize(path.clone()).map_err(|e| {
