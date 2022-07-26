@@ -8,6 +8,11 @@ fn main() {
     let old_pwd = std::env::current_dir().unwrap();
     // change current directory to anda-frontend
     std::env::set_current_dir("../anda-frontend").unwrap();
+    NpmEnv::default()
+       .with_node_env(&NodeEnv::from_cargo_profile().unwrap_or_default())
+       .init_env()
+       .install(None)
+       .exec().unwrap();
     let exit_status = NpmEnv::default()
        .with_node_env(&NodeEnv::from_cargo_profile().unwrap_or_default())
        .init_env()
