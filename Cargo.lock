@@ -145,6 +145,7 @@ dependencies = [
  "num",
  "num-derive",
  "num-traits",
+ "pretty_env_logger",
  "reqwest",
  "rocket",
  "rust-embed",

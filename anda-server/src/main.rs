@@ -1,8 +1,43 @@
+//! # Andaman Project
+//! Andaman is a package build/CI system written in Rust, powered by
+//! Kubernetes, Rocket, and Postgres.
+//!
+//! It is designed to be simple and easy to set up, but powerful enough to
+//! be used for full-scale production-ready deployments.
+//!
+//! Unlike other common CI systems like Travis or CircleCI,
+//! Andaman is not designed to be used to
+//! build and test standard code projects using custom scripts. Instead, it is designed
+//! to be a package build system that can be used to build and test packages
+//! for distribution to production repositories
+//!
+//! It is created to be a simple and robust alternative to package building systems
+//! like Koji, Launchpad, and the Arch Linux build system.
+//!
+//! # Output
+//! Andaman produces artifacts in the form of repositories, as a collection of
+//! projects' artifacts collected to make a full repository called a "compose".
+//!
+//! A compose is a full repository (or repositories) of packages, OS images,
+//! and other artifacts organized into a usable repository for package managers.
+//! For some cases, certain types of project cannot be included in a compose,
+//! as they must be contained in a separate repository of their own
+//! (e.g. Docker registry images, OSTree repositories). These will be hosted on a separate managed
+//! repository.
+//!
+//! # Setup
+//! To set up Andaman, you need:
+//! * A Kubernetes cluster to execute jobs on. (You can combine all of the below to deploy Andaman entirely on your own Kubernetes cluster.)
+//! * A Postgres database for storing build data
+//! * A S3 bucket for storing artifacts
+//! Check out the example environment variables in the `.env.example` file,
+//! and then set them up in your `.env` file.
+
 #[macro_use]
 extern crate rocket;
 use std::{path::PathBuf, borrow::Cow, ffi::OsStr};
-
-use rocket::{Build, Rocket, fs::FileServer, response::content::RawHtml, http::ContentType};
+use log::info;
+use rocket::{Build, Rocket, response::content::RawHtml, http::ContentType};
 use sea_orm_rocket::Database;
 
 mod api;
@@ -46,6 +81,22 @@ fn dist(file: PathBuf) -> Option<(ContentType, Cow<'static, [u8]>)> {
 }
 #[launch]
 async fn rocket() -> Rocket<Build> {
+    if let Ok(log_config) = std::env::var("ANDA_LOG") {
+        std::env::set_var("RUST_LOG", log_config);
+    }
+
+    // if RUST_LOG is not set
+    if std::env::var("RUST_LOG").is_err() {
+        #[cfg(debug_assertions)]
+        std::env::set_var("RUST_LOG", "debug,hyper=off");
+
+        #[cfg(not(debug_assertions))]
+        std::env::set_var("RUST_LOG", "warn,anda_server=info");
+    }
+
+    pretty_env_logger::init();
+    info!("Andaman Project Server, version {}", env!("CARGO_PKG_VERSION"));
+    info!("Starting up server...");
     rocket::build()
         .attach(db::Db::init())
         .mount("/builds", api::builds_routes())
