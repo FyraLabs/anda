@@ -20,6 +20,7 @@
 //!
 //! A compose is a full repository (or repositories) of packages, OS images,
 //! and other artifacts organized into a usable repository for package managers.
+//!
 //! For some cases, certain types of project cannot be included in a compose,
 //! as they must be contained in a separate repository of their own
 //! (e.g. Docker registry images, OSTree repositories). These will be hosted on a separate managed
@@ -30,6 +31,7 @@
 //! * A Kubernetes cluster to execute jobs on. (You can combine all of the below to deploy Andaman entirely on your own Kubernetes cluster.)
 //! * A Postgres database for storing build data
 //! * A S3 bucket for storing artifacts
+//!
 //! Check out the example environment variables in the `.env.example` file,
 //! and then set them up in your `.env` file.
 
