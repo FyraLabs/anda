@@ -14,19 +14,27 @@ use walkdir::WalkDir;
 pub struct ProjectPacker;
 
 impl ProjectPacker {
-    pub async fn pack_git(url: &str) -> Result<PathBuf> {
+    pub async fn pack_git(url: &str) -> Result<PathBuf, PackerError> {
         // parse url and get the repo slug
         let repo_slug = url.split('/').last().unwrap();
 
         //let tempdir = tempfile::tempdir().unwrap();
         let tempdir = PathBuf::from("/tmp/anda-packer");
+        fs::remove_dir_all(&tempdir).unwrap_or(());
+
         let git_url = tempdir.join(repo_slug);
 
-        fs::create_dir_all(&git_Wurl)?;
+        fs::create_dir_all(&git_url)?;
 
-        let repo = Repository::clone_recurse(url, git_url)?;
+        let repo = Repository::clone_recurse(url, git_url).map_err(|e| {
+            PackerError::Git(e)
+        })?;
 
-        Ok(Self::pack(repo.path(), None).await.unwrap())
+        let repo_path = repo.path().to_path_buf();
+        let repo_path = repo_path.parent().unwrap();
+        let pack = Self::pack(repo_path, None).await?;
+
+        Ok(pack)
     }
 
     pub async fn pack(path: &Path, output: Option<String>) -> Result<PathBuf, PackerError> {
@@ -139,6 +147,7 @@ impl ProjectPacker {
         writer.close().await.unwrap();
         std::env::set_current_dir(old_dir).unwrap();
 
+        println!("Packed {}", packfile_path.display());
         Ok(packfile_path)
     }
 
@@ -213,5 +222,16 @@ impl ProjectPacker {
         crate::build::ProjectBuilder::new(workdir).build().await?;
 
         Ok(())
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[tokio::test]
+    async fn test() {
+        ProjectPacker::pack_git("https://github.com/Ultramarine-Linux/anda.git").await.unwrap();
     }
 }

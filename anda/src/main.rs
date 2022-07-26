@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use clap::{AppSettings, ArgEnum, Parser, Subcommand};
-use log::{debug, error, info, trace};
+use log::{debug, error, info};
 use std::fs;
 use std::path::PathBuf;
 
@@ -8,8 +8,8 @@ mod api;
 mod backend;
 mod build;
 mod config;
-mod util;
 mod error;
+mod util;
 
 use backend::BackendCommand;
 
@@ -58,7 +58,7 @@ enum Command {
 
         /// Working directory for the build
         /// If not specified, the current directory is used
-        #[clap(short,long,value_name = "ANDA_WORKDIR")]
+        #[clap(short, long, value_name = "ANDA_WORKDIR")]
         workdir: Option<PathBuf>,
     },
     /// Subcommand for interacting with the build system
@@ -76,7 +76,7 @@ enum Command {
         /// optional name of the package to pack
         #[clap(short, long, value_name = "ANDA_PACK_OUTPUT")]
         output: Option<String>,
-    }
+    },
 }
 
 #[tokio::main]
@@ -100,22 +100,25 @@ async fn main() -> Result<()> {
         }
 
         Command::Build { path, workdir } => {
-
             // check if path is file
             if path.is_file() {
                 info!("path is a file, calling builder");
 
-                if path.file_name().unwrap().to_str().unwrap().ends_with(".andasrc.zip") {
+                if path
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .ends_with(".andasrc.zip")
+                {
                     debug!("path is an andasrc tarball package, calling unpacker");
-                    ProjectPacker::unpack_and_build(&path, workdir).await.map_err(|e| {
-                        error!("{:?}", e);
-                        anyhow!("{:?}", e)
-                    })?;
-                }
-
-
-
-                else {
+                    ProjectPacker::unpack_and_build(&path, workdir)
+                        .await
+                        .map_err(|e| {
+                            error!("{:?}", e);
+                            anyhow!("{:?}", e)
+                        })?;
+                } else {
                     // error and exit
                     //error!("path is not a valid build source! Please either use an andasrc tarball or a valid anda project directory");
                     anyhow::bail!("path is not a valid build source! Please either use an andasrc tarball or a valid anda project directory.");
@@ -135,31 +138,31 @@ async fn main() -> Result<()> {
 
             let path_str = path.to_str().unwrap();
 
-            if path_str.starts_with("http") ||
-            path_str.starts_with("git://") ||
-            path_str.starts_with("ssh") ||
-            path_str.starts_with("git@") &&
-            path_str.ends_with(".git") {
+            if path_str.starts_with("http") && path_str.ends_with(".git")
+                || path_str.starts_with("git://") && path_str.ends_with(".git")
+                || path_str.starts_with("ssh") && path_str.ends_with(".git")
+                || path_str.starts_with("git@") && path_str.ends_with(".git")
+            {
                 info!("path is a git url, calling packer");
                 ProjectPacker::pack_git(path_str).await.map_err(|e| {
                     error!("{:?}", e);
                     anyhow!("{:?}", e)
                 })?;
+            } else {
+                println!(
+                    "Packing from {}",
+                    fs::canonicalize(path.clone())
+                        .map_err(|e| {
+                            error!("{}", e);
+                            e
+                        })?
+                        .display()
+                );
+                //build::start_build(&path)?;
+                let p = util::ProjectPacker::pack(&path, output).await.unwrap();
+
+                println!("Packed to {}", p.display());
             }
-
-
-
-            println!(
-                "Packing from {}",
-                fs::canonicalize(path.clone()).map_err(|e| {
-                    error!("{}", e);
-                    e
-                })?.display()
-            );
-            //build::start_build(&path)?;
-            let p = util::ProjectPacker::pack(&path, output).await.unwrap();
-
-            println!("Packed to {}", p.display());
         }
     };
 
