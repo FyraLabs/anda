@@ -15,7 +15,7 @@ use kube::{
 use bytes::Bytes;
 
 use crate::db_object::Build;
-
+/// Kubernetes client object
 pub struct K8S;
 
 static CLIENT: OnceCell<Client> = OnceCell::new();
@@ -23,24 +23,25 @@ static JOBS: OnceCell<Api<Job>> = OnceCell::new();
 static PODS: OnceCell<Api<Pod>> = OnceCell::new();
 
 impl K8S {
+    /// Create a new Kubernetes client, or return the existing one
     async fn client() -> Client {
         CLIENT
             .get_or_init(async { Client::try_default().await.unwrap() })
             .await
             .clone()
     }
-
+    /// Create a new Kubernetes job API, or return the existing one
     async fn jobs() -> &'static Api<Job> {
         JOBS.get_or_init(async { Api::default_namespaced(K8S::client().await) })
             .await
     }
-
+    /// Create a new Kubernetes pod API, or return the existing one
     async fn pods() -> &'static Api<Pod> {
         PODS.get_or_init(async { Api::default_namespaced(K8S::client().await) })
             .await
     }
 }
-
+/// Dispatches build job to the Kubernetes cluster
 pub async fn dispatch_build(id: String, image: String) -> Result<()> {
     let jobs = K8S::jobs().await;
 

@@ -5,6 +5,8 @@ use std::fs;
 
 fn main() {
 
+    println!("cargo:rerun-if-changed=build.rs");
+
     let old_pwd = std::env::current_dir().unwrap();
     // change current directory to anda-frontend
     std::env::set_current_dir("../anda-frontend").unwrap();

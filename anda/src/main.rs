@@ -123,11 +123,13 @@ async fn main() -> Result<()> {
                     //error!("path is not a valid build source! Please either use an andasrc tarball or a valid anda project directory");
                     anyhow::bail!("path is not a valid build source! Please either use an andasrc tarball or a valid anda project directory.");
                 }
+            } else if path.is_dir() {
+                build::ProjectBuilder::new(path).build().await.map_err(|e| {
+                    error!("{:?}", e);
+                    anyhow!("{:?}", e)
+                })?;
             }
-            println!(
-                "Building from {}",
-                fs::canonicalize(path.clone()).unwrap().display()
-            );
+
         }
 
         Command::Backend { command } => {
@@ -159,7 +161,7 @@ async fn main() -> Result<()> {
                         .display()
                 );
                 //build::start_build(&path)?;
-                let p = util::ProjectPacker::pack(&path, output).await.unwrap();
+                let p = ProjectPacker::pack(&path, output).await.unwrap();
 
                 println!("Packed to {}", p.display());
             }

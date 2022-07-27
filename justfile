@@ -25,3 +25,6 @@ build-backend: build-web build-server
 clean:
     cargo clean
     rm -rf anda-frontend/dist
+
+watch-web:
+    cd anda-frontend && pnpm run watch

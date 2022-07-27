@@ -9,7 +9,7 @@ use log::debug;
 use std::collections::HashMap;
 
 pub(crate) fn routes() -> Vec<Route> {
-    routes![index, get, upload,]
+    routes![index, get, upload, search]
 }
 
 #[derive(FromForm)]
@@ -63,6 +63,14 @@ async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
     }
 
     Json(results)
+}
+
+#[get("/search?<query>")]
+async fn search(query: String) -> Json<Vec<Artifact>> {
+    Json(
+        Artifact::search(&query)
+            .await
+    )
 }
 
 #[cfg(test)]

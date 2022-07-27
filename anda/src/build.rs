@@ -58,6 +58,7 @@ impl ArtifactUploader {
         let mut form = multipart::Form::new()
             .percent_encode_noop()
             .text("build_id", build_id);
+        let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
 
         for file in &files {
             // add to array of form data
@@ -65,11 +66,12 @@ impl ArtifactUploader {
             let mut buf = Vec::new();
             File::open(&aa).await?.read_to_end(&mut buf).await?;
 
+            let p = aa.strip_prefix(&output_path).unwrap();
             debug!("adding file: {}", aa.display());
             let mimetype = MimeGuess::from_path(&aa).first_or_octet_stream();
             // add part to form
             let file_part = multipart::Part::bytes(buf)
-                .file_name(aa.display().to_string())
+                .file_name(p.display().to_string())
                 .mime_str(mimetype.essence_str())?;
 
             // Get a position of the hashmap by matching the key to the path
@@ -80,9 +82,6 @@ impl ArtifactUploader {
         }
 
         debug!("form: {:?}", form);
-
-        // BUG: Only the files in the top directory are uploaded.
-        // Please fix this.
 
         let res = ClientBuilder::new()
             .build()?

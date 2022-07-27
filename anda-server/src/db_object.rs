@@ -72,13 +72,24 @@ impl Artifact {
         Ok(Artifact::from(artifact))
     }
 
-    /// Lists all available artifact
+    /// Lists all available artifact (Paginated)
     pub async fn list(limit: usize, page: usize) -> Result<Vec<Artifact>> {
         let db = DbPool::get().await;
         let artifact = artifact::Entity::find()
             .order_by_desc(artifact::Column::Timestamp)
             .paginate(db, limit)
             .fetch_page(page)
+            .await?;
+        // Marshall the types from our internal representation to the actual DB representation.
+        Ok(artifact.into_iter().map(Artifact::from).collect())
+    }
+
+    /// Lists all available artifacts
+    pub async fn list_all() -> Result<Vec<Artifact>> {
+        let db = DbPool::get().await;
+        let artifact = artifact::Entity::find()
+            .order_by_desc(artifact::Column::Timestamp)
+            .all(db)
             .await?;
         // Marshall the types from our internal representation to the actual DB representation.
         Ok(artifact.into_iter().map(Artifact::from).collect())
@@ -99,7 +110,17 @@ impl Artifact {
     pub async fn search(query: &str) -> Vec<Artifact> {
         let db = DbPool::get().await;
         let artifact = artifact::Entity::find()
-            .filter(artifact::Column::Name.like(query))
+            .filter(artifact::Column::Url.like(&format!("%{}%", query)).or(
+                artifact::Column::Name.like(&format!("%{}%", query)),
+            ))
+            // TODO: use ts_query to search for the query in the url and name fields.
+            // or write up a good search algorithm.
+            /* .from_raw_sql(Statement::from_sql_and_values(DbBackend::Postgres,
+                r#"SELECT * FROM artifact where to_tsvector('name') @@ to_tsquery('$1') or to_tsvector('url') @@ to_tsquery('$1')"#,
+                vec![query.into()],
+                )
+            ) */
+
             .all(db)
             .await
             .unwrap();

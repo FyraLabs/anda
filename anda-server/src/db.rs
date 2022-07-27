@@ -37,10 +37,6 @@ impl DbPool {
     }
 }
 
-pub(crate) async fn setup_db() -> Result<DatabaseConnection, DbErr> {
-    Ok(DbPool::get().await.to_owned())
-}
-
 #[derive(Database)]
 #[database("anda")]
 pub struct Db(DbPool);
