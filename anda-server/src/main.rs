@@ -37,10 +37,10 @@
 
 #[macro_use]
 extern crate rocket;
-use std::{path::PathBuf, borrow::Cow, ffi::OsStr};
 use log::info;
-use rocket::{Build, Rocket, response::content::RawHtml, http::ContentType};
+use rocket::{http::ContentType, response::content::RawHtml, Build, Rocket};
 use sea_orm_rocket::Database;
+use std::{borrow::Cow, ffi::OsStr, path::PathBuf};
 
 mod api;
 mod auth;
@@ -59,31 +59,31 @@ struct Asset;
 
 #[get("/<_file..>")]
 fn index(_file: PathBuf) -> Option<RawHtml<Cow<'static, [u8]>>> {
-  let asset = Asset::get("index.html")?;
-  Some(RawHtml(Cow::from(asset)))
+    let asset = Asset::get("index.html")?;
+    Some(RawHtml(Cow::from(asset)))
 }
 
 #[get("/callback/<_file..>")]
 fn callback(_file: PathBuf) -> Option<RawHtml<Cow<'static, [u8]>>> {
-  let asset = Asset::get("index.html")?;
-  Some(RawHtml(Cow::from(asset)))
+    let asset = Asset::get("index.html")?;
+    Some(RawHtml(Cow::from(asset)))
 }
 
 #[get("/")]
 fn root() -> Option<RawHtml<Cow<'static, [u8]>>> {
-  let asset = Asset::get("index.html")?;
-  Some(RawHtml(Cow::from(asset)))
+    let asset = Asset::get("index.html")?;
+    Some(RawHtml(Cow::from(asset)))
 }
 
-#[get("/<file..>" , rank = 10)]
+#[get("/<file..>", rank = 10)]
 fn dist(file: PathBuf) -> Option<(ContentType, Cow<'static, [u8]>)> {
     let filename = file.display().to_string();
     let asset = Asset::get(&filename)?;
     let content_type = file
-      .extension()
-      .and_then(OsStr::to_str)
-      .and_then(ContentType::from_extension)
-      .unwrap_or(ContentType::Bytes);
+        .extension()
+        .and_then(OsStr::to_str)
+        .and_then(ContentType::from_extension)
+        .unwrap_or(ContentType::Bytes);
 
     Some((content_type, Cow::from(asset)))
 }
@@ -99,11 +99,17 @@ async fn rocket() -> Rocket<Build> {
         std::env::set_var("RUST_LOG", "debug,hyper=off");
 
         #[cfg(not(debug_assertions))]
-        std::env::set_var("RUST_LOG", "info,rocket::server=error,_=error,sqlx=error,anda_server=info");
+        std::env::set_var(
+            "RUST_LOG",
+            "info,rocket::server=error,_=error,sqlx=error,anda_server=info",
+        );
     }
 
     pretty_env_logger::init();
-    info!("Andaman Project Server, version {}", env!("CARGO_PKG_VERSION"));
+    info!(
+        "Andaman Project Server, version {}",
+        env!("CARGO_PKG_VERSION")
+    );
     info!("Starting up server...");
     rocket::build()
         .attach(db::Db::init())

@@ -39,5 +39,4 @@ pub fn load_config(root: &PathBuf) -> Result<AndaConfig, ProjectError> {
         Ok(config) => Ok(config),
         Err(_) => Err(ProjectError::InvalidManifest),
     }
-
 }

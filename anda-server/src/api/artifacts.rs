@@ -1,11 +1,11 @@
 use crate::{backend::S3Object, db_object::*};
+use log::debug;
 use rocket::{
     form::Form,
     fs::TempFile,
     serde::{json::Json, uuid::Uuid},
     Route,
 };
-use log::debug;
 use std::collections::HashMap;
 
 pub(crate) fn routes() -> Vec<Route> {
@@ -67,10 +67,7 @@ async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
 
 #[get("/search?<query>")]
 async fn search(query: String) -> Json<Vec<Artifact>> {
-    Json(
-        Artifact::search(&query)
-            .await
-    )
+    Json(Artifact::search(&query).await)
 }
 
 #[cfg(test)]

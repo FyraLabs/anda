@@ -126,12 +126,14 @@ async fn main() -> Result<()> {
                     anyhow::bail!("path is not a valid build source! Please either use an andasrc tarball or a valid anda project directory.");
                 }
             } else if path.is_dir() {
-                build::ProjectBuilder::new(path).build().await.map_err(|e| {
-                    error!("{:?}", e);
-                    anyhow!("{:?}", e)
-                })?;
+                build::ProjectBuilder::new(path)
+                    .build()
+                    .await
+                    .map_err(|e| {
+                        error!("{:?}", e);
+                        anyhow!("{:?}", e)
+                    })?;
             }
-
         }
 
         Command::Backend { command } => {

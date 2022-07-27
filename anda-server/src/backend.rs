@@ -592,7 +592,9 @@ impl Build {
             // find a build for the project with the given target_id
             let build = Self::get_by_target_id(target_id)
                 .await?
-                .iter().cloned().find(|b| b.project_id == self.project_id);
+                .iter()
+                .cloned()
+                .find(|b| b.project_id == self.project_id);
             if let Some(build) = build {
                 // untag the build
                 build.untag().await?;

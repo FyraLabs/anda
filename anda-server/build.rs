@@ -4,22 +4,23 @@ use std::fs;
 // use std::path::PathBuf;
 
 fn main() {
-
     println!("cargo:rerun-if-changed=build.rs");
 
     let old_pwd = std::env::current_dir().unwrap();
     // change current directory to anda-frontend
     std::env::set_current_dir("../anda-frontend").unwrap();
     NpmEnv::default()
-       .with_node_env(&NodeEnv::from_cargo_profile().unwrap_or_default())
-       .init_env()
-       .install(None)
-       .exec().unwrap();
+        .with_node_env(&NodeEnv::from_cargo_profile().unwrap_or_default())
+        .init_env()
+        .install(None)
+        .exec()
+        .unwrap();
     let exit_status = NpmEnv::default()
-       .with_node_env(&NodeEnv::from_cargo_profile().unwrap_or_default())
-       .init_env()
-       .run("build")
-       .exec().unwrap();
+        .with_node_env(&NodeEnv::from_cargo_profile().unwrap_or_default())
+        .init_env()
+        .run("build")
+        .exec()
+        .unwrap();
     std::env::set_current_dir(old_pwd).unwrap();
 
     // if symlink already exists
@@ -36,7 +37,6 @@ fn main() {
     } else {
         std::os::unix::fs::symlink("../anda-frontend/dist", "dist").unwrap();
     } */
-
 
     if let Ok(symlink_path) = symlink {
         if symlink_path.to_str().unwrap() == "../anda-frontend/dist" {

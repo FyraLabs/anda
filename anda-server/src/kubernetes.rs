@@ -2,17 +2,17 @@ use std::collections::BTreeMap;
 
 use anyhow::Result;
 use async_once_cell::OnceCell;
+use bytes::Bytes;
 use futures::{stream, Stream, StreamExt, TryStreamExt};
 use k8s_openapi::api::{
     batch::v1::{Job, JobSpec, JobStatus},
-    core::v1::{Container, PodSpec, PodTemplateSpec, Pod},
+    core::v1::{Container, Pod, PodSpec, PodTemplateSpec},
 };
 use kube::{
-    api::{ListParams, ObjectMeta, PostParams, LogParams},
+    api::{ListParams, LogParams, ObjectMeta, PostParams},
     runtime::watcher,
     Api, Client,
 };
-use bytes::Bytes;
 
 use crate::db_object::Build;
 /// Kubernetes client object
@@ -117,21 +117,27 @@ async fn watch_jobs() -> impl Stream<Item = BuildStatusEvent> {
     })
 }
 
-pub async fn get_logs(id: String) -> Result<impl Stream<Item = Result<Bytes, kube::Error>>, kube::Error> {
+pub async fn get_logs(
+    id: String,
+) -> Result<impl Stream<Item = Result<Bytes, kube::Error>>, kube::Error> {
     let jobs = K8S::jobs().await;
     let pods = K8S::pods().await;
-    
+
     // let job = jobs.get(format!("build-{}", id).as_str()).await?;
- 
+
     // if let Some(spec) = job.spec {
-        // if let Some(template) = spec.template {
-            // template.
-        // }
-        
+    // if let Some(template) = spec.template {
+    // template.
     // }
 
-    pods.log_stream(format!("build-pod-{}", id).as_str(), &LogParams {
-        follow: true,
-        ..Default::default()
-    }).await
+    // }
+
+    pods.log_stream(
+        format!("build-pod-{}", id).as_str(),
+        &LogParams {
+            follow: true,
+            ..Default::default()
+        },
+    )
+    .await
 }

@@ -110,9 +110,11 @@ impl Artifact {
     pub async fn search(query: &str) -> Vec<Artifact> {
         let db = DbPool::get().await;
         let artifact = artifact::Entity::find()
-            .filter(artifact::Column::Url.like(&format!("%{}%", query)).or(
-                artifact::Column::Name.like(&format!("%{}%", query)),
-            ))
+            .filter(
+                artifact::Column::Url
+                    .like(&format!("%{}%", query))
+                    .or(artifact::Column::Name.like(&format!("%{}%", query))),
+            )
             // TODO: use ts_query to search for the query in the url and name fields.
             // or write up a good search algorithm.
             /* .from_raw_sql(Statement::from_sql_and_values(DbBackend::Postgres,
@@ -120,7 +122,6 @@ impl Artifact {
                 vec![query.into()],
                 )
             ) */
-
             .all(db)
             .await
             .unwrap();

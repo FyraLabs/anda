@@ -72,7 +72,15 @@ impl ProjectPacker {
 
         for result in walker {
             //debug!("{:?}", result);
-            file_list.insert(result.unwrap().path().to_path_buf().strip_prefix(&path).unwrap().to_path_buf());
+            file_list.insert(
+                result
+                    .unwrap()
+                    .path()
+                    .to_path_buf()
+                    .strip_prefix(&path)
+                    .unwrap()
+                    .to_path_buf(),
+            );
         }
 
         let old_dir = std::env::current_dir().unwrap();

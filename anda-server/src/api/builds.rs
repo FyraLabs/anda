@@ -96,7 +96,8 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
                     .ok_or(Status::InternalServerError)?
                     .to_path_buf(),
             )
-            .await.map_err(|_| Status::InternalServerError)?;
+            .await
+            .map_err(|_| Status::InternalServerError)?;
 
             // send file to backend for processing
 

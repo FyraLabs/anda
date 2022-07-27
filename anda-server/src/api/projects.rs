@@ -6,11 +6,7 @@ use rocket::serde::uuid::Uuid;
 use rocket::Route;
 
 pub(crate) fn routes() -> Vec<Route> {
-    routes![
-        index,
-        get,
-        new,
-    ]
+    routes![index, get, new,]
 }
 
 #[get("/?<limit>&<page>")]
@@ -27,13 +23,15 @@ async fn get(id: Uuid) -> Option<Json<Project>> {
 #[derive(FromForm)]
 struct ProjectNew {
     name: String,
-    description: Option<String>
+    description: Option<String>,
 }
-
 
 #[post("/", data = "<data>")]
 async fn new(data: Form<ProjectNew>) -> Result<(), Status> {
     let project = Project::new(data.name.clone(), data.description.clone());
-    project.add().await.map_err(|_| Status::InternalServerError)?;
+    project
+        .add()
+        .await
+        .map_err(|_| Status::InternalServerError)?;
     Ok(())
 }
