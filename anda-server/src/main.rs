@@ -99,7 +99,7 @@ async fn rocket() -> Rocket<Build> {
         std::env::set_var("RUST_LOG", "debug,hyper=off");
 
         #[cfg(not(debug_assertions))]
-        std::env::set_var("RUST_LOG", "warn,anda_server=info");
+        std::env::set_var("RUST_LOG", "info,rocket::server=error,_=error,sqlx=error,anda_server=info");
     }
 
     pretty_env_logger::init();
