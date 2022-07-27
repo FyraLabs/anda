@@ -8,9 +8,8 @@ use log::{debug, info};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use tokio::fs::{File};
+use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use walkdir::WalkDir;
 pub struct ProjectPacker;
 
 impl ProjectPacker {
@@ -26,9 +25,7 @@ impl ProjectPacker {
 
         fs::create_dir_all(&git_url)?;
 
-        let repo = Repository::clone_recurse(url, git_url).map_err(|e| {
-            PackerError::Git(e)
-        })?;
+        let repo = Repository::clone_recurse(url, git_url).map_err(PackerError::Git)?;
 
         let repo_path = repo.path().to_path_buf();
         let repo_path = repo_path.parent().unwrap();
@@ -68,54 +65,16 @@ impl ProjectPacker {
         let mut packfile = File::create(&packfile_path).await?;
 
         let mut writer = ZipFileWriter::new(&mut packfile);
+        let mut file_list: HashSet<PathBuf> = HashSet::new();
 
-        //let mut tar = TarBuilder::new(packfile);
+        debug!("walking {}", path.display());
+        let walker = ignore::Walk::new(&path);
 
-        // parse gitignore file
-        let gitignore_path = path.join(".gitignore");
-        let andaignore_path = path.join(".andaignore");
-
-        let mut file_list = HashSet::new();
-
-        if gitignore_path.exists() {
-            let gitignore = gitignore::File::new(&gitignore_path).unwrap();
-
-            let files = gitignore.included_files();
-
-            for file in files.unwrap() {
-                let file_path = file.strip_prefix(&path).unwrap();
-                debug!("adding {}", file_path.display());
-                if file_path.exists() {
-                    file_list.insert(file_path.to_path_buf());
-                }
-            }
+        for result in walker {
+            //debug!("{:?}", result);
+            file_list.insert(result.unwrap().path().to_path_buf().strip_prefix(&path).unwrap().to_path_buf());
         }
 
-        if andaignore_path.exists() {
-            let andaignore = gitignore::File::new(&andaignore_path).unwrap();
-
-            let files = andaignore.included_files();
-
-            for file in files.unwrap() {
-                let file_path = file.strip_prefix(&path).unwrap();
-                if file_path.exists() {
-                    file_list.insert(file_path.to_path_buf());
-                }
-            }
-        }
-
-        //tar.follow_symlinks(true);
-        // if gitignore and andaignore files don't exists, add all files in folder
-        if !andaignore_path.exists() && !gitignore_path.exists() {
-            WalkDir::new(&path)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter(|e| e.file_type().is_file())
-                .for_each(|e| {
-                    let file_path = e.path().strip_prefix(&path).unwrap();
-                    file_list.insert(file_path.to_path_buf());
-                });
-        }
         let old_dir = std::env::current_dir().unwrap();
 
         std::env::set_current_dir(path).unwrap();
@@ -225,13 +184,14 @@ impl ProjectPacker {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[tokio::test]
     async fn test() {
-        ProjectPacker::pack_git("https://github.com/Ultramarine-Linux/anda.git").await.unwrap();
+        ProjectPacker::pack_git("https://github.com/Ultramarine-Linux/anda.git")
+            .await
+            .unwrap();
     }
 }
