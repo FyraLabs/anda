@@ -45,14 +45,13 @@ pub(crate) async fn match_subcmd(cmd: &BackendCommand) -> Result<()> {
 
             let mut writer = TabWriter::new(vec![]);
 
-            writer.write_all(b"ID\tWORKER\tSTATUS\tPROJECT_ID\tTIMESTAMP\tCOMPOSE_ID\n")?;
+            writer.write_all(b"ID\tSTATUS\tPROJECT_ID\tTIMESTAMP\tCOMPOSE_ID\n")?;
 
             for build in builds {
                 writer.write_all(
                     format!(
-                        "{}\t{}\t{}\t{}\t{}\t{}\n",
+                        "{}\t{}\t{}\t{}\t{}\n",
                         build.id.simple(),
-                        build.worker.simple(),
                         build.status,
                         build
                             .project_id
