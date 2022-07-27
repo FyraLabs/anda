@@ -11,8 +11,5 @@
             "password": "example"
         }
     ],
-    "emmet.includeLanguages": {
-        "rust": "html"
-    },
     "rust-analyzer.checkOnSave.command": "clippy"
 }
