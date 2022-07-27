@@ -5,7 +5,7 @@
 use async_once_cell::OnceCell;
 use dotenv::dotenv;
 use sea_orm::*;
-use sea_orm_rocket::{rocket::figment::Figment, Config, Database};
+use sea_orm_rocket::{rocket::figment::Figment, Database};
 use std::env;
 
 pub struct DbPool {
@@ -13,7 +13,7 @@ pub struct DbPool {
 }
 
 static DB: OnceCell<DatabaseConnection> = OnceCell::new();
-
+#[allow(clippy::new_ret_no_self)]
 impl DbPool {
     pub async fn new() -> Result<DatabaseConnection, DbErr> {
         dotenv().ok();
