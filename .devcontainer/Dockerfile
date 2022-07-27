@@ -2,11 +2,14 @@
 
 FROM fedora:36
 
-COPY library-scripts/common-redhat.sh /tmp/library-scripts/
+COPY library-scripts/ /tmp/library-scripts/
 RUN bash /tmp/library-scripts/common-redhat.sh
-
+RUN bash /tmp/library-scripts/docker-redhat.sh
 COPY scripts/postinstall.sh /usr/share/scripts/
 
 RUN dnf groupinstall -y "Development Tools"
 RUN dnf groupinstall -y "RPM Development Tools"
-RUN dnf groupinstall -y openssl-devel
+RUN dnf install -y openssl-devel
+ENTRYPOINT ["/usr/local/share/docker-init.sh"]
+VOLUME [ "/var/lib/docker" ]
+CMD ["sleep", "infinity"]

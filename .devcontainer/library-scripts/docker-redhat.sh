@@ -106,22 +106,15 @@ else
     fi
 fi
 
-curl -fsSL https://download.docker.com/linux/${OSNAME}/gpg > /tmp/docker.gpg && \
-rpm --import /tmp/docker.gpg
-
 #yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-${RHEL_COMPAT_VER}.noarch.rpm
 yum install -y yum-utils device-mapper-persistent-data lvm2
 #yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 
 yum -y update
-#yum -y install docker-ce-cli
+# Install moby engine
 dnf install -y moby-engine
 
 # Install Docker Compose
-find_version_from_git_tags DOCKER_DASH_COMPOSE_VERSION "https://github.com/docker/compose" "tags/"
-echo "(*) Installing docker-compose ${DOCKER_DASH_COMPOSE_VERSION}..."
-#curl -fsSL "https://github.com/docker/compose/releases/download/${DOCKER_DASH_COMPOSE_VERSION}/docker-compose-Linux-x86_64" -o /usr/local/bin/docker-compose
-#chmod +x /usr/local/bin/docker-compose
 dnf install docker-compose -y
 
 # If init file already exists, exit
@@ -209,4 +202,4 @@ EOF
 chmod +x /usr/local/share/docker-init.sh
 chown ${USERNAME}:root /usr/local/share/docker-init.sh
 
-echo 'docker-in-docker-debian script has completed!'
+echo 'docker-in-docker-fedora script has completed!'

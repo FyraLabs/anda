@@ -67,6 +67,7 @@ enum Command {
         #[clap(subcommand)]
         command: BackendCommand,
     },
+    /// Packs up the project into a distributable .andasrc.zip file
     Pack {
         /// Path to the project.
         /// If not specified, the current directory is used

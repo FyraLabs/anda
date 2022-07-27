@@ -15,3 +15,6 @@ echo "export PATH=\"\$PNPM_HOME:$PATH\"" >> "$HOME/.zshrc"
 sudo dnf module enable nodejs:16 -y
 
 sudo dnf install -y just nodejs 
+
+sudo /usr/local/share/docker-init.sh
+sudo ln -sf /usr/libexec/docker/docker-proxy /usr/bin/docker-proxy

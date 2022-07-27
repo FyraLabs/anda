@@ -2,3 +2,4 @@ target
 vendor
 .env
 anda-build/
+node_modules/
