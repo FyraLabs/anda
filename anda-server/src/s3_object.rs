@@ -51,15 +51,15 @@ impl S3Artifact {
         let metadata = file.metadata().await?;
 
         // convert to &[u8]
-        let mut bytes = vec![0; metadata.len() as usize];
+        let mut bytes = Vec::with_capacity(metadata.len() as usize);
         // Read entire file into `bytes`
-        file.read_buf(&mut bytes).await?;
+        file.read_to_end(&mut bytes).await?;
         // upload to S3
         let ret = self
             .connection
             .put_object()
             .key(dest)
-            .body(ByteStream::from(bytes))
+            .body(bytes.into())
             .bucket(BUCKET.as_str())
             .send()
             .await?;

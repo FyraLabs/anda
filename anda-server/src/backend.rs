@@ -155,8 +155,8 @@ impl S3Object for BuildCache {
         let file_path = path.canonicalize()?;
         let mut file = File::open(file_path).await?;
         let metadata = file.metadata().await?;
-        let mut bytes = vec![0; metadata.len() as usize];
-        file.read_buf(&mut bytes).await?;
+        let mut bytes = Vec::with_capacity(metadata.len() as usize);
+        file.read_to_end(&mut bytes).await?;
 
         let obj = crate::s3_object::S3Artifact::new()?;
         let dest_path = format!("build_cache/{}/{}", self.id.simple(), self.filename);
