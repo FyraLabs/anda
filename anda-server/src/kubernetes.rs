@@ -42,7 +42,7 @@ impl K8S {
     }
 }
 /// Dispatches build job to the Kubernetes cluster
-pub async fn dispatch_build(id: String, image: String, token: String) -> Result<()> {
+pub async fn dispatch_build(id: String, image: String, pack_url: String, token: String) -> Result<()> {
     let jobs = K8S::jobs().await;
 
     // TODO: Issue a build token and pass it into the job
@@ -71,7 +71,12 @@ pub async fn dispatch_build(id: String, image: String, token: String) -> Result<
                                 name: "ANDA_BUILD_TOKEN".to_string(),
                                 value: Some(token.clone()),
                                 ..EnvVar::default()
-                            }
+                            },
+                            EnvVar {
+                                name: "ANDA_BUILD_PACK_URL".to_string(),
+                                value: Some(pack_url.clone()),
+                                ..EnvVar::default()
+                            },
                         ]),
                         ..Default::default()
                     }],
