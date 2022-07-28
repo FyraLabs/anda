@@ -59,7 +59,9 @@ pub async fn dispatch_build(id: String, image: String, pack_url: String, token: 
         spec: Some(JobSpec {
             template: PodTemplateSpec {
                 spec: Some(PodSpec {
+                    restart_policy: Some("Never".to_string()),
                     containers: vec![Container {
+                        name: format!("build-container-{}", id),
                         image: Some(image),
                         env: Some(vec![
                             EnvVar {

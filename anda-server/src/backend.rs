@@ -19,6 +19,8 @@ use crate::s3_object::{S3Artifact, BUCKET, S3_ENDPOINT};
 use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};
 
+use crate::kubernetes::dispatch_build;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Serialize, Deserialize)]
 pub enum BuildStatus {
     Pending = 0,
@@ -27,96 +29,22 @@ pub enum BuildStatus {
     Failure = 3,
 }
 
-pub enum BuildMethod {
-    Url { url: String },
-    SrcFile { path: PathBuf, filename: String },
-}
-
 pub struct AndaBackend {
-    method: BuildMethod,
     build_id: Uuid,
+    pack: BuildCache,
+    image: String,
 }
 
 impl AndaBackend {
-    pub fn new(method: BuildMethod, build_id: Uuid) -> Self {
-        AndaBackend { method, build_id }
-    }
-
-    pub async fn new_build(source: BuildMethod, project_id: Option<Uuid>) -> Result<Build> {
-        let build = Build::new(None, project_id, None, "BuildSubmission".to_string())
-            .add()
-            .await?;
-
-        Self::new(source, build.id).build().await?;
-
-        Ok(build)
-    }
-
-    pub fn new_src_file<T: Into<String>>(path: PathBuf, filename: T, build_id: Uuid) -> Self {
-        AndaBackend {
-            method: BuildMethod::SrcFile {
-                path,
-                filename: filename.into(),
-            },
-            build_id,
-        }
-    }
-    pub fn new_url<T: Into<String>>(url: T, build_id: Uuid) -> Self {
-        AndaBackend {
-            method: BuildMethod::Url { url: url.into() },
-            build_id,
-        }
+    pub fn new(build_id: Uuid, pack: BuildCache, image: String) -> Self {
+        AndaBackend { build_id, pack, image }
     }
 
     // Proxy function to the actual build method.
     // Matches the method enum and calls the appropriate method.
     pub async fn build(&self) -> Result<()> {
-        match &self.method {
-            BuildMethod::Url { url } => {
-                self.build_url(url)?;
-
-                //crate::kubernetes::dispatch_build(id, image);
-            }
-            BuildMethod::SrcFile { path, filename } => {
-                println!("Building from src file: {:?}", path);
-                println!("actual filename: {}", filename);
-
-                // now check what kind of file it is, so we can determine which build backend to use.
-                // match file extension
-                if filename.ends_with("src.rpm") {
-                    // call rpmbuild backend
-                    panic!("rpmbuild backend not implemented yet");
-                } else if filename.ends_with("andasrc.tar") {
-                    // We have an andaman tarball.
-                    todo!();
-                }
-            }
-        }
+        dispatch_build(self.build_id.to_string(), self.image.to_string(), self.pack.get_url(), "owo".to_string()).await?;
         Ok(())
-    }
-
-    // Builds a project from a URL (e.g. github)
-    pub fn build_url(&self, url: &str) -> Result<()> {
-        // call kubernetes to call anda with the params.
-        todo!()
-    }
-
-    pub fn build_src_file(&self, path: &PathBuf, filename: &str) -> Result<()> {
-        println!("Building from src file: {:?}", path);
-        println!("actual filename: {}", filename);
-
-        // now check what kind of file it is, so we can determine which build backend to use.
-        // match file extension
-        if filename.ends_with("src.rpm") {
-            // call rpmbuild backend
-            panic!("rpmbuild backend not implemented yet");
-        } else if filename.ends_with("andasrc.zip") {
-            // We have an andaman tarball.
-            // create a kubernetes job to build the project, then copy the file.
-            // get the path to the copied file, and then call anda to do the work.
-            todo!();
-        }
-        todo!()
     }
 }
 #[async_trait]
@@ -238,6 +166,7 @@ impl S3Object for BuildCache {
         let sys_time = SystemTime::from(chrono_time);
         obj.connection
             .put_object()
+            .body(bytes.into())
             .bucket(BUCKET.as_str())
             .key(dest_path.as_str())
             // 7 days

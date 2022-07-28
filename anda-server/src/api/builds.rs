@@ -1,4 +1,4 @@
-use crate::backend::{AndaBackend, Build, BuildCache, BuildMethod, S3Object};
+use crate::backend::{AndaBackend, Build, BuildCache, S3Object};
 use rocket::{
     form::Form,
     fs::TempFile,
@@ -6,6 +6,7 @@ use rocket::{
     serde::{json::Json, uuid::Uuid},
     Route,
 };
+use crate::db_object::{Project, Target};
 
 pub(crate) fn routes() -> Vec<Route> {
     routes![
@@ -38,51 +39,18 @@ async fn get_by_target(target_id: Uuid) -> Option<Json<Vec<Build>>> {
 #[derive(FromForm)]
 pub struct BuildSubmission<'r> {
     project_id: Option<Uuid>,
-    url: Option<String>,
-    src_file: Option<TempFile<'r>>,
-    build_type: Option<String>,
+    target_id: Uuid,
+    src_file: TempFile<'r>,
 }
 
 #[post("/", data = "<data>")]
 async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> {
-    // check if both url and src_file are empty
-
-    if data.url.is_none() && data.src_file.is_none() {
-        // return error: invalid form: both url and src_file are empty
-        return Err(Status::PreconditionRequired);
-    }
-
-    // check if both url and src_file are not empty
-    if data.url.is_some() && data.src_file.is_some() {
-        // return error: invalid form: both url and src_file are not empty
-        return Err(Status::PreconditionRequired);
-    }
-
-    // match on url or src_file
-    let build_type = if data.url.is_some() {
-        0
-    } else if data.src_file.is_some() {
-        1
-    } else {
-        // return error: invalid form: neither url nor src_file is not empty
-        return Err(Status::PreconditionRequired);
-    };
-
-    let build: BuildMethod;
-    match build_type {
-        0 => {
-            build = BuildMethod::Url {
-                url: data.url.as_ref().unwrap().to_string(),
-            };
-        }
-        1 => {
-            // src_file build
+    let target = Target::get(data.target_id).await.map_err(|_| Status::BadRequest)?;
+    // src_file build
             //let backend = AndaBackend::new_src_file(data.src_file.as_ref().unwrap(), data.build_type.as_ref().unwrap());
             // upload the file to S3
-            BuildCache::new(
+            let cache = BuildCache::new(
                 data.src_file
-                    .as_ref()
-                    .ok_or(Status::InternalServerError)?
                     .raw_name()
                     .ok_or(Status::InternalServerError)?
                     .dangerous_unsafe_unsanitized_raw()
@@ -90,8 +58,6 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
             )
             .upload_file(
                 data.src_file
-                    .as_ref()
-                    .ok_or(Status::InternalServerError)?
                     .path()
                     .ok_or(Status::InternalServerError)?
                     .to_path_buf(),
@@ -99,37 +65,14 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
             .await
             .map_err(|_| Status::InternalServerError)?;
 
-            // send file to backend for processing
-
-            build = BuildMethod::SrcFile {
-                path: data
-                    .src_file
-                    .as_ref()
-                    .ok_or(Status::InternalServerError)?
-                    .path()
-                    .ok_or(Status::InternalServerError)?
-                    .to_path_buf(),
-                filename: data
-                    .src_file
-                    .as_ref()
-                    .ok_or(Status::InternalServerError)?
-                    .raw_name()
-                    .ok_or(Status::InternalServerError)?
-                    .dangerous_unsafe_unsanitized_raw()
-                    .to_string(),
-            };
-        }
-        _ => {
-            // return error: invalid form: neither url nor src_file is not empty
-            return Err(Status::BadRequest);
-        }
-    }
+            let build_id = Uuid::new_v4();
 
     // process backend request
 
-    let build = AndaBackend::new_build(build, data.project_id)
-        .await
-        .unwrap();
+    let build = AndaBackend::new(build_id, cache, target.image.unwrap_or_else(||"fedora:latest".to_string()));
+    build.build().await.map_err(|_| Status::InternalServerError)?;
+
+    let build = Build::new(Some(target.id), data.project_id, None, "BuildSubmission".to_string());
 
     Ok(Json(build))
 }

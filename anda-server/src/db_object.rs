@@ -429,4 +429,13 @@ impl Target {
         let res = target::ActiveModel::insert(target, db).await?;
         Ok(Target::from_model(res))
     }
+
+    pub async fn get(id: Uuid) -> Result<Target> {
+        let db = DbPool::get().await;
+        let target = target::Entity::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Target not found"))?;
+        Ok(Target::from_model(target))
+    }
 }
