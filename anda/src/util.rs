@@ -198,7 +198,7 @@ impl ProjectPacker {
                 continue;
             }
 
-            debug!("{}", entry.name());
+            //debug!("{}", entry.name());
 
             // create parent directories if needed
             let mut path = workdir.clone();
@@ -210,7 +210,7 @@ impl ProjectPacker {
             let buf = i.read_to_end_crc().await.unwrap();
 
             // write files to disk
-            let mut file = File::create(path).await?;
+            let mut file = File::create(&path).await?;
             file.write_all(&buf).await?;
         }
 
