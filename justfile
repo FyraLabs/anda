@@ -1,3 +1,6 @@
+build_all: build-backend build-cli
+
+
 serve:
     cargo run --bin anda-server
 
@@ -28,3 +31,6 @@ clean:
 
 watch-web:
     cd anda-frontend && pnpm run watch
+
+format:
+    cargo fmt --all
