@@ -94,6 +94,7 @@ dependencies = [
  "chrono",
  "clap",
  "dotenv",
+ "futures",
  "git2",
  "ignore",
  "log",
@@ -111,6 +112,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-tar",
+ "tokio-util",
  "toml",
  "uuid",
  "walkdir",
@@ -3984,6 +3986,7 @@ checksum = "cc463cd8deddc3770d20f9852143d50bf6094e640b485cb2e189a2099085ff45"
 dependencies = [
  "bytes",
  "futures-core",
+ "futures-io",
  "futures-sink",
  "pin-project-lite",
  "slab",

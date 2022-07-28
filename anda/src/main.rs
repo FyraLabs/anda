@@ -54,7 +54,7 @@ enum Command {
         /// Path to the project
         /// If not specified, the current directory is used
         #[clap(value_name = "ANDA_PROJECT_PATH", default_value = ".")]
-        path: PathBuf,
+        path: String,
 
         /// Working directory for the build
         /// If not specified, the current directory is used
@@ -102,7 +102,15 @@ async fn main() -> Result<()> {
         }
 
         Command::Build { path, workdir } => {
-            // check if path is file
+            if let Ok(url) = reqwest::Url::parse(&path) {
+                info!("path is a URL, calling downloader");
+                ProjectPacker::download_and_call_unpack_build(url.as_str(), workdir).await?;
+                return Ok(());
+            }
+
+            let path = PathBuf::from(path);
+
+             // check if path is file
             if path.is_file() {
                 info!("path is a file, calling builder");
 
@@ -133,7 +141,7 @@ async fn main() -> Result<()> {
                         error!("{:?}", e);
                         anyhow!("{:?}", e)
                     })?;
-            }
+            } 
         }
 
         Command::Backend { command } => {

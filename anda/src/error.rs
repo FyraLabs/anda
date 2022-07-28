@@ -2,6 +2,7 @@
 
 use proc_macro2::TokenStream;
 use std::error;
+use std::fmt::{Display, Formatter};
 // derive macro that implements the From<anyhow::Error> trait
 
 #[derive(Debug)]
@@ -68,6 +69,14 @@ pub enum PackerError {
     Other(String),
     Git(git2::Error),
 }
+
+impl Display for PackerError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for PackerError {}
 
 impl From<std::io::Error> for PackerError {
     fn from(err: std::io::Error) -> Self {

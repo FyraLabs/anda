@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use std::{fs, io};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio_util::compat::FuturesAsyncReadCompatExt;
+use futures::stream::TryStreamExt;
 pub struct ProjectPacker;
 
 impl ProjectPacker {
@@ -116,6 +118,41 @@ impl ProjectPacker {
 
         println!("Packed {}", packfile_path.display());
         Ok(packfile_path)
+    }
+
+    pub async fn download_and_call_unpack_build(
+        url: &str,
+        workdir: Option<PathBuf>,
+    ) -> Result<(), PackerError> {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        // download file using reqwest
+        let resp = reqwest::get(url).await.unwrap();
+        //let mut buf = vec![];
+        let filename = resp
+            .url()
+            .path_segments()
+            .and_then(|segments| segments.last())
+            .and_then(|name| {
+                if name.is_empty() {
+                    None
+                } else {
+                    Some(name)
+                }
+            })
+            .unwrap_or("build.andasrc.zip");
+        let dest = tmp_dir.path().join(filename);
+
+        let data = resp.bytes_stream();
+        let data = data
+            .map_err(|e| futures::io::Error::new(futures::io::ErrorKind::Other, e))
+            .into_async_read();
+
+        let mut data = data.compat();
+
+        let mut file = File::create(&dest).await?;
+        tokio::io::copy(&mut data, &mut file).await?;
+
+        Self::unpack_and_build(&dest, workdir).await
     }
 
     pub async fn unpack_and_build(

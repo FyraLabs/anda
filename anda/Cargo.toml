@@ -25,14 +25,14 @@ toml = "0.5.9"
 serde_json = "1.0.13"
 serde_yaml = "0.8.24"
 anyhow = "1.0.58"# Add macro feature so rust-analyzer finally finds the macros
-tokio = { version = "1.19.2", features = ["rt-multi-thread", "macros", "fs", "process"] }
+tokio = { version = "1.19.2", features = ["rt-multi-thread", "macros", "fs", "process",] }
 tokio-tar = "0.3.0"
 tokio-stream = "0.1.9"
 walkdir = "2.3.2"
 dotenv = "0.15.0"
 uuid = { version = "1.1.2", features = ["serde"] }
 chrono = { version = "0.4.2", features = ["serde"] }
-reqwest = { version = "0.11.11", features = ["multipart", "json"] }
+reqwest = { version = "0.11.11", features = ["multipart", "json", "stream"] }
 # tabwriter for pretty printing tables
 tabwriter = "1.2.1"
 runas = "0.2.1"
@@ -43,6 +43,8 @@ async_zip = { git = "https://github.com/Majored/rs-async-zip.git", branch = "mai
 git2 = "0.14.4"
 tempfile = "3.3.0"
 ignore = "0.4.18"
+tokio-util = { version = "0.7.3", features = ["compat"] }
+futures = "0.3.21"
 
 
 [package.metadata.rpm]
