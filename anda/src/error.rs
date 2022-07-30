@@ -8,13 +8,13 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug)]
 pub enum ProjectError {
     NoManifest,
-    InvalidManifest,
+    InvalidManifest(hcl::Error),
     Other(String),
 }
 
-impl From<toml::de::Error> for ProjectError {
-    fn from(_: toml::de::Error) -> Self {
-        ProjectError::InvalidManifest
+impl From<hcl::error::Error> for ProjectError {
+    fn from(e: hcl::error::Error) -> Self {
+        ProjectError::InvalidManifest(e)
     }
 }
 
@@ -28,11 +28,13 @@ impl std::fmt::Display for ProjectError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ProjectError::NoManifest => write!(f, "No manifest found"),
-            ProjectError::InvalidManifest => write!(f, "Invalid manifest"),
+            ProjectError::InvalidManifest(e) => write!(f, "Invalid manifest: {}", e),
             ProjectError::Other(msg) => write!(f, "{}", msg),
         }
     }
 }
+
+impl std::error::Error for ProjectError {}
 
 #[derive(Debug)]
 pub enum BuilderError {

@@ -17,7 +17,7 @@ use tokio::{
 };
 use walkdir::WalkDir;
 
-use crate::error::BuilderError;
+use crate::{error::BuilderError, config::Project};
 
 trait ExitOkPolyfill {
     fn exit_ok_polyfilled(&self) -> Result<()>;
@@ -122,13 +122,9 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub fn dnf_builddep(&self) -> Result<(), BuilderError> {
-        let config = crate::config::load_config(&self.root).map_err(|e| {
-            error!("{}", e);
-            BuilderError::Project(e)
-        })?;
+    pub fn dnf_builddep(&self, project: &Project) -> Result<(), BuilderError> {
 
-        let spec_path = config.package.spec.canonicalize()?;
+        let spec_path = project.spec.as_ref().unwrap();
 
         let builddep_exit = runas::Command::new("dnf")
             .args(&["builddep", "-y", spec_path.to_str().unwrap()])
@@ -138,24 +134,19 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    ///  Builds an Andaman project.
-    pub async fn build(&self) -> Result<(), BuilderError> {
-        // TODO: Move this to a method called `build_rpm` as we support more project types
-        let config = crate::config::load_config(&self.root)?;
-
+    pub async fn build_rpm(&self, _name: String, project: Project) -> Result<(), BuilderError> {
         let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
 
-        // if env var `ANDA_SKIP_BUILDDEP` is set to 1, we skip the builddep step
-        if env::var("ANDA_SKIP_BUILDDEP").unwrap_or_default() != "1" {
-            self.dnf_builddep()?;
-        } else {
-            warn!("builddep step skipped, builds may fail due to missing dependencies!");
-        }
-
-        let mut rpmbuild = Command::new("rpmbuild")
+            // if env var `ANDA_SKIP_BUILDDEP` is set to 1, we skip the builddep step
+            if env::var("ANDA_SKIP_BUILDDEP").unwrap_or_default() != "1" {
+                self.dnf_builddep(&project)?;
+            } else {
+                warn!("builddep step skipped, builds may fail due to missing dependencies!");
+            }
+            let mut rpmbuild = Command::new("rpmbuild")
             .args(vec![
                 "-ba",
-                config.package.spec.to_str().unwrap(),
+                project.spec.unwrap().to_str().unwrap(),
                 "--define",
                 format!("_rpmdir {}", output_path).as_str(),
                 "--define",
@@ -166,44 +157,55 @@ impl ProjectBuilder {
                 format!(
                     "_sourcedir {}",
                     tokio::fs::canonicalize(&self.root)
-                        .await?
-                        .to_str()
-                        .ok_or_else(|| BuilderError::Other(
-                            "invalid unicode for path".to_string()
-                        ))?
+                    .await?
+                    .to_str()
+                    .ok_or_else(|| BuilderError::Other(
+                        "invalid unicode for path".to_string()
+                    ))?
                 )
                 .as_str(),
-            ])
-            .current_dir(&self.root)
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()?;
+                ])
+                .current_dir(&self.root)
+                .stderr(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()?;
 
-        let stdout = rpmbuild.stdout.take().expect("Can't get stdout");
-        let stderr = rpmbuild.stderr.take().expect("Can't get stderr");
-        let reader_out = BufReader::new(stdout);
-        let reader_err = BufReader::new(stderr);
+                let stdout = rpmbuild.stdout.take().expect("Can't get stdout");
+                let stderr = rpmbuild.stderr.take().expect("Can't get stderr");
+                let reader_out = BufReader::new(stdout);
+                let reader_err = BufReader::new(stderr);
 
-        reader_out.lines().for_each(|line| {
-            info!("rpmbuild:\t{}", line.unwrap());
-        });
-        reader_err.lines().for_each(|line| {
-            warn!("rpmbuild:\t{}", line.unwrap());
-        });
+                reader_out.lines().for_each(|line| {
+                    info!("rpmbuild:\t{}", line.unwrap());
+                });
+                reader_err.lines().for_each(|line| {
+                    warn!("rpmbuild:\t{}", line.unwrap());
+                });
 
-        // stream log output from rpmbuild to rust log
+                // stream log output from rpmbuild to rust log
 
-        //let rpmbuild_exit_status = rpmbuild.status()?;
-        //rpmbuild_exit_status.exit_ok_polyfilled()?;
-        rpmbuild.wait()?.exit_ok_polyfilled()?;
+                //let rpmbuild_exit_status = rpmbuild.status()?;
+                //rpmbuild_exit_status.exit_ok_polyfilled()?;
+                rpmbuild.wait()?.exit_ok_polyfilled()?;
 
-        // if env var `ANDA_BUILD_ID` is set, we upload the artifacts
-
-        if env::var("ANDA_BUILD_ID").is_ok() {
-            info!("uploading artifacts...");
-            self.push_folder(PathBuf::from(output_path)).await?;
-        }
-
-        Ok(())
+                // if env var `ANDA_BUILD_ID` is set, we upload the artifacts
+                if env::var("ANDA_BUILD_ID").is_ok() {
+                    info!("uploading artifacts...");
+                    self.push_folder(PathBuf::from(output_path)).await?;
+                }
+        todo!()
     }
-}
+
+    ///  Builds an Andaman project.
+    pub async fn build(&self) -> Result<(), BuilderError> {
+        // TODO: Move this to a method called `build_rpm` as we support more project types
+        let config = crate::config::load_config(&self.root)?;
+
+        for (name, project) in config.project {
+
+            self.build_rpm(name, project).await?;
+                // Ok(())
+            }
+            Ok(())
+        }
+    }

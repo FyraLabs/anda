@@ -45,6 +45,7 @@ tempfile = "3.3.0"
 ignore = "0.4.18"
 tokio-util = { version = "0.7.3", features = ["compat"] }
 futures = "0.3.21"
+hcl-rs = "0.6.2"
 
 
 [package.metadata.rpm]
