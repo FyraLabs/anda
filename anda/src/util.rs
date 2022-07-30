@@ -3,6 +3,7 @@ use anyhow::Result;
 use async_zip::read::seek::ZipFileReader;
 use async_zip::write::{EntryOptions, ZipFileWriter};
 use async_zip::Compression;
+use futures::stream::TryStreamExt;
 use git2::Repository;
 use log::{debug, info};
 use std::collections::HashSet;
@@ -11,7 +12,6 @@ use std::{fs, io};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
-use futures::stream::TryStreamExt;
 pub struct ProjectPacker;
 
 impl ProjectPacker {

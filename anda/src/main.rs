@@ -110,7 +110,7 @@ async fn main() -> Result<()> {
 
             let path = PathBuf::from(path);
 
-             // check if path is file
+            // check if path is file
             if path.is_file() {
                 info!("path is a file, calling builder");
 
@@ -141,7 +141,7 @@ async fn main() -> Result<()> {
                         error!("{:?}", e);
                         anyhow!("{:?}", e)
                     })?;
-            } 
+            }
         }
 
         Command::Backend { command } => {

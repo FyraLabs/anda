@@ -26,7 +26,6 @@ pub struct Script {
     pub command: String,
 }
 
-
 pub fn load_config(root: &PathBuf) -> Result<AndaConfig, ProjectError> {
     let config_path = root.join("anda.hcl");
 

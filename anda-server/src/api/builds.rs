@@ -1,4 +1,5 @@
 use crate::backend::{AndaBackend, Build, BuildCache, S3Object};
+use crate::db_object::{Project, Target};
 use rocket::{
     form::Form,
     fs::TempFile,
@@ -6,7 +7,6 @@ use rocket::{
     serde::{json::Json, uuid::Uuid},
     Route,
 };
-use crate::db_object::{Project, Target};
 
 pub(crate) fn routes() -> Vec<Route> {
     routes![
@@ -45,34 +45,48 @@ pub struct BuildSubmission<'r> {
 
 #[post("/", data = "<data>")]
 async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> {
-    let target = Target::get(data.target_id).await.map_err(|_| Status::BadRequest)?;
+    let target = Target::get(data.target_id)
+        .await
+        .map_err(|_| Status::BadRequest)?;
     // src_file build
-            //let backend = AndaBackend::new_src_file(data.src_file.as_ref().unwrap(), data.build_type.as_ref().unwrap());
-            // upload the file to S3
-            let cache = BuildCache::new(
-                data.src_file
-                    .raw_name()
-                    .ok_or(Status::InternalServerError)?
-                    .dangerous_unsafe_unsanitized_raw()
-                    .to_string(),
-            )
-            .upload_file(
-                data.src_file
-                    .path()
-                    .ok_or(Status::InternalServerError)?
-                    .to_path_buf(),
-            )
-            .await
-            .map_err(|_| Status::InternalServerError)?;
+    //let backend = AndaBackend::new_src_file(data.src_file.as_ref().unwrap(), data.build_type.as_ref().unwrap());
+    // upload the file to S3
+    let cache = BuildCache::new(
+        data.src_file
+            .raw_name()
+            .ok_or(Status::InternalServerError)?
+            .dangerous_unsafe_unsanitized_raw()
+            .to_string(),
+    )
+    .upload_file(
+        data.src_file
+            .path()
+            .ok_or(Status::InternalServerError)?
+            .to_path_buf(),
+    )
+    .await
+    .map_err(|_| Status::InternalServerError)?;
 
-            let build_id = Uuid::new_v4();
+    let build_id = Uuid::new_v4();
 
     // process backend request
 
-    let build = AndaBackend::new(build_id, cache, target.image.unwrap_or_else(||"fedora:latest".to_string()));
-    build.build().await.map_err(|_| Status::InternalServerError)?;
+    let build = AndaBackend::new(
+        build_id,
+        cache,
+        target.image.unwrap_or_else(|| "fedora:latest".to_string()),
+    );
+    build
+        .build()
+        .await
+        .map_err(|_| Status::InternalServerError)?;
 
-    let build = Build::new(Some(target.id), data.project_id, None, "BuildSubmission".to_string());
+    let build = Build::new(
+        Some(target.id),
+        data.project_id,
+        None,
+        "BuildSubmission".to_string(),
+    );
 
     Ok(Json(build))
 }

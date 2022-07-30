@@ -37,13 +37,23 @@ pub struct AndaBackend {
 
 impl AndaBackend {
     pub fn new(build_id: Uuid, pack: BuildCache, image: String) -> Self {
-        AndaBackend { build_id, pack, image }
+        AndaBackend {
+            build_id,
+            pack,
+            image,
+        }
     }
 
     // Proxy function to the actual build method.
     // Matches the method enum and calls the appropriate method.
     pub async fn build(&self) -> Result<()> {
-        dispatch_build(self.build_id.to_string(), self.image.to_string(), self.pack.get_url(), "owo".to_string()).await?;
+        dispatch_build(
+            self.build_id.to_string(),
+            self.image.to_string(),
+            self.pack.get_url(),
+            "owo".to_string(),
+        )
+        .await?;
         Ok(())
     }
 }

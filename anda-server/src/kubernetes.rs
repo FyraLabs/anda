@@ -6,7 +6,7 @@ use bytes::Bytes;
 use futures::{stream, Stream, StreamExt, TryStreamExt};
 use k8s_openapi::api::{
     batch::v1::{Job, JobSpec, JobStatus},
-    core::v1::{Container, Pod, PodSpec, PodTemplateSpec, EnvVar},
+    core::v1::{Container, EnvVar, Pod, PodSpec, PodTemplateSpec},
 };
 use kube::{
     api::{ListParams, LogParams, ObjectMeta, PostParams},
@@ -42,7 +42,12 @@ impl K8S {
     }
 }
 /// Dispatches build job to the Kubernetes cluster
-pub async fn dispatch_build(id: String, image: String, pack_url: String, token: String) -> Result<()> {
+pub async fn dispatch_build(
+    id: String,
+    image: String,
+    pack_url: String,
+    token: String,
+) -> Result<()> {
     let jobs = K8S::jobs().await;
 
     // TODO: Issue a build token and pass it into the job
