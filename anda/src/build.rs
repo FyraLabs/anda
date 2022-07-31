@@ -7,6 +7,7 @@ use owo_colors::OwoColorize;
 use pretty_env_logger::env_logger::Builder;
 use reqwest::{multipart, Client, ClientBuilder};
 use serde::Serialize;
+use solvent::DepGraph;
 use std::{
     collections::HashMap,
     env,
@@ -196,7 +197,9 @@ impl ProjectBuilder {
     pub fn run_pre_script(&self, project: &Project) -> Result<(), BuilderError> {
         println!("{}", "Running pre-build script...".yellow());
         for command in &project.pre_script.as_ref().unwrap().commands {
-            let command = execute::command(command).execute_output().map_err(BuilderError::Script)?;
+            let command = execute::command(command)
+                .execute_output()
+                .map_err(BuilderError::Script)?;
 
             if !command.status.success() {
                 error!("{}", "Pre-build script failed".red());
@@ -210,7 +213,9 @@ impl ProjectBuilder {
     pub fn run_post_script(&self, project: &Project) -> Result<(), BuilderError> {
         println!("{}", "Running post-build script...".yellow());
         for command in &project.post_script.as_ref().unwrap().commands {
-            let command = execute::command(command).execute_output().map_err(BuilderError::Script)?;
+            let command = execute::command(command)
+                .execute_output()
+                .map_err(BuilderError::Script)?;
 
             if !command.status.success() {
                 error!("{}", "Post-build script failed".red());
@@ -221,17 +226,56 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub fn run_build_script(&self, project: &Project) -> Result<(), BuilderError> {
-        println!("{}", "Running build script...".yellow());
-        for (stage_name, stage) in &project.script.as_ref().unwrap().stage {
-            println!("{}: `{}`", "Starting script stage".yellow(), stage_name.white());
-            for command in &stage.commands {
-                let command = execute::command(command).execute_output().map_err(BuilderError::Script)?;
+    pub fn run_stage(stage: &crate::config::Stage, stage_name: &String) -> Result<(), BuilderError> {
+        println!(
+            "{}: `{}`",
+            "Starting script stage".yellow(),
+            stage_name.white()
+        );
+        for command in &stage.commands {
+            let command = execute::command(command)
+                .execute_output()
+                .map_err(BuilderError::Script)?;
 
-                if !command.status.success() {
-                    error!("{}", "Build script failed".red());
-                    return Err(BuilderError::Command("build script failed".to_string()));
-                }
+            if !command.status.success() {
+                error!("{}", "Build script failed".red());
+                return Err(BuilderError::Command("build script failed".to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn run_build_script(&self, project: &Project) -> Result<(), BuilderError> {
+        // we should turn this into a tuple of (stage, stage_name)
+        let mut depgraph: DepGraph<&crate::config::Stage> = DepGraph::new();
+        println!("{}", "Running build script...".yellow());
+        let script = project.script.as_ref().unwrap();
+        for (_stage_name, stage) in &script.stage {
+            let empty_vec: Vec<String> = Vec::new();
+            let depends = stage.depends.as_ref().unwrap_or(&empty_vec);
+            let depends = depends
+                .iter()
+                .map(|d| {
+                    script
+                        .get_stage(d)
+                        .unwrap_or_else(|| panic!("Can't find stage {}", d.as_str()))
+                })
+                .collect::<Vec<&crate::config::Stage>>();
+            depgraph.register_dependencies(stage, depends);
+        }
+        let final_stage = &crate::config::Stage {
+            depends: None,
+            commands: vec![],
+        };
+        depgraph.register_dependencies(
+            final_stage,
+            script.stage.iter().map(|(_, stage)| stage).collect(),
+        );
+        for node in depgraph.dependencies_of(&final_stage).unwrap() {
+            match node {
+                // FIXME: find_key_for_value fails to match data
+                Ok(stage) => Self::run_stage(stage, script.find_key_for_value(stage).unwrap_or(&"final_or_untitled".to_string()))?,
+                Err(e) => return Err(BuilderError::Other(format!("solvent: {:?}", e))),
             }
         }
         Ok(())

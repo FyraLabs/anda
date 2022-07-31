@@ -18,14 +18,31 @@ pub struct Project {
     pub pre_script: Option<PreScript>,
     pub script: Option<Script>,
     pub post_script: Option<PostScript>,
+    pub rollback_script: Option<Script>,
 }
 #[derive(Deserialize)]
 pub struct Script {
-    pub stage: HashMap<String, Stage>
+    pub stage: HashMap<String, Stage>,
 }
 
-#[derive(Deserialize)]
+impl Script {
+    pub fn get_stage(&self, name: &str) -> Option<&Stage> {
+        self.stage.get(name)
+    }
+    pub fn find_key_for_value(&self, value: &Stage) -> Option<&String> {
+        self.stage.iter().find_map(|(key, val)| {
+            if val == value {
+                Some(key)
+            } else {
+                None
+            }
+        })
+    }
+}
+
+#[derive(Deserialize, Eq, PartialEq, Hash)]
 pub struct Stage {
+    pub depends: Option<Vec<String>>,
     pub commands: Vec<String>,
 }
 
@@ -39,18 +56,15 @@ pub struct PostScript {
     pub commands: Vec<String>,
 }
 
-
 #[derive(Deserialize)]
 pub struct RpmBuild {
     pub spec: PathBuf,
 }
 
-
 #[derive(Deserialize)]
 pub struct Docker {
     pub dockerfile: PathBuf,
 }
-
 
 pub fn load_config(root: &PathBuf) -> Result<AndaConfig, ProjectError> {
     let config_path = root.join("anda.hcl");

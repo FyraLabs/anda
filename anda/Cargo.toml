@@ -48,6 +48,7 @@ futures = "0.3.21"
 hcl-rs = "0.6.4"
 owo-colors = "3"
 execute = "0.2.11"
+solvent = "0.8.3"
 
 
 [package.metadata.rpm]
