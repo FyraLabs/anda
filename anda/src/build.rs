@@ -2,10 +2,8 @@ use anyhow::{anyhow, Result};
 use execute::Execute;
 use log::{debug, error, info, warn};
 use mime_guess::MimeGuess;
-use owo_colors::colors::*;
 use owo_colors::OwoColorize;
-use pretty_env_logger::env_logger::Builder;
-use reqwest::{multipart, Client, ClientBuilder};
+use reqwest::{multipart, ClientBuilder};
 use serde::Serialize;
 use solvent::DepGraph;
 use std::{
@@ -16,7 +14,7 @@ use std::{
     process::{Command, ExitStatus, Stdio},
 };
 use tokio::{
-    fs::{File, OpenOptions},
+    fs::File,
     io::AsyncReadExt,
 };
 use walkdir::WalkDir;
@@ -137,7 +135,7 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub async fn build_rpm(&self, _name: String, project: &Project) -> Result<(), BuilderError> {
+    pub async fn build_rpm(&self, project: &Project) -> Result<(), BuilderError> {
         let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
 
         // if env var `ANDA_SKIP_BUILDDEP` is set to 1, we skip the builddep step
@@ -195,14 +193,15 @@ impl ProjectBuilder {
     }
 
     pub fn run_pre_script(&self, project: &Project) -> Result<(), BuilderError> {
-        println!("{}", "Running pre-build script...".yellow());
+        println!(":: {}", "Running pre-build script...".yellow());
         for command in &project.pre_script.as_ref().unwrap().commands {
+            println!("$ {}", command.black());
             let command = execute::command(command)
                 .execute_output()
                 .map_err(BuilderError::Script)?;
 
             if !command.status.success() {
-                error!("{}", "Pre-build script failed".red());
+                println!(":: {}", "Pre-build script failed".red());
                 return Err(BuilderError::Command("pre-script failed".to_string()));
             }
         }
@@ -211,14 +210,15 @@ impl ProjectBuilder {
     }
 
     pub fn run_post_script(&self, project: &Project) -> Result<(), BuilderError> {
-        println!("{}", "Running post-build script...".yellow());
+        println!(":: {}", "Running post-build script...".yellow());
         for command in &project.post_script.as_ref().unwrap().commands {
+            println!("$ {}", command.black());
             let command = execute::command(command)
                 .execute_output()
                 .map_err(BuilderError::Script)?;
 
             if !command.status.success() {
-                error!("{}", "Post-build script failed".red());
+                println!(":: {}", "Post-build script failed".red());
                 return Err(BuilderError::Command("post-script failed".to_string()));
             }
         }
@@ -226,20 +226,62 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub fn run_stage(stage: &crate::config::Stage, stage_name: &String) -> Result<(), BuilderError> {
+    pub fn run_stage(
+        stage: &crate::config::Stage,
+        stage_name: &String,
+    ) -> Result<(), BuilderError> {
         println!(
-            "{}: `{}`",
+            " -> {}: `{}`",
             "Starting script stage".yellow(),
-            stage_name.white()
+            stage_name.white().italic()
         );
         for command in &stage.commands {
+            println!("$ {}", command.black());
+
             let command = execute::command(command)
                 .execute_output()
                 .map_err(BuilderError::Script)?;
 
             if !command.status.success() {
-                error!("{}", "Build script failed".red());
+                println!(":: {}", "Build script failed".red());
                 return Err(BuilderError::Command("build script failed".to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn run_rollback(
+        &self,
+        project: &Project,
+        stage: &crate::config::Stage,
+    ) -> Result<(), BuilderError> {
+        if project.rollback.is_some() {
+            let rollback = project.rollback.as_ref().unwrap();
+            let name = project
+                .script
+                .as_ref()
+                .unwrap()
+                .find_key_for_value(stage)
+                .unwrap();
+            if rollback.get_stage(name).is_some() {
+                let stage = rollback.get_stage(name).unwrap();
+                println!(
+                    " -> {}: `{}`",
+                    "Rolling back".yellow(),
+                    name.white().italic()
+                );
+                for command in &stage.commands {
+                    println!("$ {}", command.black());
+
+                    let command = execute::command(command)
+                        .execute_output()
+                        .map_err(BuilderError::Script)?;
+
+                    if !command.status.success() {
+                        error!("{}", "Rollback failed".red());
+                        return Err(BuilderError::Command("rollback failed".to_string()));
+                    }
+                }
             }
         }
         Ok(())
@@ -248,9 +290,9 @@ impl ProjectBuilder {
     pub fn run_build_script(&self, project: &Project) -> Result<(), BuilderError> {
         // we should turn this into a tuple of (stage, stage_name)
         let mut depgraph: DepGraph<&crate::config::Stage> = DepGraph::new();
-        println!("{}", "Running build script...".yellow());
+        println!(":: {}", "Running build script...".yellow());
         let script = project.script.as_ref().unwrap();
-        for (_stage_name, stage) in &script.stage {
+        for stage in script.stage.values() {
             let empty_vec: Vec<String> = Vec::new();
             let depends = stage.depends.as_ref().unwrap_or(&empty_vec);
             let depends = depends
@@ -274,32 +316,88 @@ impl ProjectBuilder {
         for node in depgraph.dependencies_of(&final_stage).unwrap() {
             match node {
                 // FIXME: find_key_for_value fails to match data
-                Ok(stage) => Self::run_stage(stage, script.find_key_for_value(stage).unwrap_or(&"final_or_untitled".to_string()))?,
+                Ok(stage) => {
+                    let result = Self::run_stage(
+                        stage,
+                        script
+                            .find_key_for_value(stage)
+                            .unwrap_or(&"final_or_untitled".to_string()),
+                    );
+                    if result.is_err() {
+                        self.run_rollback(project, stage)?;
+                        return Err(result.err().unwrap());
+                    }
+                }
                 Err(e) => return Err(BuilderError::Other(format!("solvent: {:?}", e))),
             }
         }
         Ok(())
     }
 
+    pub fn build_docker(&self, project: &Project) -> Result<(), BuilderError> {
+        for (tag, image) in &project.docker.as_ref().unwrap().image {
+            let version = image
+                .version.as_ref()
+                .map(|s| format!(":{}", s))
+                .unwrap_or_else(String::new);
+            let status = Command::new("docker")
+                .arg("build")
+                .arg("-t")
+                .arg(format!("{}{}", tag, version))
+                .arg(&image.workdir)
+                .current_dir(&self.root)
+                .status();
+
+            if !status.unwrap().success() {
+                return Err(BuilderError::Command("docker build failed".to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn run_project(&self, name: String, project: &Project) -> Result<(), BuilderError> {
+        println!(
+            "{} `{}`...",
+            "Building project".bright_cyan(),
+            &name.white().bold()
+        );
+
+        if project.pre_script.is_some() {
+            self.run_pre_script(project)?;
+        }
+        if project.script.is_some() {
+            self.run_build_script(project)?;
+        }
+        if project.rpmbuild.is_some() {
+            self.build_rpm(project).await?;
+        }
+        if project.docker.is_some() {
+            self.build_docker(project)?;
+        }
+        if project.post_script.is_some() {
+            self.run_post_script(project)?;
+        }
+
+        // print empty line to separate projects
+        println!();
+        Ok(())
+    }
+
     ///  Builds an Andaman project.
-    pub async fn build(&self) -> Result<(), BuilderError> {
-        // TODO: Move this to a method called `build_rpm` as we support more project types
+    pub async fn build(&self, projects: Vec<String>) -> Result<(), BuilderError> {
         let config = crate::config::load_config(&self.root)?;
         let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
 
+        if !projects.is_empty() {
+            for proj in projects {
+                let project = config.project.get(&proj).ok_or_else(|| BuilderError::Other(format!("Project `{}` not found", &proj)))?;
+                self.run_project(proj, project).await?;
+            }
+            return Ok(());
+        }
+
         for (name, project) in config.project {
-            if project.pre_script.is_some() {
-                self.run_pre_script(&project)?;
-            }
-            if project.script.is_some() {
-                self.run_build_script(&project)?;
-            }
-            if project.rpmbuild.is_some() {
-                self.build_rpm(name, &project).await?;
-            }
-            if project.post_script.is_some() {
-                self.run_post_script(&project)?;
-            }
+            self.run_project(name, &project).await?;
         }
         // if env var `ANDA_BUILD_ID` is set, we upload the artifacts
         if env::var("ANDA_BUILD_ID").is_ok() {

@@ -22,15 +22,17 @@ project "anda" {
 
 
     docker {
-        dockerfile = "Dockerfile"
-        tag = "anda/rust-hello-world"
+        image "anda/anda" {
+            version = "latest"
+            dir = "."
+        }
     }
 
 
-    rollback_script {
+    rollback {
         stage "build" {
             commands = [
-                "rm -rf target/release"
+                "echo 'rollback'"
                 ]
             ]
         }
@@ -42,7 +44,22 @@ project "anda" {
         stage "build" {
             commands = [
                 "echo 'build command here'"
-                ]
+            ]
+        }
+    }
+
+    /* docker {
+        image "anda/anda" {
+            version = "latest"
+            workdir = "."
+        }
+    } */
+
+    rollback {
+        stage "fails" {
+            commands = [
+                "echo 'rollback command here'"
+            ]
         }
     }
 
@@ -52,10 +69,20 @@ project "anda" {
     post_script {
         commands = [
             "echo 'world'"
-            ]
+        ]
     }
 
 
     // if scripts are defined and type is docker or rpm, the scripts will be executed
     // before the package is built.
+}
+
+project "z" {
+    script {
+        stage "build" {
+            commands = [
+                "echo 'build command here'"
+            ]
+        }
+    }
 }

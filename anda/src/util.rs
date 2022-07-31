@@ -223,7 +223,7 @@ impl ProjectPacker {
         // print current dir
         debug!("{}", std::env::current_dir().unwrap().display());
         // execute anda build internally
-        crate::build::ProjectBuilder::new(workdir).build().await?;
+        crate::build::ProjectBuilder::new(workdir).build(vec![]).await?;
 
         Ok(())
     }

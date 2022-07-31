@@ -18,7 +18,7 @@ pub struct Project {
     pub pre_script: Option<PreScript>,
     pub script: Option<Script>,
     pub post_script: Option<PostScript>,
-    pub rollback_script: Option<Script>,
+    pub rollback: Option<Script>,
 }
 #[derive(Deserialize)]
 pub struct Script {
@@ -63,8 +63,15 @@ pub struct RpmBuild {
 
 #[derive(Deserialize)]
 pub struct Docker {
-    pub dockerfile: PathBuf,
+    pub image: HashMap<String, DockerImage>,  // tag, file
 }
+
+#[derive(Deserialize)]
+pub struct DockerImage {
+    pub workdir: PathBuf,
+    pub version: Option<String>,
+}
+
 
 pub fn load_config(root: &PathBuf) -> Result<AndaConfig, ProjectError> {
     let config_path = root.join("anda.hcl");

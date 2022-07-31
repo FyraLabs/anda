@@ -53,13 +53,19 @@ enum Command {
     Build {
         /// Path to the project
         /// If not specified, the current directory is used
-        #[clap(value_name = "ANDA_PROJECT_PATH", default_value = ".")]
+        #[clap(value_name = "PROJECT_PATH", default_value = ".")]
         path: String,
 
         /// Working directory for the build
         /// If not specified, the current directory is used
-        #[clap(short, long, value_name = "ANDA_WORKDIR")]
+        #[clap(short, long, value_name = "WORKDIR")]
         workdir: Option<PathBuf>,
+
+        /// List of projects to be built.
+        /// if not specified, all projects are built.
+        /// Can be specified multiple times.
+        #[clap(short, long, value_name = "PROJECT")]
+        projects: Vec<String>,
     },
     /// Subcommand for interacting with the build system
     Backend {
@@ -101,7 +107,7 @@ async fn main() -> Result<()> {
             println!("Removing {}", packages.join(", "));
         }
 
-        Command::Build { path, workdir } => {
+        Command::Build { path, workdir, projects } => {
             if let Ok(url) = reqwest::Url::parse(&path) {
                 info!("path is a URL, calling downloader");
                 ProjectPacker::download_and_call_unpack_build(url.as_str(), workdir).await?;
@@ -135,7 +141,7 @@ async fn main() -> Result<()> {
                 }
             } else if path.is_dir() {
                 build::ProjectBuilder::new(path)
-                    .build()
+                    .build(projects)
                     .await
                     .map_err(|e| {
                         error!("{:?}", e);
