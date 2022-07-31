@@ -56,7 +56,13 @@ impl From<ProjectError> for BuilderError {
 
 impl std::fmt::Display for BuilderError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Builder Error")
+        match self {
+            BuilderError::Project(e) => write!(f, "Project: {}", e),
+            BuilderError::Command(e) => write!(f, "Command: {}", e),
+            BuilderError::Io(e) => write!(f, "IO: {}", e),
+            BuilderError::Other(e) => write!(f, "Other: {}", e),
+            BuilderError::Script(e) => write!(f, "Script: {}", e),
+        }
     }
 }
 
@@ -71,7 +77,12 @@ pub enum PackerError {
 
 impl Display for PackerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Packer Error")
+        match self {
+            PackerError::Build(e) => write!(f, "Build: {}", e),
+            PackerError::Path(e) => write!(f, "Path: {}", e),
+            PackerError::Io(e) => write!(f, "IO: {}", e),
+            PackerError::Git(e) => write!(f, "Git: {}", e),
+        }
     }
 }
 
