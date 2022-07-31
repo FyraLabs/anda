@@ -91,5 +91,5 @@ pub fn load_config(root: &PathBuf) -> Result<AndaConfig, ProjectError> {
             .as_str(),
     );
 
-    config.map_err(ProjectError::InvalidManifest)
+    config.map_err(ProjectError::HclError)
 }

@@ -229,14 +229,3 @@ impl ProjectPacker {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[tokio::test]
-    async fn test() {
-        ProjectPacker::pack_git("https://github.com/Ultramarine-Linux/anda.git")
-            .await
-            .unwrap();
-    }
-}

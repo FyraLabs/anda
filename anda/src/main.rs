@@ -110,7 +110,10 @@ async fn main() -> Result<()> {
         Command::Build { path, workdir, projects } => {
             if let Ok(url) = reqwest::Url::parse(&path) {
                 info!("path is a URL, calling downloader");
-                ProjectPacker::download_and_call_unpack_build(url.as_str(), workdir).await?;
+                ProjectPacker::download_and_call_unpack_build(url.as_str(), workdir).await.map_err(|e| {
+                    error!("{}", e);
+                    anyhow!("{}", e)
+                })?;
                 return Ok(());
             }
 
@@ -131,8 +134,8 @@ async fn main() -> Result<()> {
                     ProjectPacker::unpack_and_build(&path, workdir)
                         .await
                         .map_err(|e| {
-                            error!("{:?}", e);
-                            anyhow!("{:?}", e)
+                            error!("{}", e);
+                            anyhow!("{}", e)
                         })?;
                 } else {
                     // error and exit
@@ -144,8 +147,8 @@ async fn main() -> Result<()> {
                     .build(projects)
                     .await
                     .map_err(|e| {
-                        error!("{:?}", e);
-                        anyhow!("{:?}", e)
+                        error!("{}", e);
+                        anyhow!("{}", e)
                     })?;
             }
         }
@@ -165,8 +168,8 @@ async fn main() -> Result<()> {
             {
                 info!("path is a git url, calling packer");
                 ProjectPacker::pack_git(path_str).await.map_err(|e| {
-                    error!("{:?}", e);
-                    anyhow!("{:?}", e)
+                    error!("{}", e);
+                    anyhow!("{}", e)
                 })?;
             } else {
                 println!(
@@ -179,7 +182,10 @@ async fn main() -> Result<()> {
                         .display()
                 );
                 //build::start_build(&path)?;
-                let p = ProjectPacker::pack(&path, output).await.unwrap();
+                let p = ProjectPacker::pack(&path, output).await.map_err(|e| {
+                    error!("{}", e);
+                    anyhow!("{}", e)
+                })?;
 
                 println!("Packed to {}", p.display());
             }

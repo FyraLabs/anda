@@ -1,20 +1,17 @@
 //! Andaman client error handler
-
-use proc_macro2::TokenStream;
-use std::error;
 use std::fmt::{Display, Formatter};
 // derive macro that implements the From<anyhow::Error> trait
 
-#[derive(Debug)]
 pub enum ProjectError {
     NoManifest,
-    InvalidManifest(hcl::Error),
+    InvalidManifest(String),
+    HclError(hcl::error::Error),
     Other(String),
 }
 
 impl From<hcl::error::Error> for ProjectError {
     fn from(e: hcl::error::Error) -> Self {
-        ProjectError::InvalidManifest(e)
+        ProjectError::HclError(e)
     }
 }
 
@@ -30,19 +27,19 @@ impl std::fmt::Display for ProjectError {
             ProjectError::NoManifest => write!(f, "No manifest found"),
             ProjectError::InvalidManifest(e) => write!(f, "Invalid manifest: {}", e),
             ProjectError::Other(msg) => write!(f, "{}", msg),
+            ProjectError::HclError(e) => write!(f, "HCL: {:?}", e),
         }
     }
 }
 
-impl std::error::Error for ProjectError {}
+//impl std::error::Error for ProjectError {}
 
-#[derive(Debug)]
 pub enum BuilderError {
     Project(ProjectError),
     Command(String),
     Io(std::io::Error),
     Other(String),
-    Script(std::io::Error)
+    Script(std::io::Error),
 }
 
 impl From<anyhow::Error> for BuilderError {
@@ -59,27 +56,26 @@ impl From<ProjectError> for BuilderError {
 
 impl std::fmt::Display for BuilderError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "Builder Error")
     }
 }
 
-#[derive(Debug)]
 pub enum PackerError {
-    Project(ProjectError),
+    //Project(ProjectError),
     Build(BuilderError),
     Path(String),
     Io(std::io::Error),
-    Other(String),
+    //Other(String),
     Git(git2::Error),
 }
 
 impl Display for PackerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "Packer Error")
     }
 }
 
-impl std::error::Error for PackerError {}
+// impl std::error::Error for PackerError {}
 
 impl From<std::io::Error> for PackerError {
     fn from(err: std::io::Error) -> Self {
