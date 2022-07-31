@@ -107,13 +107,19 @@ async fn main() -> Result<()> {
             println!("Removing {}", packages.join(", "));
         }
 
-        Command::Build { path, workdir, projects } => {
+        Command::Build {
+            path,
+            workdir,
+            projects,
+        } => {
             if let Ok(url) = reqwest::Url::parse(&path) {
                 info!("path is a URL, calling downloader");
-                ProjectPacker::download_and_call_unpack_build(url.as_str(), workdir).await.map_err(|e| {
-                    error!("{}", e);
-                    anyhow!("{}", e)
-                })?;
+                ProjectPacker::download_and_call_unpack_build(url.as_str(), workdir)
+                    .await
+                    .map_err(|e| {
+                        error!("{}", e);
+                        anyhow!("{}", e)
+                    })?;
                 return Ok(());
             }
 

@@ -63,7 +63,7 @@ pub struct RpmBuild {
 
 #[derive(Deserialize)]
 pub struct Docker {
-    pub image: HashMap<String, DockerImage>,  // tag, file
+    pub image: HashMap<String, DockerImage>, // tag, file
 }
 
 #[derive(Deserialize)]
@@ -71,7 +71,6 @@ pub struct DockerImage {
     pub workdir: PathBuf,
     pub version: Option<String>,
 }
-
 
 pub fn load_config(root: &PathBuf) -> Result<AndaConfig, ProjectError> {
     let config_path = root.join("anda.hcl");

@@ -13,10 +13,7 @@ use std::{
     path::PathBuf,
     process::{Command, ExitStatus, Stdio},
 };
-use tokio::{
-    fs::File,
-    io::AsyncReadExt,
-};
+use tokio::{fs::File, io::AsyncReadExt};
 use walkdir::WalkDir;
 
 use crate::{config::Project, error::BuilderError};
@@ -337,7 +334,8 @@ impl ProjectBuilder {
     pub fn build_docker(&self, project: &Project) -> Result<(), BuilderError> {
         for (tag, image) in &project.docker.as_ref().unwrap().image {
             let version = image
-                .version.as_ref()
+                .version
+                .as_ref()
                 .map(|s| format!(":{}", s))
                 .unwrap_or_else(String::new);
             let status = Command::new("docker")
@@ -390,7 +388,10 @@ impl ProjectBuilder {
 
         if !projects.is_empty() {
             for proj in projects {
-                let project = config.project.get(&proj).ok_or_else(|| BuilderError::Other(format!("Project `{}` not found", &proj)))?;
+                let project = config
+                    .project
+                    .get(&proj)
+                    .ok_or_else(|| BuilderError::Other(format!("Project `{}` not found", &proj)))?;
                 self.run_project(proj, project).await?;
             }
             return Ok(());
