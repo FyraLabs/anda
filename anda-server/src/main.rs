@@ -5,15 +5,6 @@
 //! It is designed to be simple and easy to set up, but powerful enough to
 //! be used for full-scale production-ready deployments.
 //!
-//! Unlike other common CI systems like Travis or CircleCI,
-//! Andaman is not designed to be used to
-//! build and test standard code projects using custom scripts. Instead, it is designed
-//! to be a package build system that can be used to build and test packages
-//! for distribution to production repositories
-//!
-//! It is created to be a simple and robust alternative to package building systems
-//! like Koji, Launchpad, and the Arch Linux build system.
-//!
 //! # Output
 //! Andaman produces artifacts in the form of repositories, as a collection of
 //! projects' artifacts collected to make a full repository called a "compose".

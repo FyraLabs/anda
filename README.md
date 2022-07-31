@@ -4,15 +4,14 @@
 
 # Andaman
 
-Andaman is a build system (and soon, a package manager) written in Rust.
+Andaman is a package build system and CI (Continuous Integration) tool written in Rust.
 It is inspired by Ultramarine Linux's `umpkg` project, and allows you to quickly build multiple types of projects into different artifacts.
 
-> NOTE: Currently, Andaman only supports building RPM packages. Support for other artifact types will be added soon. Currently OCI/Docker is our secondary goal.
+It also supports monorepos with configuration files, and can be run completely standalone without a server (Although it comes with one for distributed builds).
 
 Andaman is planned to have the following features:
 
 - Building artifact
-- resolving and installing RPM packages
 - Signing packages
 - Build artifacts for:
     - Disk images and live media (powered by Lorax)
@@ -54,6 +53,7 @@ Andaman is a build system written in Rust, and is powered by the following compo
 - [Kubernetes](https://kubernetes.io) for build orchestration
 - [PostgreSQL](https://www.postgresql.org) for storing build metadata
 - [SeaORM](https://www.sea-ql.org/SeaORM/) for database access
+- [HCL (HashiCorp Configuration Language)](https://github.com/hashicorp/hcl) for project manifests
 
 ## Roadmap
 
