@@ -1,24 +1,46 @@
 project "anda" {
-    proj_type = "rpm" // rpm, generic, docker
-
-    // spec file for rpm
-    spec = "./anda.spec"
-    // Docker images
-    // dockerfile = "./Dockerfile"
+    pre_script {
+        commands = ["echo 'hello'"]
+    }
     /*
-    scripts = {
-        script "build" {
-            command = ["cargo", "build", "--release"]
+
+    script {
+        stage "build" {
+            commands = [
+                "cargo build --release"
+                ]
         }
-        script "test" {
-            command = ["cargo", "test", "--release"]
+        stage "test" {
+            commands = [
+                "cargo test --release"
+                ]
         }
-        script "install" {
-            command = ["cargo", "install", "."]
-        }
+    }
+
+
+
+    docker {
+        dockerfile = "Dockerfile"
     }
     */
 
-    // if scripts is defined and type is docker or rpm, the scripts will be executed
+    script {
+        stage "build" {
+            commands = [
+                "echo 'build command here'"
+                ]
+        }
+    }
+
+    rpmbuild {
+        spec = "./anda.spec"
+    }
+    post_script {
+        commands = [
+            "echo 'world'"
+            ]
+    }
+
+    // if scripts are defined and type is docker or rpm, the scripts will be executed
     // before the package is built.
 }

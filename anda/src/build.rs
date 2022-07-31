@@ -1,6 +1,9 @@
 use anyhow::{anyhow, Result};
+use execute::Execute;
 use log::{debug, error, info, warn};
 use mime_guess::MimeGuess;
+use owo_colors::colors::*;
+use owo_colors::OwoColorize;
 use pretty_env_logger::env_logger::Builder;
 use reqwest::{multipart, Client, ClientBuilder};
 use serde::Serialize;
@@ -123,7 +126,7 @@ impl ProjectBuilder {
     }
 
     pub fn dnf_builddep(&self, project: &Project) -> Result<(), BuilderError> {
-        let spec_path = project.spec.as_ref().unwrap();
+        let spec_path = &project.rpmbuild.as_ref().unwrap().spec;
 
         let builddep_exit = runas::Command::new("dnf")
             .args(&["builddep", "-y", spec_path.to_str().unwrap()])
@@ -133,19 +136,19 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub async fn build_rpm(&self, _name: String, project: Project) -> Result<(), BuilderError> {
+    pub async fn build_rpm(&self, _name: String, project: &Project) -> Result<(), BuilderError> {
         let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
 
         // if env var `ANDA_SKIP_BUILDDEP` is set to 1, we skip the builddep step
         if env::var("ANDA_SKIP_BUILDDEP").unwrap_or_default() != "1" {
-            self.dnf_builddep(&project)?;
+            self.dnf_builddep(project)?;
         } else {
             warn!("builddep step skipped, builds may fail due to missing dependencies!");
         }
         let mut rpmbuild = Command::new("rpmbuild")
             .args(vec![
                 "-ba",
-                project.spec.unwrap().to_str().unwrap(),
+                project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
                 "--define",
                 format!("_rpmdir {}", output_path).as_str(),
                 "--define",
@@ -187,23 +190,78 @@ impl ProjectBuilder {
         //rpmbuild_exit_status.exit_ok_polyfilled()?;
         rpmbuild.wait()?.exit_ok_polyfilled()?;
 
-        // if env var `ANDA_BUILD_ID` is set, we upload the artifacts
-        if env::var("ANDA_BUILD_ID").is_ok() {
-            info!("uploading artifacts...");
-            self.push_folder(PathBuf::from(output_path)).await?;
+        Ok(())
+    }
+
+    pub fn run_pre_script(&self, project: &Project) -> Result<(), BuilderError> {
+        println!("{}", "Running pre-build script...".yellow());
+        for command in &project.pre_script.as_ref().unwrap().commands {
+            let command = execute::command(command).execute_output().map_err(BuilderError::Script)?;
+
+            if !command.status.success() {
+                error!("{}", "Pre-build script failed".red());
+                return Err(BuilderError::Command("pre-script failed".to_string()));
+            }
         }
-        todo!()
+        println!("{}", "Pre-build script finished.".green());
+        Ok(())
+    }
+
+    pub fn run_post_script(&self, project: &Project) -> Result<(), BuilderError> {
+        println!("{}", "Running post-build script...".yellow());
+        for command in &project.post_script.as_ref().unwrap().commands {
+            let command = execute::command(command).execute_output().map_err(BuilderError::Script)?;
+
+            if !command.status.success() {
+                error!("{}", "Post-build script failed".red());
+                return Err(BuilderError::Command("post-script failed".to_string()));
+            }
+        }
+        println!("{}", "Post-build script finished.".green());
+        Ok(())
+    }
+
+    pub fn run_build_script(&self, project: &Project) -> Result<(), BuilderError> {
+        println!("{}", "Running build script...".yellow());
+        for (stage_name, stage) in &project.script.as_ref().unwrap().stage {
+            println!("{}: `{}`", "Starting script stage".yellow(), stage_name.white());
+            for command in &stage.commands {
+                let command = execute::command(command).execute_output().map_err(BuilderError::Script)?;
+
+                if !command.status.success() {
+                    error!("{}", "Build script failed".red());
+                    return Err(BuilderError::Command("build script failed".to_string()));
+                }
+            }
+        }
+        Ok(())
     }
 
     ///  Builds an Andaman project.
     pub async fn build(&self) -> Result<(), BuilderError> {
         // TODO: Move this to a method called `build_rpm` as we support more project types
         let config = crate::config::load_config(&self.root)?;
+        let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
 
         for (name, project) in config.project {
-            self.build_rpm(name, project).await?;
-            // Ok(())
+            if project.pre_script.is_some() {
+                self.run_pre_script(&project)?;
+            }
+            if project.script.is_some() {
+                self.run_build_script(&project)?;
+            }
+            if project.rpmbuild.is_some() {
+                self.build_rpm(name, &project).await?;
+            }
+            if project.post_script.is_some() {
+                self.run_post_script(&project)?;
+            }
         }
+        // if env var `ANDA_BUILD_ID` is set, we upload the artifacts
+        if env::var("ANDA_BUILD_ID").is_ok() {
+            info!("uploading artifacts...");
+            self.push_folder(PathBuf::from(output_path)).await?;
+        };
         Ok(())
     }
 }

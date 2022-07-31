@@ -13,18 +13,44 @@ pub struct AndaConfig {
 
 #[derive(Deserialize)]
 pub struct Project {
-    pub proj_type: String,
-    pub spec: Option<PathBuf>,
-    pub dockerfile: Option<PathBuf>,
-    pub scripts: Option<Vec<Script>>,
-    // FIXME: Option types are currently not supported in hcl-rs
-    // This will fail unless upstream fixes thisq
+    pub rpmbuild: Option<RpmBuild>,
+    pub docker: Option<Docker>,
+    pub pre_script: Option<PreScript>,
+    pub script: Option<Script>,
+    pub post_script: Option<PostScript>,
 }
 #[derive(Deserialize)]
 pub struct Script {
-    pub name: String,
-    pub command: String,
+    pub stage: HashMap<String, Stage>
 }
+
+#[derive(Deserialize)]
+pub struct Stage {
+    pub commands: Vec<String>,
+}
+
+#[derive(Deserialize)]
+pub struct PreScript {
+    pub commands: Vec<String>,
+}
+
+#[derive(Deserialize)]
+pub struct PostScript {
+    pub commands: Vec<String>,
+}
+
+
+#[derive(Deserialize)]
+pub struct RpmBuild {
+    pub spec: PathBuf,
+}
+
+
+#[derive(Deserialize)]
+pub struct Docker {
+    pub dockerfile: PathBuf,
+}
+
 
 pub fn load_config(root: &PathBuf) -> Result<AndaConfig, ProjectError> {
     let config_path = root.join("anda.hcl");
@@ -44,8 +70,5 @@ pub fn load_config(root: &PathBuf) -> Result<AndaConfig, ProjectError> {
             .as_str(),
     );
 
-    match config {
-        Ok(config) => Ok(config),
-        Err(e) => Err(ProjectError::InvalidManifest(e)),
-    }
+    config.map_err(ProjectError::InvalidManifest)
 }

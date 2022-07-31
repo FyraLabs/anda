@@ -42,6 +42,7 @@ pub enum BuilderError {
     Command(String),
     Io(std::io::Error),
     Other(String),
+    Script(std::io::Error)
 }
 
 impl From<anyhow::Error> for BuilderError {
