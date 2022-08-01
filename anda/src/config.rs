@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use log::warn;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -12,6 +13,7 @@ pub struct AndaConfig {
 }
 
 impl AndaConfig {
+
     pub fn find_key_for_value(&self, value: &Project) -> Option<&String> {
         self.project.iter().find_map(|(key, val)| {
             if val == value {
@@ -80,6 +82,9 @@ pub struct Docker {
 
 #[derive(Deserialize, PartialEq, Eq)]
 pub struct DockerImage {
+    pub dockerfile: Option<PathBuf>,
+    pub import: Option<PathBuf>,
+    pub tag_latest: Option<bool>,
     pub workdir: PathBuf,
     pub version: Option<String>,
 }
@@ -102,5 +107,36 @@ pub fn load_config(root: &PathBuf) -> Result<AndaConfig, ProjectError> {
             .as_str(),
     );
 
-    config.map_err(ProjectError::HclError)
+    let config = config.map_err(ProjectError::HclError);
+
+    check_config(config?)
+}
+
+/// Lints and checks the config for errors.
+pub fn check_config(config: AndaConfig) -> Result<AndaConfig, ProjectError> {
+    let mut errors = vec![];
+
+    for (key, value) in &config.project {
+        if value.rpmbuild.is_none() && value.docker.is_none() && value.script.is_none() {
+            warn!("project {} has no build manifest!", key);
+        }
+        if let Some(docker) = &value.docker {
+            if docker.image.is_empty() {
+                errors.push(ProjectError::InvalidManifest(format!(
+                    "project {} has no docker images",
+                    key
+                )));
+            }
+
+            for (tag, image) in &docker.image {
+                if image.dockerfile.is_none() && image.import.is_none(){
+                    errors.push(ProjectError::InvalidManifest(format!(
+                        "project {} has no dockerfile or import for image {}",
+                        key, tag
+                    )));
+                }
+            }
+        }
+    }
+    Ok(config)
 }

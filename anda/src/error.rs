@@ -27,7 +27,15 @@ impl std::fmt::Display for ProjectError {
             ProjectError::NoManifest => write!(f, "No manifest found"),
             ProjectError::InvalidManifest(e) => write!(f, "Invalid manifest: {}", e),
             ProjectError::Other(msg) => write!(f, "{}", msg),
-            ProjectError::HclError(e) => write!(f, "HCL: {:?}", e),
+            ProjectError::HclError(e) => write!(
+                f,
+                "Error parsing HCL: {}{}",
+                e.to_owned(),
+                e.to_owned()
+                    .location()
+                    .map(|l| format!(" at {}:{}", l.line, l.col))
+                    .unwrap_or_default()
+            ),
         }
     }
 }

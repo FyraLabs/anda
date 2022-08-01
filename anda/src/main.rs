@@ -10,6 +10,7 @@ mod build;
 mod config;
 mod error;
 mod util;
+mod container;
 
 use backend::BackendCommand;
 
@@ -35,19 +36,6 @@ enum BuildBackend {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Install a package
-    Install {
-        /// Packages to be installed
-        #[clap(required = true)]
-        packages: Vec<String>,
-    },
-
-    /// Remove a package
-    Remove {
-        /// Packages to be removed
-        #[clap(required = true)]
-        packages: Vec<String>,
-    },
 
     /// Build an Andaman project
     Build {
@@ -66,6 +54,10 @@ enum Command {
         /// Can be specified multiple times.
         #[clap(short, long, value_name = "PROJECT")]
         projects: Vec<String>,
+
+        /// Scope of the project to be run.
+        #[clap(short, long, value_name = "SCOPE")]
+        scope: Option<String>,
     },
     /// Subcommand for interacting with the build system
     Backend {
@@ -99,18 +91,11 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Install { packages } => {
-            println!("Installing {}", packages.join(", "));
-        }
-
-        Command::Remove { packages } => {
-            println!("Removing {}", packages.join(", "));
-        }
-
         Command::Build {
             path,
             workdir,
             projects,
+            scope
         } => {
             if let Ok(url) = reqwest::Url::parse(&path) {
                 info!("path is a URL, calling downloader");
@@ -149,13 +134,26 @@ async fn main() -> Result<()> {
                     anyhow::bail!("path is not a valid build source! Please either use an andasrc tarball or a valid anda project directory.");
                 }
             } else if path.is_dir() {
-                build::ProjectBuilder::new(path)
-                    .build(projects)
-                    .await
-                    .map_err(|e| {
-                        error!("{}", e);
-                        anyhow!("{}", e)
-                    })?;
+
+                if let Some(scope) = scope {
+                    build::ProjectBuilder::new(path)
+                        .build_in_scope(&scope)
+                        .await
+                        .map_err(|e| {
+                            error!("{}", e);
+                            anyhow!("{}", e)
+                        })?;
+                        // cargo run --bin anda build -s anda::
+                } else {
+                    build::ProjectBuilder::new(path)
+                        .build(projects)
+                        .await
+                        .map_err(|e| {
+                            error!("{}", e);
+                            anyhow!("{}", e)
+                        })?;
+                }
+
             }
         }
 

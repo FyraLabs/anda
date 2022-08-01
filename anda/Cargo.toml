@@ -15,7 +15,7 @@ license = "MIT"
 clap = { version = "3.2", features = ["derive"] }
 pretty_env_logger = "0.4.0"
 log = "~0.4.17"
-anyhow = "1.0.58"  # Add macro feature so rust-analyzer finally finds the macros
+anyhow = "1.0.59"  # Add macro feature so rust-analyzer finally finds the macros
 dotenv = "0.15.0"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_derive = "1.0.139"
@@ -30,7 +30,6 @@ uuid = { version = "1.1.2", features = ["serde"] }
 chrono = { version = "0.4.2", features = ["serde"] }
 reqwest = { version = "0.11.11", features = ["multipart", "json", "stream"] }
 tabwriter = "1.2.1"  # tabwriter for pretty printing tables
-runas = "0.2.1"
 mime_guess = "2.0.4"
 proc-macro2 = "1.0.40"
 async-compression = { version = "0.3.14", features = ["flate2", "tokio", "gzip"] }
@@ -44,6 +43,9 @@ hcl-rs = "0.6.4"
 owo-colors = "3"
 execute = "0.2.11"
 solvent = "0.8.3"
+bollard = { version = "0.13.0", features = ["chrono"] }
+crossterm = "0.24.0"
+regex = "1.6.0"
 
 
 [package.metadata.rpm]

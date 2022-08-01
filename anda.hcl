@@ -33,8 +33,8 @@ project "anda" {
         stage "build" {
             commands = [
                 "echo 'rollback'"
-                ]
             ]
+
         }
     }
 
@@ -43,29 +43,44 @@ project "anda" {
     script {
         stage "build" {
             commands = [
-                "echo 'build command here'"
+                "echo 'build command here'",
+                "echo $TEST"
+            ]
+        }
+
+        stage "test" {
+            depends = ["build"]
+            commands = [
+                "echo 'test command here'",
+                "echo $TEST"
             ]
         }
     }
 
     /* docker {
         image "anda/anda" {
-            version = "latest"
+            tag_latest = true
+            version = "$COMMIT_ID"
+            workdir = "."
+        }
+        image "test" {
+            tag_latest = true
+            version = "$COMMIT_ID"
             workdir = "."
         }
     } */
 
     rollback {
-        stage "fails" {
+        stage "build" {
             commands = [
                 "echo 'rollback command here'"
             ]
         }
     }
 
-    /* rpmbuild {
+    rpmbuild {
         spec = "./anda.spec"
-    } */
+    }
     post_script {
         commands = [
             "echo 'world'"
