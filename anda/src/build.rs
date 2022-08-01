@@ -193,7 +193,7 @@ impl ProjectBuilder {
         println!(":: {}", "Running pre-build script...".yellow());
         for command in &project.pre_script.as_ref().unwrap().commands {
             println!("$ {}", command.black());
-            let command = execute::command(command)
+            let command = execute::shell(command)
                 .execute_output()
                 .map_err(BuilderError::Script)?;
 
@@ -210,7 +210,7 @@ impl ProjectBuilder {
         println!(":: {}", "Running post-build script...".yellow());
         for command in &project.post_script.as_ref().unwrap().commands {
             println!("$ {}", command.black());
-            let command = execute::command(command)
+            let command = execute::shell(command)
                 .execute_output()
                 .map_err(BuilderError::Script)?;
 
@@ -235,7 +235,7 @@ impl ProjectBuilder {
         for command in &stage.commands {
             println!("$ {}", command.black());
 
-            let command = execute::command(command)
+            let command = execute::shell(command)
                 .execute_output()
                 .map_err(BuilderError::Script)?;
 
@@ -270,7 +270,7 @@ impl ProjectBuilder {
                 for command in &stage.commands {
                     println!("$ {}", command.black());
 
-                    let command = execute::command(command)
+                    let command = execute::shell(command)
                         .execute_output()
                         .map_err(BuilderError::Script)?;
 
