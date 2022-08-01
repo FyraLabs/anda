@@ -11,7 +11,19 @@ pub struct AndaConfig {
     pub project: HashMap<String, Project>,
 }
 
-#[derive(Deserialize)]
+impl AndaConfig {
+    pub fn find_key_for_value(&self, value: &Project) -> Option<&String> {
+        self.project.iter().find_map(|(key, val)| {
+            if val == value {
+                Some(key)
+            } else {
+                None
+            }
+        })
+    }
+}
+
+#[derive(Deserialize, PartialEq, Eq)]
 pub struct Project {
     pub rpmbuild: Option<RpmBuild>,
     pub docker: Option<Docker>,
@@ -20,7 +32,7 @@ pub struct Project {
     pub post_script: Option<PostScript>,
     pub rollback: Option<Script>,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, PartialEq, Eq)]
 pub struct Script {
     pub stage: HashMap<String, Stage>,
 }
@@ -46,27 +58,27 @@ pub struct Stage {
     pub commands: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Eq, PartialEq, Hash)]
 pub struct PreScript {
     pub commands: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Eq, PartialEq, Hash)]
 pub struct PostScript {
     pub commands: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, PartialEq, Eq)]
 pub struct RpmBuild {
     pub spec: PathBuf,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, PartialEq, Eq)]
 pub struct Docker {
     pub image: HashMap<String, DockerImage>, // tag, file
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, PartialEq, Eq)]
 pub struct DockerImage {
     pub workdir: PathBuf,
     pub version: Option<String>,

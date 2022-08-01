@@ -1,3 +1,6 @@
+//! Utility functions for Andaman.
+
+
 use crate::error::PackerError;
 use anyhow::Result;
 use async_zip::read::seek::ZipFileReader;
@@ -12,6 +15,24 @@ use std::{fs, io};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
+
+
+/// Returns the current commit hash of the given repository located at the given path.
+pub fn current_commit(path: &Path) -> Option<String> {
+    let repo = Repository::open(path).ok()?;
+    let head = repo.head().ok()?;
+    let commit = head.peel_to_commit().ok()?;
+    Some(commit.id().to_string())
+}
+
+pub fn branch_name(path: &Path) -> Option<String> {
+    let repo = Repository::open(path).ok()?;
+    let head = repo.head().ok()?;
+    let name = head.shorthand()?;
+    Some(name.to_string())
+}
+/// Project packer object.
+/// Deals with `andasrc.zip` files.
 pub struct ProjectPacker;
 
 impl ProjectPacker {

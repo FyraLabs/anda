@@ -16,7 +16,7 @@ use std::{
 use tokio::{fs::File, io::AsyncReadExt};
 use walkdir::WalkDir;
 
-use crate::{config::Project, error::BuilderError};
+use crate::{config::{Project, AndaConfig}, error::BuilderError, util};
 
 trait ExitOkPolyfill {
     fn exit_ok_polyfilled(&self) -> Result<()>;
@@ -131,10 +131,27 @@ impl ProjectBuilder {
         builddep_exit.exit_ok_polyfilled()?;
         Ok(())
     }
+    /// Prepares environment variables for the build process.
+    pub fn prepare_env(&self, project: &Project) -> Result<(), BuilderError> {
+        let config = crate::config::load_config(&self.root)?;
+        if let Some(cid) = util::current_commit(&self.root) {
+            env::set_var("COMMIT_ID", cid);
+        }
+
+        if let Some(branch) = util::branch_name(&self.root) {
+            env::set_var("BRANCH", branch);
+        }
+
+        if let Some(project_name) = config.find_key_for_value(project) {
+            env::set_var("PROJECT_NAME", project_name);
+        };
+
+        Ok(())
+    }
 
     pub async fn build_rpm(&self, project: &Project) -> Result<(), BuilderError> {
         let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
-
+        self.prepare_env(project)?;
         // if env var `ANDA_SKIP_BUILDDEP` is set to 1, we skip the builddep step
         if env::var("ANDA_SKIP_BUILDDEP").unwrap_or_default() != "1" {
             self.dnf_builddep(project)?;
@@ -191,6 +208,7 @@ impl ProjectBuilder {
 
     pub fn run_pre_script(&self, project: &Project) -> Result<(), BuilderError> {
         println!(":: {}", "Running pre-build script...".yellow());
+        self.prepare_env(project)?;
         for command in &project.pre_script.as_ref().unwrap().commands {
             println!("$ {}", command.black());
             let command = execute::shell(command)
@@ -208,6 +226,7 @@ impl ProjectBuilder {
 
     pub fn run_post_script(&self, project: &Project) -> Result<(), BuilderError> {
         println!(":: {}", "Running post-build script...".yellow());
+        self.prepare_env(project)?;
         for command in &project.post_script.as_ref().unwrap().commands {
             println!("$ {}", command.black());
             let command = execute::shell(command)
@@ -252,6 +271,7 @@ impl ProjectBuilder {
         project: &Project,
         stage: &crate::config::Stage,
     ) -> Result<(), BuilderError> {
+        self.prepare_env(project)?;
         if project.rollback.is_some() {
             let rollback = project.rollback.as_ref().unwrap();
             let name = project
@@ -286,6 +306,7 @@ impl ProjectBuilder {
 
     pub fn run_build_script(&self, project: &Project) -> Result<(), BuilderError> {
         // we should turn this into a tuple of (stage, stage_name)
+        self.prepare_env(project)?;
         let mut depgraph: DepGraph<&crate::config::Stage> = DepGraph::new();
         println!(":: {}", "Running build script...".yellow());
         let script = project.script.as_ref().unwrap();
@@ -332,21 +353,30 @@ impl ProjectBuilder {
     }
 
     pub fn build_docker(&self, project: &Project) -> Result<(), BuilderError> {
+        println!(":: {}", "Building docker image...".yellow());
+        self.prepare_env(project)?;
         for (tag, image) in &project.docker.as_ref().unwrap().image {
             let version = image
                 .version
                 .as_ref()
                 .map(|s| format!(":{}", s))
                 .unwrap_or_else(String::new);
-            let status = Command::new("docker")
-                .arg("build")
-                .arg("-t")
-                .arg(format!("{}{}", tag, version))
-                .arg(&image.workdir)
-                .current_dir(&self.root)
-                .status();
 
-            if !status.unwrap().success() {
+            let tag_string = format!("{}{}", tag, version);
+
+            println!(" -> {} `{}`", "Building docker image".yellow(), tag_string.white().italic());
+            let command = format!(
+                "docker build -t {} {}",
+                tag_string,
+                &image.workdir.to_str().unwrap()
+            );
+
+            println!("$ {}", command.black());
+
+            let status = execute::shell(command)
+                .execute_output()?
+                .status;
+            if !status.success() {
                 return Err(BuilderError::Command("docker build failed".to_string()));
             }
         }
