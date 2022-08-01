@@ -33,6 +33,7 @@ pub struct Project {
     pub script: Option<Script>,
     pub post_script: Option<PostScript>,
     pub rollback: Option<Script>,
+    pub env: Option<Vec<String>>
 }
 #[derive(Deserialize, PartialEq, Eq)]
 pub struct Script {

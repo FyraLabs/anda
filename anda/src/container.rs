@@ -5,6 +5,7 @@ use bollard::image::BuildImageOptions;
 use bollard::image::CreateImageOptions;
 use bollard::service::HostConfig;
 use bollard::Docker;
+use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
@@ -124,6 +125,9 @@ impl Container {
     }
 
     pub async fn run_cmd(&self, command: Vec<&str>) -> Result<&Container> {
+
+        println!("{}", format!("$ {}", command.join(" ")).black());
+
         let exec = self
             .hdl
             .docker
@@ -143,7 +147,7 @@ impl Container {
             self.hdl.docker.start_exec(&exec.id, None).await?
         {
             while let Some(Ok(msg)) = output.next().await {
-                print!("{}", msg);
+                print!("{} {}","[DOCKER]".blue(), msg);
                 // TODO will improve appearance later
             }
         } else {
@@ -164,7 +168,10 @@ impl Container {
 
     //? https://github.com/fussybeaver/bollard/blob/master/examples/exec.rs
     pub async fn run_cmds(&self, commands: Vec<&str>) -> Result<&Container> {
+
+
         for command in commands {
+            println!("{}", format!("$ {}", command).black());
             let exec = self
                 .hdl
                 .docker
@@ -186,7 +193,7 @@ impl Container {
                 self.hdl.docker.start_exec(&exec.id, None).await?
             {
                 while let Some(Ok(msg)) = output.next().await {
-                    print!("{}", msg);
+                    print!("{} {}","[DOCKER]".blue(), msg);
                     // TODO will improve appearance later
                 }
             } else {

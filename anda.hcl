@@ -44,7 +44,10 @@ project "anda" {
         stage "build" {
             commands = [
                 "echo 'build command here'",
-                "echo $TEST"
+                "echo $TEST",
+                "echo Branch: \"$BRANCH\"",
+                "echo 'Project: $PROJECT_NAME'",
+                "echo 'Commit ID: $COMMIT_ID'",
             ]
         }
 
@@ -87,6 +90,9 @@ project "anda" {
         ]
     }
 
+    env = [
+        "TEST=test"
+    ]
 
     // if scripts are defined and type is docker or rpm, the scripts will be executed
     // before the package is built.

@@ -139,28 +139,39 @@ impl ProjectBuilder {
         Ok(())
     }
     /// Prepares environment variables for the build process.
-    pub fn prepare_env(&self, project: &Project) -> Result<(), BuilderError> {
+    pub fn prepare_env(&self, project: &Project) -> Result<Vec<String>, BuilderError> {
         let config = crate::config::load_config(&self.root)?;
+
+        let mut envlist = Vec::new();
+        if let Some(env) = project.env.as_ref() {
+            for key in env {
+                envlist.push(key.to_owned())
+            }
+        }
+
         if let Some(cid) = util::current_commit(&self.root) {
-            env::set_var("COMMIT_ID", cid);
+            //env::set_var("COMMIT_ID", cid);
+            //println!("COMMIT_ID: {}", cid);
+            envlist.push(format!("COMMIT_ID={}", cid));
         }
 
         if let Some(branch) = util::branch_name(&self.root) {
-            env::set_var("BRANCH", branch);
+            //env::set_var("BRANCH", branch);
+            envlist.push(format!("BRANCH={}", branch));
         }
 
         if let Some(project_name) = config.find_key_for_value(project) {
-            env::set_var("PROJECT_NAME", project_name);
+            //env::set_var("PROJECT_NAME", project_name);
+            envlist.push(format!("PROJECT_NAME={}", project_name));
         };
 
-        Ok(())
+        Ok(envlist)
     }
 
     pub async fn build_rpm(&self, project: &Project) -> Result<(), BuilderError> {
         let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
-        self.prepare_env(project)?;
         println!(":: {}", "Building RPMs".yellow());
-        self.contain("rpm")
+        self.contain("rpm", project)
             .await?
             .run_cmd(vec![
                 "sudo",
@@ -209,7 +220,6 @@ impl ProjectBuilder {
 
     pub fn run_pre_script(&self, project: &Project) -> Result<(), BuilderError> {
         println!(":: {}", "Running pre-build script...".yellow());
-        self.prepare_env(project)?;
         for command in &project.pre_script.as_ref().unwrap().commands {
             println!("$ {}", command.black());
             let command = execute::shell(command)
@@ -227,7 +237,6 @@ impl ProjectBuilder {
 
     pub fn run_post_script(&self, project: &Project) -> Result<(), BuilderError> {
         println!(":: {}", "Running post-build script...".yellow());
-        self.prepare_env(project)?;
         for command in &project.post_script.as_ref().unwrap().commands {
             println!("$ {}", command.black());
             let command = execute::shell(command)
@@ -243,7 +252,13 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub async fn contain(&self, name: &str) -> Result<Container, anyhow::Error> {
+    pub async fn contain(&self, name: &str, project: &Project) -> Result<Container, BuilderError> {
+
+        //let config = crate::config::load_config(&self.root)?;
+
+
+        let envs = self.prepare_env(project)?;
+
         let conhdl = ContainerHdl::new();
         let cwd = self.root.canonicalize()?.to_str().unwrap().to_owned();
 
@@ -258,15 +273,19 @@ impl ProjectBuilder {
             tty: Some(true),
             working_dir: Some(cwd),
             host_config: Some(hostconf),
+            env: Some(envs),
             ..Default::default()
         };
-        Container::new(conhdl, Some(cfg)).await?.start().await
+        let c = Container::new(conhdl, Some(cfg)).await?.start().await;
+
+        c.map_err(|e| BuilderError::Command(e.to_string()))
     }
 
     pub async fn run_stage(
         &self,
         stage: &crate::config::Stage,
         stage_name: &String,
+        project: &Project,
     ) -> Result<(), BuilderError> {
         if !stage_name.eq("ANDA_UNTITLED_FINAL") {
             println!(
@@ -276,7 +295,7 @@ impl ProjectBuilder {
             );
         }
 
-        self.contain("stage")
+        self.contain("stage", project)
             .await?
             .run_cmds(stage.commands.iter().map(|c| c.as_str()).collect())
             .await?
@@ -307,7 +326,7 @@ impl ProjectBuilder {
                     name.white().italic()
                 );
                 match self
-                    .contain("rollback")
+                    .contain("rollback", project)
                     .await?
                     .run_cmds(stage.commands.iter().map(|c| c.as_str()).collect())
                     .await
@@ -376,6 +395,7 @@ impl ProjectBuilder {
                             script
                                 .find_key_for_value(stage)
                                 .unwrap_or(&"ANDA_UNTITLED_FINAL".to_string()),
+                            project,
                         )
                         .await;
                     if result.is_err() {
