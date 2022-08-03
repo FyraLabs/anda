@@ -13,7 +13,6 @@ pub struct AndaConfig {
 }
 
 impl AndaConfig {
-
     pub fn find_key_for_value(&self, value: &Project) -> Option<&String> {
         self.project.iter().find_map(|(key, val)| {
             if val == value {
@@ -33,7 +32,7 @@ pub struct Project {
     pub script: Option<Script>,
     pub post_script: Option<PostScript>,
     pub rollback: Option<Script>,
-    pub env: Option<Vec<String>>
+    pub env: Option<Vec<String>>,
 }
 #[derive(Deserialize, PartialEq, Eq)]
 pub struct Script {
@@ -130,7 +129,7 @@ pub fn check_config(config: AndaConfig) -> Result<AndaConfig, ProjectError> {
             }
 
             for (tag, image) in &docker.image {
-                if image.dockerfile.is_none() && image.import.is_none(){
+                if image.dockerfile.is_none() && image.import.is_none() {
                     errors.push(ProjectError::InvalidManifest(format!(
                         "project {} has no dockerfile or import for image {}",
                         key, tag

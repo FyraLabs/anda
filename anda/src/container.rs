@@ -91,10 +91,7 @@ impl ContainerHdl {
 }
 
 impl Container {
-    pub async fn new(
-        mut hdl: ContainerHdl,
-        config: Option<Config<String>>,
-    ) -> Result<Self> {
+    pub async fn new(mut hdl: ContainerHdl, config: Option<Config<String>>) -> Result<Self> {
         if let Some(config) = config {
             hdl.config = config;
         }
@@ -125,7 +122,6 @@ impl Container {
     }
 
     pub async fn run_cmd(&self, command: Vec<&str>) -> Result<&Container> {
-
         println!("{}", format!("$ {}", command.join(" ")).black());
 
         let exec = self
@@ -147,7 +143,7 @@ impl Container {
             self.hdl.docker.start_exec(&exec.id, None).await?
         {
             while let Some(Ok(msg)) = output.next().await {
-                print!("{} {}","[DOCKER]".blue(), msg);
+                print!("{} {}", "[DOCKER]".blue(), msg);
                 // TODO will improve appearance later
             }
         } else {
@@ -168,8 +164,6 @@ impl Container {
 
     //? https://github.com/fussybeaver/bollard/blob/master/examples/exec.rs
     pub async fn run_cmds(&self, commands: Vec<&str>) -> Result<&Container> {
-
-
         for command in commands {
             println!("{}", format!("$ {}", command).black());
             let exec = self
@@ -193,7 +187,7 @@ impl Container {
                 self.hdl.docker.start_exec(&exec.id, None).await?
             {
                 while let Some(Ok(msg)) = output.next().await {
-                    print!("{} {}","[DOCKER]".blue(), msg);
+                    print!("{} {}", "[DOCKER]".blue(), msg);
                     // TODO will improve appearance later
                 }
             } else {

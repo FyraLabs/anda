@@ -253,9 +253,7 @@ impl ProjectBuilder {
     }
 
     pub async fn contain(&self, name: &str, project: &Project) -> Result<Container, BuilderError> {
-
         //let config = crate::config::load_config(&self.root)?;
-
 
         let envs = self.prepare_env(project)?;
 

@@ -1,6 +1,5 @@
 //! Utility functions for Andaman.
 
-
 use crate::error::PackerError;
 use anyhow::Result;
 use async_zip::read::seek::ZipFileReader;
@@ -15,7 +14,6 @@ use std::{fs, io};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
-
 
 /// Returns the current commit hash of the given repository located at the given path.
 pub fn current_commit(path: &Path) -> Option<String> {

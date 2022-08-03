@@ -8,9 +8,9 @@ mod api;
 mod backend;
 mod build;
 mod config;
+mod container;
 mod error;
 mod util;
-mod container;
 
 use backend::BackendCommand;
 
@@ -36,7 +36,6 @@ enum BuildBackend {
 
 #[derive(Subcommand)]
 enum Command {
-
     /// Build an Andaman project
     Build {
         /// Path to the project
@@ -95,7 +94,7 @@ async fn main() -> Result<()> {
             path,
             workdir,
             projects,
-            scope
+            scope,
         } => {
             if let Ok(url) = reqwest::Url::parse(&path) {
                 info!("path is a URL, calling downloader");
@@ -134,7 +133,6 @@ async fn main() -> Result<()> {
                     anyhow::bail!("path is not a valid build source! Please either use an andasrc tarball or a valid anda project directory.");
                 }
             } else if path.is_dir() {
-
                 if let Some(scope) = scope {
                     build::ProjectBuilder::new(path)
                         .build_in_scope(&scope)
@@ -143,7 +141,7 @@ async fn main() -> Result<()> {
                             error!("{}", e);
                             anyhow!("{}", e)
                         })?;
-                        // cargo run --bin anda build -s anda::
+                    // cargo run --bin anda build -s anda::
                 } else {
                     build::ProjectBuilder::new(path)
                         .build(projects)
@@ -153,7 +151,6 @@ async fn main() -> Result<()> {
                             anyhow!("{}", e)
                         })?;
                 }
-
             }
         }
 
