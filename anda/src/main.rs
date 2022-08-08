@@ -1,3 +1,5 @@
+#![deny(rust_2018_idioms)]
+
 use anyhow::{anyhow, Result};
 use clap::{AppSettings, ArgEnum, Parser, Subcommand};
 use log::{debug, error, info};

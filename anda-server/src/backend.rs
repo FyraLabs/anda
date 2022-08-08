@@ -557,6 +557,26 @@ impl Build {
     }
 }
 
+
+pub struct Target {
+    pub id: Uuid,
+    pub name: String,
+    pub image: Option<String>,
+    pub arch: String,
+}
+
+impl From<crate::db_object::Target> for Target {
+    fn from(target: crate::db_object::Target) -> Self {
+        Self {
+            id: target.id,
+            name: target.name,
+            image: target.image,
+            arch: target.arch,
+        }
+    }
+}
+
+
 // Artifact API
 // #[derive(Debug, Clone)]
 #[cfg(test)]

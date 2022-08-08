@@ -6,10 +6,11 @@
 
 use anyhow::{Ok, Result};
 use chrono::{DateTime, Utc};
-use reqwest::{multipart::Form, Client};
+use reqwest::{multipart::{Form, self}, Client};
 use serde::{Deserialize, Serialize};
+use tokio::io::AsyncReadExt;
 
-use std::env;
+use std::{env, path::PathBuf};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -104,6 +105,25 @@ impl AndaBackend {
 
         let resp = self.client.post(&url).multipart(form).send().await?;
 
+        let build: Build = resp.json().await?;
+        Ok(build)
+    }
+
+    pub async fn upload_build(&self,target_id: Uuid, packfile_path: &PathBuf) -> Result<Build> {
+        let url = format!("{}/builds", self.url);
+
+        let mut buf = Vec::new();
+
+        tokio::fs::File::open(packfile_path).await?.read_to_end(&mut buf).await?;
+
+        let file_part = multipart::Part::bytes(buf)
+            .file_name(packfile_path.file_name().unwrap().to_str().unwrap().to_owned());
+        let form = Form::new()
+            .percent_encode_noop()
+            .text("target_id", target_id.to_string())
+            .part("src_file", file_part);
+
+        let resp = self.client.post(&url).multipart(form).send().await?;
         let build: Build = resp.json().await?;
         Ok(build)
     }

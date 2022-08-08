@@ -5,9 +5,11 @@ use bollard::image::BuildImageOptions;
 use bollard::image::CreateImageOptions;
 use bollard::service::HostConfig;
 use bollard::Docker;
+use buildkit_llb::{prelude::{MultiOwnedOutput, source::ImageSource, fs::SequenceOperation, Command as LLBCommand, *}, utils::{OperationOutput, OutputIdx, OwnOutputIdx}};
+//use buildkit_llb::prelude::*;
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use std::env;
 use tokio_stream::StreamExt;
 
@@ -205,6 +207,47 @@ impl Container {
             }
         }
         Ok(self.to_owned())
+    }
+}
+
+pub struct Buildkit;
+
+impl Buildkit {
+    pub fn new() -> Buildkit {
+        Self
+    }
+
+    fn image() -> ImageSource {
+        let builder_image = Source::image("library/alpine:latest")
+            .custom_name("Using alpine:latest as a builder");
+        builder_image
+    }
+    fn build_command(image: &ImageSource) -> Arc<LLBCommand<'_>> {
+        LLBCommand::run("/bin/sh")
+                .args(&["-c", "echo 'test string 5' > /out/file0"])
+                .custom_name("create a dummy file")
+                .mount(Mount::ReadOnlyLayer(image.output(), "/"))
+                .mount(Mount::Scratch(OutputIdx(0), "/out"))
+                .ref_counted()
+    }
+
+    fn build_graph(command: Arc<LLBCommand<'static>>) -> OperationOutput<'static> {
+        let fs: SequenceOperation<'static> = {
+            FileSystem::sequence()
+                .custom_name("do multiple file system manipulations")
+                .append(
+                    FileSystem::copy()
+                        .from(LayerPath::Other(command.output(0), "/file0"))
+                        .to(OutputIdx(0), LayerPath::Other(command.output(0), "/file1")),
+                )
+                .append(
+                    FileSystem::copy()
+                        .from(LayerPath::Own(OwnOutputIdx(0), "/file0"))
+                        .to(OutputIdx(1), LayerPath::Own(OwnOutputIdx(0), "/file2")),
+                )
+        };
+
+        fs.ref_counted().output(1)
     }
 }
 

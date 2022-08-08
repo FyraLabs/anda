@@ -81,6 +81,7 @@ pub enum PackerError {
     Io(std::io::Error),
     //Other(String),
     Git(git2::Error),
+    Other(String)
 }
 
 impl Display for PackerError {
@@ -90,6 +91,7 @@ impl Display for PackerError {
             PackerError::Path(e) => write!(f, "Path: {}", e),
             PackerError::Io(e) => write!(f, "IO: {}", e),
             PackerError::Git(e) => write!(f, "Git: {}", e),
+            PackerError::Other(e) => write!(f, "{}", e),
         }
     }
 }
@@ -99,6 +101,12 @@ impl Display for PackerError {
 impl From<std::io::Error> for PackerError {
     fn from(err: std::io::Error) -> Self {
         PackerError::Io(err)
+    }
+}
+
+impl From<anyhow::Error> for PackerError {
+    fn from(err: anyhow::Error) -> Self {
+        PackerError::Other(err.to_string())
     }
 }
 

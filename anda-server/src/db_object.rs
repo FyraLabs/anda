@@ -400,9 +400,9 @@ pub struct Target {
 }
 
 impl Target {
-    pub fn new(name: String, image: Option<String>, arch: String) -> Self {
+    pub fn new(id: Uuid, name: String, image: Option<String>, arch: String) -> Self {
         Self {
-            id: Uuid::new_v4(),
+            id,
             name,
             image,
             arch,

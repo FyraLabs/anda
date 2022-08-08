@@ -8,6 +8,7 @@ use async_zip::Compression;
 use futures::stream::TryStreamExt;
 use git2::Repository;
 use log::{debug, info};
+use uuid::Uuid;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
@@ -248,4 +249,16 @@ impl ProjectPacker {
 
         Ok(())
     }
+}
+
+
+/// Packs the project and pushes it to the server
+pub async fn push_build(root: &PathBuf) -> Result<crate::api::Build, PackerError> {
+
+    let packfile = ProjectPacker::pack(root, None).await?;
+
+    let build_push = crate::api::AndaBackend::new(None)
+        .upload_build(Uuid::nil(), &packfile).await?;
+
+    todo!()
 }
