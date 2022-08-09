@@ -196,7 +196,7 @@ async fn main() -> Result<()> {
             }
         }
         Command::Buildx => {
-            let hash = HashMap::from([("FOO".to_string(), "BAR".to_string())]);
+            let hash = std::collections::BTreeMap::from([("FOO".to_string(), "BAR".to_string())]);
 
             let opts = container::BuildkitOptions {
                 env: Some(hash),

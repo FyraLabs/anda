@@ -7,14 +7,20 @@ use bollard::service::HostConfig;
 use bollard::Docker;
 use buildkit_llb::{
     prelude::{
-        fs::SequenceOperation, source::ImageSource, Command as LLBCommand, MultiOwnedOutput, *,
+        fs::SequenceOperation, source::{ImageSource, LocalSource}, Command as LLBCommand, MultiOwnedOutput, *,
     },
     utils::{OperationOutput, OutputIdx, OwnOutputIdx},
 };
 //use buildkit_llb::prelude::*;
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
-use std::{borrow::BorrowMut, env, io::BufRead, path::PathBuf, process::ExitStatus};
+use std::{
+    borrow::BorrowMut,
+    env,
+    io::{stdin, stdout, BufRead},
+    path::PathBuf,
+    process::ExitStatus, collections::BTreeMap,
+};
 use std::{collections::HashMap, sync::Arc};
 use tokio_stream::StreamExt;
 
@@ -129,7 +135,7 @@ impl Container {
     }
 
     pub async fn run_cmd(&self, command: Vec<&str>) -> Result<&Container> {
-        println!("{}", format!("$ {}", command.join(" ")).black());
+        eprintln!("{}", format!("$ {}", command.join(" ")).black());
 
         let exec = self
             .hdl
@@ -172,7 +178,7 @@ impl Container {
     //? https://github.com/fussybeaver/bollard/blob/master/examples/exec.rs
     pub async fn run_cmds(&self, commands: Vec<&str>) -> Result<&Container> {
         for command in commands {
-            println!("{}", format!("$ {}", command).black());
+            eprintln!("{}", format!("$ {}", command).black());
             let exec = self
                 .hdl
                 .docker
@@ -217,15 +223,17 @@ impl Container {
 
 #[derive(Default)]
 pub struct BuildkitOptions {
-    pub env: Option<HashMap<String, String>>,
+    pub env: Option<BTreeMap<String, String>>,
     pub cwd: Option<String>,
     pub progress: Option<String>,
     pub transfer_artifacts: Option<bool>,
 }
+
 pub struct Buildkit {
     image: Option<Arc<ImageSource>>,
     cmd: Option<Arc<Command<'static>>>,
     options: BuildkitOptions,
+    context: Option<OperationOutput<'static>>
 }
 
 impl Buildkit {
@@ -239,6 +247,7 @@ impl Buildkit {
             image: None,
             cmd: None,
             options: opts,
+            context: None,
         }
     }
 
@@ -246,6 +255,46 @@ impl Buildkit {
         if switch {
             self.options.transfer_artifacts = Some(true);
         }
+        self
+    }
+
+
+    pub fn context(mut self, ctx: LocalSource) -> Buildkit {
+        let mut context = ctx;
+
+        let dockerignore_path = PathBuf::from("./").join(".dockerignore");
+        if dockerignore_path.exists() {
+            // read dockerignore file
+            let dockerignore_file = std::fs::File::open(dockerignore_path).unwrap();
+            let dockerignore_file = std::io::BufReader::new(dockerignore_file);
+            let dockerignore_file = dockerignore_file.lines();
+            for line in dockerignore_file {
+                let line = line.unwrap();
+                if line.starts_with('#') {
+                    continue;
+                }
+                let line = line.trim();
+                if line.is_empty() {
+                    continue;
+                }
+                //let line = PathBuf::from("./").join(line);
+                context = context.add_exclude_pattern(line);
+            }
+        }
+
+        let context = context.ref_counted().output();
+
+        let fs: SequenceOperation<'_> = {
+            FileSystem::sequence()
+                .custom_name("Getting build context")
+                .append(
+                    FileSystem::copy()
+                        .from(LayerPath::Other(context, "/"))
+                        .to(OutputIdx(0), LayerPath::Scratch("/src")),
+                )
+        };
+        //fs.ref_counted().output(0);
+        self.context = Some(fs.ref_counted().output(0));
         self
     }
 
@@ -258,7 +307,7 @@ impl Buildkit {
         self
     }
 
-    pub fn command_args(&mut self, command: Vec<&str> ) -> &mut Buildkit {
+    pub fn command_args(&mut self, command: Vec<&str>) -> &mut Buildkit {
         // find dockerignore file
         let mut local = Source::local("context");
         let dockerignore_path = PathBuf::from("./").join(".dockerignore");
@@ -281,16 +330,15 @@ impl Buildkit {
             }
         }
 
-        let local = local.ref_counted();
-
+        //let local = local.ref_counted();
         if let Some(image) = &self.image {
             // split the first command
             let (arg1, argn) = command.split_first().unwrap();
-            println!("{}", format!("$ {}", arg1).black());
+            eprintln!("{}", format!("$ {}", arg1).black());
             let mut cmd = LLBCommand::run(arg1.to_owned())
                 .args(argn)
                 .cwd("/src")
-                .env_iter(self.options.env.as_ref().unwrap_or(&HashMap::new()));
+                .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
             if let Some(out) = &self.cmd {
                 cmd = cmd
                     //.mount(Mount::ReadOnlyLayer(image.output(), "/"))
@@ -304,7 +352,7 @@ impl Buildkit {
                 //TODO: Make this a list of shared caches so it's distro-agnostic
             }
             cmd = cmd
-                .mount(Mount::Layer(OutputIdx(2), local.output(), "/src"))
+                .mount(Mount::Layer(OutputIdx(2), self.context.as_ref().unwrap().to_owned(), "/src"))
                 .mount(Mount::SharedCache("/var/cache/dnf"));
 
             let cmd = cmd.ref_counted();
@@ -314,7 +362,6 @@ impl Buildkit {
         }
         self
     }
-
 
     pub fn command(&mut self, command: &str) -> &mut Buildkit {
         // find dockerignore file
@@ -341,12 +388,11 @@ impl Buildkit {
 
         let local = local.ref_counted();
 
-
         if let Some(image) = &self.image {
             let mut cmd = LLBCommand::run("/bin/sh")
                 .args(&["-c", command])
                 .cwd("/src")
-                .env_iter(self.options.env.as_ref().unwrap_or(&HashMap::new()));
+                .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
             if let Some(out) = &self.cmd {
                 cmd = cmd
                     //.mount(Mount::ReadOnlyLayer(image.output(), "/"))
@@ -368,7 +414,7 @@ impl Buildkit {
                 //TODO: Make this a list of shared caches so it's distro-agnostic
             }
             cmd = cmd
-                .mount(Mount::Layer(OutputIdx(2), local.output(), "/src"))
+                .mount(Mount::Layer(OutputIdx(2), self.context.as_ref().unwrap().to_owned(), "/src"))
                 .mount(Mount::SharedCache("/var/cache/dnf"));
 
             let cmd = cmd.ref_counted();
@@ -384,7 +430,7 @@ impl Buildkit {
             let mut cmd = LLBCommand::run("/bin/sh")
                 .args(&["-c", command])
                 .cwd("/src")
-                .env_iter(self.options.env.as_ref().unwrap_or(&HashMap::new()));
+                .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
             if let Some(out) = &self.cmd {
                 cmd = cmd
                     .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
@@ -405,6 +451,14 @@ impl Buildkit {
         self
     }
 
+    pub fn merge_outputs(&mut self, output: Buildkit) -> &mut Buildkit {
+            let cmd = LLBCommand::run("true")
+                .mount(Mount::Layer(OutputIdx(0), output.cmd.as_ref().unwrap().output(0), "/"))
+                .mount(Mount::Layer(OutputIdx(1), output.cmd.as_ref().unwrap().output(1), "/src/anda-build"));
+            let cmd = cmd.ref_counted();
+            self.cmd = Some(cmd);
+        self
+    }
     pub fn build_graph(&mut self) -> OperationOutput<'_> {
         if self.cmd.is_none() {
             panic!("No output specified");
@@ -424,7 +478,7 @@ impl Buildkit {
         fs.ref_counted().output(0)
     }
 
-    pub fn execute(&mut self) -> Result<ExitStatus> {
+    pub fn execute(&mut self) -> Result<()> {
         let mut extra_args = Vec::new();
 
         if let Some(opt) = &self.options.progress {
@@ -463,10 +517,13 @@ impl Buildkit {
         let stdin = cmd.stdin.as_mut().unwrap();
 
         Terminal::with(self.build_graph())
-            .write_definition(stdin)
+            .write_definition(cmd.stdin.as_mut().unwrap())
             .unwrap();
+        cmd.wait()?;
 
-        Ok(cmd.wait()?)
+        //Ok(cmd.wait()?)
+
+        Ok(())
     }
 }
 

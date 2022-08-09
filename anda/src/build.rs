@@ -9,7 +9,7 @@ use reqwest::{multipart, ClientBuilder};
 use serde::Serialize;
 use solvent::DepGraph;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, BTreeMap},
     env,
     io::{BufRead, BufReader},
     path::PathBuf,
@@ -128,10 +128,10 @@ impl ProjectBuilder {
         Ok(())
     }
     /// Prepares environment variables for the build process.
-    pub fn _prepare_env(&self, project: &Project) -> Result<HashMap<String, String>, BuilderError> {
+    pub fn _prepare_env(&self, project: &Project) -> Result<BTreeMap<String, String>, BuilderError> {
         let config = crate::config::load_config(&self.root)?;
 
-        let mut envlist: HashMap<String, String> = HashMap::new();
+        let mut envlist: BTreeMap<String, String> = BTreeMap::new();
 
         if let Some(env) = project.env.as_ref() {
             for key in env {
@@ -188,7 +188,7 @@ impl ProjectBuilder {
 
     pub async fn build_rpm(&self, project: &Project) -> Result<(), BuilderError> {
         let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
-        println!(":: {}", "Building RPMs".yellow());
+        eprintln!(":: {}", "Building RPMs".yellow());
 
         let envlist = self._prepare_env(project)?;
 
@@ -268,9 +268,9 @@ impl ProjectBuilder {
     }
 
     pub fn run_pre_script(&self, project: &Project) -> Result<(), BuilderError> {
-        println!(":: {}", "Running pre-build script...".yellow());
+        eprintln!(":: {}", "Running pre-build script...".yellow());
         for command in &project.pre_script.as_ref().unwrap().commands {
-            println!("$ {}", command.black());
+            eprintln!("$ {}", command.black());
             let command = execute::shell(command)
                 .execute_output()
                 .map_err(BuilderError::Script)?;
@@ -280,14 +280,14 @@ impl ProjectBuilder {
                 return Err(BuilderError::Command("pre-script failed".to_string()));
             }
         }
-        println!("{}", "Pre-build script finished.".green());
+        eprintln!("{}", "Pre-build script finished.".green());
         Ok(())
     }
 
     pub fn run_post_script(&self, project: &Project) -> Result<(), BuilderError> {
-        println!(":: {}", "Running post-build script...".yellow());
+        eprintln!(":: {}", "Running post-build script...".yellow());
         for command in &project.post_script.as_ref().unwrap().commands {
-            println!("$ {}", command.black());
+            eprintln!("$ {}", command.black());
             let command = execute::shell(command)
                 .execute_output()
                 .map_err(BuilderError::Script)?;
@@ -297,7 +297,7 @@ impl ProjectBuilder {
                 return Err(BuilderError::Command("post-script failed".to_string()));
             }
         }
-        println!("{}", "Post-build script finished.".green());
+        eprintln!("{}", "Post-build script finished.".green());
         Ok(())
     }
 
@@ -335,7 +335,7 @@ impl ProjectBuilder {
         project: &Project,
     ) -> Result<(), BuilderError> {
         if !stage_name.eq("ANDA_UNTITLED_FINAL") {
-            println!(
+            eprintln!(
                 " -> {}: `{}`",
                 "Starting script stage".yellow(),
                 stage_name.white().italic()
@@ -353,7 +353,7 @@ impl ProjectBuilder {
             transfer_artifacts: Some(true),
             ..Default::default()
         };
-        let mut b = Buildkit::new(Some(opts)).image("fedora:latest");
+        let mut b = Buildkit::new(Some(opts)).image("fedora:latest").context(buildkit_llb::prelude::Source::local("context"));
 
 
         /* self.contain("stage", project)
@@ -366,6 +366,12 @@ impl ProjectBuilder {
         for command in &stage.commands {
             b.command(command);
         }
+
+        /* let (cmd1, cmdn) = &stage.commands.split_first().unwrap();
+        b.command(cmd1);
+        for command in cmdn.iter() {
+            b.command_nocontext(command.as_str());
+        } */
 
         b.execute()?;
         Ok(())
@@ -423,7 +429,7 @@ impl ProjectBuilder {
         // we should turn this into a tuple of (stage, stage_name)
         self.prepare_env(project)?;
         let mut depgraph: DepGraph<&crate::config::Stage> = DepGraph::new();
-        println!(":: {}", "Running build script...".yellow());
+        eprintln!(":: {}", "Running build script...".yellow());
         let script = project.script.as_ref().unwrap();
         for stage in script.stage.values() {
             let empty_vec: Vec<String> = Vec::new();
@@ -497,8 +503,8 @@ impl ProjectBuilder {
                     tag_string,
                     &image.workdir.to_str().unwrap()
                 );
-                println!("$ {}", command.black());
-                println!(
+                eprintln!("$ {}", command.black());
+                eprintln!(
                     " -> {} `{}`",
                     "Building docker image".yellow(),
                     tag_string.white().italic().to_string().to_owned()

@@ -1,5 +1,5 @@
-target/
-.pnpm/
-.git/
-*/node_modules
-anda-build/
+**/target
+**/.pnpm
+**/.git
+**/node_modules
+**/anda-build

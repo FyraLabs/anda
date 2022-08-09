@@ -54,7 +54,7 @@ impl Script {
     }
 }
 
-#[derive(Deserialize, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct Stage {
     pub depends: Option<Vec<String>>,
     pub commands: Vec<String>,
