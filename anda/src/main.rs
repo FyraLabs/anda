@@ -1,11 +1,11 @@
 #![deny(rust_2018_idioms)]
 
 use anyhow::{anyhow, Result};
-use buildkit_llb::prelude::{Terminal, MultiBorrowedOutput};
+use buildkit_llb::prelude::{MultiBorrowedOutput, Terminal};
 use clap::{AppSettings, ArgEnum, Parser, Subcommand};
 use log::{debug, error, info};
-use std::{fs, io::stdout, collections::HashMap};
 use std::path::PathBuf;
+use std::{collections::HashMap, fs, io::stdout};
 
 mod api;
 mod backend;
@@ -78,7 +78,7 @@ enum Command {
         #[clap(short, long, value_name = "ANDA_PACK_OUTPUT")]
         output: Option<String>,
     },
-    Buildx
+    Buildx,
 }
 
 #[tokio::main]
@@ -196,17 +196,13 @@ async fn main() -> Result<()> {
             }
         }
         Command::Buildx => {
-
-            let hash = HashMap::from([
-                ("FOO".to_string(), "BAR".to_string()),
-            ]);
+            let hash = HashMap::from([("FOO".to_string(), "BAR".to_string())]);
 
             let opts = container::BuildkitOptions {
                 env: Some(hash),
                 ..Default::default()
             };
-            let mut b = container::Buildkit::new(Some(opts));
-            b.image("fedora:latest");
+            let mut b = container::Buildkit::new(Some(opts)).image("alpine:latest");
             //b.command("sudo dnf install -y git");
             b.command("echo 'hello world' > /builddir/file0");
             //b.command("ls -la /src");

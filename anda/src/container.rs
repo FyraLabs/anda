@@ -220,6 +220,7 @@ pub struct BuildkitOptions {
     pub env: Option<HashMap<String, String>>,
     pub cwd: Option<String>,
     pub progress: Option<String>,
+    pub transfer_artifacts: Option<bool>,
 }
 pub struct Buildkit {
     image: Option<Arc<ImageSource>>,
@@ -241,7 +242,14 @@ impl Buildkit {
         }
     }
 
-    pub fn image(&mut self, image_name: &str) -> &mut Buildkit {
+    pub fn dependency_context(mut self, switch: bool) -> Buildkit {
+        if switch {
+            self.options.transfer_artifacts = Some(true);
+        }
+        self
+    }
+
+    pub fn image(mut self, image_name: &str) -> Buildkit {
         let img = Source::image("fedora:latest")
             .custom_name(format!("Using image {}", image_name))
             .ref_counted();
@@ -249,6 +257,64 @@ impl Buildkit {
         self.image = Some(img);
         self
     }
+
+    pub fn command_args(&mut self, command: Vec<&str> ) -> &mut Buildkit {
+        // find dockerignore file
+        let mut local = Source::local("context");
+        let dockerignore_path = PathBuf::from("./").join(".dockerignore");
+        if dockerignore_path.exists() {
+            // read dockerignore file
+            let dockerignore_file = std::fs::File::open(dockerignore_path).unwrap();
+            let dockerignore_file = std::io::BufReader::new(dockerignore_file);
+            let dockerignore_file = dockerignore_file.lines();
+            for line in dockerignore_file {
+                let line = line.unwrap();
+                if line.starts_with('#') {
+                    continue;
+                }
+                let line = line.trim();
+                if line.is_empty() {
+                    continue;
+                }
+                //let line = PathBuf::from("./").join(line);
+                local = local.add_exclude_pattern(line);
+            }
+        }
+
+        let local = local.ref_counted();
+
+        if let Some(image) = &self.image {
+            // split the first command
+            let (arg1, argn) = command.split_first().unwrap();
+            println!("{}", format!("$ {}", arg1).black());
+            let mut cmd = LLBCommand::run(arg1.to_owned())
+                .args(argn)
+                .cwd("/src")
+                .env_iter(self.options.env.as_ref().unwrap_or(&HashMap::new()));
+            if let Some(out) = &self.cmd {
+                cmd = cmd
+                    //.mount(Mount::ReadOnlyLayer(image.output(), "/"))
+                    .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
+                    .mount(Mount::Layer(OutputIdx(1), out.output(1), "/src/anda-build"))
+            } else {
+                cmd = cmd
+                    //.mount(Mount::ReadOnlyLayer(image.output(), "/"))
+                    .mount(Mount::Layer(OutputIdx(0), image.output(), "/"))
+                    .mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"));
+                //TODO: Make this a list of shared caches so it's distro-agnostic
+            }
+            cmd = cmd
+                .mount(Mount::Layer(OutputIdx(2), local.output(), "/src"))
+                .mount(Mount::SharedCache("/var/cache/dnf"));
+
+            let cmd = cmd.ref_counted();
+            self.cmd = Some(cmd);
+        } else {
+            panic!("No image specified");
+        }
+        self
+    }
+
 
     pub fn command(&mut self, command: &str) -> &mut Buildkit {
         // find dockerignore file
@@ -275,66 +341,66 @@ impl Buildkit {
 
         let local = local.ref_counted();
 
-        if let Some(image) = &self.image {
-            if let Some(cmd) = &self.cmd {
-                let cmd = LLBCommand::run("/bin/sh")
-                    .args(&["-c", command])
-                    //.mount(Mount::ReadOnlyLayer(image.output(), "/"))
-                    .mount(Mount::Layer(OutputIdx(0), cmd.output(0), "/"))
-                    .mount(Mount::Layer(OutputIdx(1), cmd.output(1), "/src/anda-build"))
-                    .mount(Mount::Layer(OutputIdx(2), local.output(), "/src"))
-                    .mount(Mount::SharedCache("/var/cache/dnf"))
-                    .cwd("/src")
-                    .env_iter(self.options.env.as_ref().unwrap_or(&HashMap::new()));
-                //.env("FOO", "BAR");
-                let cmd = cmd.ref_counted();
-                self.cmd = Some(cmd);
-            } else {
-                let cmd = LLBCommand::run("/bin/sh")
-                    .args(&["-c", command])
-                    //.mount(Mount::ReadOnlyLayer(image.output(), "/"))
-                    .mount(Mount::Layer(OutputIdx(0), image.output(), "/"))
-                    .mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"))
-                    .mount(Mount::Layer(OutputIdx(2), local.output(), "/src"))
-                    //TODO: Make this a list of shared caches so it's distro-agnostic
-                    .mount(Mount::SharedCache("/var/cache/dnf"))
-                    .cwd("/src")
-                    .env_iter(self.options.env.as_ref().unwrap_or(&HashMap::new()));
 
-                let cmd = cmd.ref_counted();
-                self.cmd = Some(cmd);
+        if let Some(image) = &self.image {
+            let mut cmd = LLBCommand::run("/bin/sh")
+                .args(&["-c", command])
+                .cwd("/src")
+                .env_iter(self.options.env.as_ref().unwrap_or(&HashMap::new()));
+            if let Some(out) = &self.cmd {
+                cmd = cmd
+                    //.mount(Mount::ReadOnlyLayer(image.output(), "/"))
+                    .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
+                    .mount(Mount::Layer(OutputIdx(1), out.output(1), "/src/anda-build"))
+            } else {
+                cmd = cmd
+                    //.mount(Mount::ReadOnlyLayer(image.output(), "/"))
+                    .mount(Mount::Layer(OutputIdx(0), image.output(), "/"));
+
+                    if let Some(switch) = self.options.transfer_artifacts {
+                        if switch {
+                            let art = Source::local("artifacts").ref_counted();
+                            cmd = cmd.mount(Mount::Layer(OutputIdx(1), art.output(), "/src/anda-build"));
+                        }
+                    } else {
+                        cmd = cmd.mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"));
+                    }
+                //TODO: Make this a list of shared caches so it's distro-agnostic
             }
+            cmd = cmd
+                .mount(Mount::Layer(OutputIdx(2), local.output(), "/src"))
+                .mount(Mount::SharedCache("/var/cache/dnf"));
+
+            let cmd = cmd.ref_counted();
+            self.cmd = Some(cmd);
+        } else {
+            panic!("No image specified");
         }
         self
     }
 
     pub fn command_nocontext(&mut self, command: &str) -> &mut Buildkit {
         if let Some(image) = &self.image {
-            if let Some(cmd) = &self.cmd {
-                let mut cmd = LLBCommand::run("/bin/sh")
-                    .args(&["-c", command])
-                    //.mount(Mount::ReadOnlyLayer(image.output(), "/"))
-                    .mount(Mount::Layer(OutputIdx(0), cmd.output(0), "/"))
-                    .mount(Mount::Layer(OutputIdx(1), cmd.output(1), "/src/anda-build"))
-                    .mount(Mount::SharedCache("/var/cache/dnf"))
-                    .cwd("/src")
-                    .env_iter(self.options.env.as_ref().unwrap_or(&HashMap::new()));
+            let mut cmd = LLBCommand::run("/bin/sh")
+                .args(&["-c", command])
+                .cwd("/src")
+                .env_iter(self.options.env.as_ref().unwrap_or(&HashMap::new()));
+            if let Some(out) = &self.cmd {
+                cmd = cmd
+                    .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
+                    .mount(Mount::Layer(OutputIdx(1), out.output(1), "/src/anda-build"))
                 //.env("FOO", "BAR");
-                let cmd = cmd.ref_counted();
-                self.cmd = Some(cmd);
             } else {
-                let cmd = LLBCommand::run("/bin/sh")
-                    .args(&["-c", command])
-                    //.mount(Mount::ReadOnlyLayer(image.output(), "/"))
+                cmd = cmd
                     .mount(Mount::Layer(OutputIdx(0), image.output(), "/"))
                     .mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"))
-                    .mount(Mount::SharedCache("/var/cache/dnf"))
-                    .cwd("/src")
-                    .env_iter(self.options.env.as_ref().unwrap_or(&HashMap::new()));
-
-                let cmd = cmd.ref_counted();
-                self.cmd = Some(cmd);
             }
+            cmd = cmd.mount(Mount::SharedCache("/var/cache/dnf"));
+
+            let cmd = cmd.ref_counted();
+            self.cmd = Some(cmd);
+        } else {
+            panic!("No image specified");
         }
         self
     }
@@ -344,7 +410,6 @@ impl Buildkit {
             panic!("No output specified");
         }
 
-        let local = Source::local(".");
         let output = self.cmd.take().unwrap().output(1);
         let fs: SequenceOperation<'_> = {
             FileSystem::sequence()
@@ -378,7 +443,12 @@ impl Buildkit {
                 }
             }
         };
-
+        if let Some(opt) = self.options.transfer_artifacts {
+            if opt {
+                extra_args.push("--local");
+                extra_args.push("artifacts=anda-build");
+            }
+        }
         let mut cmd = std::process::Command::new("buildctl")
             .arg("build")
             .arg("--output")

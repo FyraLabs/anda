@@ -196,34 +196,27 @@ impl ProjectBuilder {
             env: Some(envlist),
             ..Default::default()
         };
-        let mut b = Buildkit::new(Some(opts));
-        b.image("fedora:latest");
+        let mut b = Buildkit::new(Some(opts)).image("fedora:latest");
 
         b.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
         b.command_nocontext("sudo dnf install -y rpm-build dnf-plugins-core");
         b.command(&format!(
-            "cd /src && sudo dnf builddep -y {}",
+            "sudo dnf builddep -y {}",
             project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap()
         ));
-        let build_cmd = vec![
-            "cd /src &&",
+        b.command_args(vec![
             "rpmbuild",
             "-ba",
             project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
             "--define",
-            format!("\"_rpmdir {}\"", output_path).as_str(),
+            format!("_rpmdir {}", output_path).as_str(),
             "--define",
-            format!("\"_srcrpmdir {}/src\"", output_path).as_str(),
+            format!("_srcrpmdir {}/src", output_path).as_str(),
             "--define",
-            "\"_disable_source_fetch 0\"",
+            "_disable_source_fetch 0",
             "--define",
-            format!(
-                "\"_sourcedir {}\"",
-                "/src"
-            )
-            .as_str(),
-        ].join(" ");
-        b.command(&build_cmd);
+            format!("_sourcedir {}", "/src").as_str(),
+        ]);
 
         b.execute()?;
 
@@ -349,12 +342,32 @@ impl ProjectBuilder {
             );
         }
 
-        self.contain("stage", project)
+        if stage.commands.is_empty() {
+            return Ok(());
+        }
+
+        let envlist = self._prepare_env(project)?;
+
+        let opts = BuildkitOptions {
+            env: Some(envlist),
+            transfer_artifacts: Some(true),
+            ..Default::default()
+        };
+        let mut b = Buildkit::new(Some(opts)).image("fedora:latest");
+
+
+        /* self.contain("stage", project)
             .await?
             .run_cmds(stage.commands.iter().map(|c| c.as_str()).collect())
             .await?
             .finish()
-            .await?;
+            .await?; */
+
+        for command in &stage.commands {
+            b.command(command);
+        }
+
+        b.execute()?;
         Ok(())
     }
 

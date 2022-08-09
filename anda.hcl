@@ -46,8 +46,8 @@ project "anda" {
                 "echo 'build command here'",
                 "echo $TEST",
                 "echo Branch: \"$BRANCH\"",
-                "echo 'Project: $PROJECT_NAME'",
-                "echo 'Commit ID: $COMMIT_ID'",
+                "echo Project: $PROJECT_NAME",
+                "echo Commit ID: $COMMIT_ID",
             ]
         }
 
