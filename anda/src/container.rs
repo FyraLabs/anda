@@ -292,7 +292,7 @@ impl Buildkit {
                 .append(
                     FileSystem::copy()
                         .from(LayerPath::Other(context, "/"))
-                        .to(OutputIdx(0), LayerPath::Scratch("/src")),
+                        .to(OutputIdx(0), LayerPath::Scratch("/")),
                 )
         };
         //fs.ref_counted().output(0);
@@ -306,7 +306,7 @@ impl Buildkit {
                     FileSystem::sequence()
                         .custom_name("Getting artifact cache")
                         .append(
-                            FileSystem::mkdir(OutputIdx(0), LayerPath::Scratch("/src/anda-build")).make_parents(true),
+                            FileSystem::mkdir(OutputIdx(0), LayerPath::Scratch("/")).make_parents(true),
                         )
                         .append(
                             FileSystem::copy()

@@ -196,7 +196,7 @@ impl ProjectBuilder {
             env: Some(envlist),
             ..Default::default()
         };
-        let mut b = Buildkit::new(Some(opts)).image("fedora:latest");
+        let mut b = Buildkit::new(Some(opts)).image("fedora:latest").context(buildkit_llb::prelude::Source::local("context"));
 
         b.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
         b.command_nocontext("sudo dnf install -y rpm-build dnf-plugins-core");

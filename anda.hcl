@@ -56,7 +56,8 @@ project "anda" {
             depends = ["build"]
             commands = [
                 "echo 'test command here'",
-                "echo $TEST"
+                "echo $TEST",
+                "cat anda-build/build.txt",
             ]
         }
     }
