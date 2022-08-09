@@ -1,9 +1,10 @@
 #![deny(rust_2018_idioms)]
 
 use anyhow::{anyhow, Result};
+use buildkit_llb::prelude::{Terminal, MultiBorrowedOutput};
 use clap::{AppSettings, ArgEnum, Parser, Subcommand};
 use log::{debug, error, info};
-use std::fs;
+use std::{fs, io::stdout, collections::HashMap};
 use std::path::PathBuf;
 
 mod api;
@@ -77,6 +78,7 @@ enum Command {
         #[clap(short, long, value_name = "ANDA_PACK_OUTPUT")]
         output: Option<String>,
     },
+    Buildx
 }
 
 #[tokio::main]
@@ -192,6 +194,29 @@ async fn main() -> Result<()> {
 
                 println!("Packed to {}", p.display());
             }
+        }
+        Command::Buildx => {
+
+            let hash = HashMap::from([
+                ("FOO".to_string(), "BAR".to_string()),
+            ]);
+
+            let opts = container::BuildkitOptions {
+                env: Some(hash),
+                ..Default::default()
+            };
+            let mut b = container::Buildkit::new(Some(opts));
+            b.image("fedora:latest");
+            //b.command("sudo dnf install -y git");
+            b.command("echo 'hello world' > /builddir/file0");
+            //b.command("ls -la /src");
+            b.command("echo 'hello world' > /builddir/file1 && cat /builddir/file0");
+            b.command("echo 'hello world' > /builddir/file2 && cat /builddir/file1");
+            b.command("echo $FOO");
+
+            //Terminal::with(b.build_graph()).write_definition(std::io::stdout());
+
+            b.execute()?;
         }
     };
 

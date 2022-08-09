@@ -20,7 +20,7 @@ use walkdir::WalkDir;
 
 use crate::{
     config::{AndaConfig, Project},
-    container::{Container, ContainerHdl},
+    container::{Buildkit, BuildkitOptions, Container, ContainerHdl},
     error::{BuilderError, ProjectError},
     util,
 };
@@ -127,18 +127,36 @@ impl ProjectBuilder {
 
         Ok(())
     }
-
-    pub fn dnf_builddep(&self, project: &Project) -> Result<(), BuilderError> {
-        let spec_path = &project.rpmbuild.as_ref().unwrap().spec;
-
-        let builddep_exit = Command::new("sudo")
-            .args(&["dnf", "builddep", "-y", spec_path.to_str().unwrap()])
-            .status()?;
-
-        builddep_exit.exit_ok_polyfilled()?;
-        Ok(())
-    }
     /// Prepares environment variables for the build process.
+    pub fn _prepare_env(&self, project: &Project) -> Result<HashMap<String, String>, BuilderError> {
+        let config = crate::config::load_config(&self.root)?;
+
+        let mut envlist: HashMap<String, String> = HashMap::new();
+
+        if let Some(env) = project.env.as_ref() {
+            for key in env {
+                let (k, v) = key.split_once('=').unwrap();
+                envlist.insert(k.to_string(), v.to_string());
+            }
+        }
+        if let Some(cid) = util::current_commit(&self.root) {
+            //env::set_var("COMMIT_ID", cid);
+            //println!("COMMIT_ID: {}", cid);
+            envlist.insert("COMMIT_ID".to_owned(), cid);
+        };
+
+        if let Some(branch) = util::branch_name(&self.root) {
+            //env::set_var("BRANCH", branch);
+            envlist.insert("BRANCH".to_owned(), branch);
+        }
+
+        if let Some(project_name) = config.find_key_for_value(project) {
+            //env::set_var("PROJECT_NAME", project_name);
+            envlist.insert("PROJECT_NAME".to_owned(), project_name.to_owned());
+        };
+
+        Ok(envlist)
+    }
     pub fn prepare_env(&self, project: &Project) -> Result<Vec<String>, BuilderError> {
         let config = crate::config::load_config(&self.root)?;
 
@@ -171,50 +189,88 @@ impl ProjectBuilder {
     pub async fn build_rpm(&self, project: &Project) -> Result<(), BuilderError> {
         let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
         println!(":: {}", "Building RPMs".yellow());
-        self.contain("rpm", project)
-            .await?
-            .run_cmd(vec![
-                "sudo",
-                "dnf",
-                "install",
-                "-y",
-                "rpm-build",
-                "dnf-plugins-core",
-            ])
-            .await?
-            .run_cmd(vec![
-                "sudo",
-                "dnf",
-                "builddep",
-                "-y",
-                project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
-            ])
-            .await?
-            .run_cmd(vec![
-                "rpmbuild",
-                "-ba",
-                project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
-                "--define",
-                format!("_rpmdir {}", output_path).as_str(),
-                "--define",
-                format!("_srcrpmdir {}/src", output_path).as_str(),
-                "--define",
-                "_disable_source_fetch 0",
-                "--define",
-                format!(
-                    "_sourcedir {}",
-                    tokio::fs::canonicalize(&self.root)
-                        .await?
-                        .to_str()
-                        .ok_or_else(|| BuilderError::Other(
-                            "invalid unicode for path".to_string()
-                        ))?
-                )
-                .as_str(),
-            ])
-            .await?
-            .finish()
-            .await?;
+
+        let envlist = self._prepare_env(project)?;
+
+        let opts = BuildkitOptions {
+            env: Some(envlist),
+            ..Default::default()
+        };
+        let mut b = Buildkit::new(Some(opts));
+        b.image("fedora:latest");
+
+        b.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
+        b.command_nocontext("sudo dnf install -y rpm-build dnf-plugins-core");
+        b.command(&format!(
+            "cd /src && sudo dnf builddep -y {}",
+            project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap()
+        ));
+        let build_cmd = vec![
+            "cd /src &&",
+            "rpmbuild",
+            "-ba",
+            project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
+            "--define",
+            format!("\"_rpmdir {}\"", output_path).as_str(),
+            "--define",
+            format!("\"_srcrpmdir {}/src\"", output_path).as_str(),
+            "--define",
+            "\"_disable_source_fetch 0\"",
+            "--define",
+            format!(
+                "\"_sourcedir {}\"",
+                "/src"
+            )
+            .as_str(),
+        ].join(" ");
+        b.command(&build_cmd);
+
+        b.execute()?;
+
+        /* self.contain("rpm", project)
+        .await?
+        .run_cmd(vec![
+            "sudo",
+            "dnf",
+            "install",
+            "-y",
+            "rpm-build",
+            "dnf-plugins-core",
+        ])
+        .await?
+        .run_cmd(vec![
+            "sudo",
+            "dnf",
+            "builddep",
+            "-y",
+            project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
+        ])
+        .await?
+        .run_cmd(vec![
+            "rpmbuild",
+            "-ba",
+            project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
+            "--define",
+            format!("_rpmdir {}", output_path).as_str(),
+            "--define",
+            format!("_srcrpmdir {}/src", output_path).as_str(),
+            "--define",
+            "_disable_source_fetch 0",
+            "--define",
+            format!(
+                "_sourcedir {}",
+                tokio::fs::canonicalize(&self.root)
+                    .await?
+                    .to_str()
+                    .ok_or_else(|| BuilderError::Other(
+                        "invalid unicode for path".to_string()
+                    ))?
+            )
+            .as_str(),
+        ])
+        .await?
+        .finish()
+        .await?; */
         Ok(())
     }
 
