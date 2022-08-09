@@ -233,7 +233,8 @@ pub struct Buildkit {
     image: Option<Arc<ImageSource>>,
     cmd: Option<Arc<Command<'static>>>,
     options: BuildkitOptions,
-    context: Option<OperationOutput<'static>>
+    context: Option<OperationOutput<'static>>,
+    artifact_cache: Option<OperationOutput<'static>>,
 }
 
 impl Buildkit {
@@ -248,6 +249,7 @@ impl Buildkit {
             cmd: None,
             options: opts,
             context: None,
+            artifact_cache: None,
         }
     }
 
@@ -295,6 +297,26 @@ impl Buildkit {
         };
         //fs.ref_counted().output(0);
         self.context = Some(fs.ref_counted().output(0));
+
+
+        if let Some(switch) = self.options.transfer_artifacts {
+            let artifact_cache = Source::local("artifacts").ref_counted().output();
+            if switch {
+                let artifact_cache = {
+                    FileSystem::sequence()
+                        .custom_name("Getting artifact cache")
+                        .append(
+                            FileSystem::mkdir(OutputIdx(0), LayerPath::Scratch("/src/anda-build")).make_parents(true),
+                        )
+                        .append(
+                            FileSystem::copy()
+                                .from(LayerPath::Other(artifact_cache, "/"))
+                                .to(OutputIdx(1), LayerPath::Own(OwnOutputIdx(0), "/")),
+                        )
+                };
+                self.artifact_cache = Some(artifact_cache.ref_counted().output(1));
+            }
+        }
         self
     }
 
@@ -405,8 +427,8 @@ impl Buildkit {
 
                     if let Some(switch) = self.options.transfer_artifacts {
                         if switch {
-                            let art = Source::local("artifacts").ref_counted();
-                            cmd = cmd.mount(Mount::Layer(OutputIdx(1), art.output(), "/src/anda-build"));
+                            let art = self.artifact_cache.as_ref().unwrap();
+                            cmd = cmd.mount(Mount::Layer(OutputIdx(1), art.to_owned(), "/src/anda-build"));
                         }
                     } else {
                         cmd = cmd.mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"));
