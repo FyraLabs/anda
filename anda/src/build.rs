@@ -100,6 +100,23 @@ impl ArtifactUploader {
     }
 }
 
+
+#[derive(Clone)]
+pub struct BuilderOptions {
+    pub display_llb: bool,
+    pub config_location: PathBuf,
+    pub buildkit_log: crate::BuildkitLog,
+}
+#[allow(clippy::derivable_impls)]
+impl Default for BuilderOptions {
+    fn default() -> Self {
+        Self {
+            display_llb: false,
+            config_location: PathBuf::from("anda.hcl"),
+            buildkit_log: crate::BuildkitLog::Auto,
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct ProjectBuilder {
     root: PathBuf,
@@ -128,8 +145,8 @@ impl ProjectBuilder {
         Ok(())
     }
     /// Prepares environment variables for the build process.
-    pub fn _prepare_env(&self, project: &Project) -> Result<BTreeMap<String, String>, BuilderError> {
-        let config = crate::config::load_config(&self.root)?;
+    pub fn _prepare_env(&self, project: &Project, opts: &BuilderOptions) -> Result<BTreeMap<String, String>, BuilderError> {
+        let config = crate::config::load_config(&opts.config_location)?;
 
         let mut envlist: BTreeMap<String, String> = BTreeMap::new();
 
@@ -157,8 +174,8 @@ impl ProjectBuilder {
 
         Ok(envlist)
     }
-    pub fn prepare_env(&self, project: &Project) -> Result<Vec<String>, BuilderError> {
-        let config = crate::config::load_config(&self.root)?;
+    pub fn prepare_env(&self, project: &Project, opts: &BuilderOptions) -> Result<Vec<String>, BuilderError> {
+        let config = crate::config::load_config(&opts.config_location)?;
 
         let mut envlist = Vec::new();
         if let Some(env) = project.env.as_ref() {
@@ -186,11 +203,11 @@ impl ProjectBuilder {
         Ok(envlist)
     }
 
-    pub async fn build_rpm(&self, project: &Project) -> Result<(), BuilderError> {
+    pub async fn build_rpm(&self, project: &Project, builder_opts: &BuilderOptions) -> Result<(), BuilderError> {
         let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
         eprintln!(":: {}", "Building RPMs".yellow());
 
-        let envlist = self._prepare_env(project)?;
+        let envlist = self._prepare_env(project, builder_opts)?;
 
         let opts = BuildkitOptions {
             env: Some(envlist),
@@ -218,7 +235,7 @@ impl ProjectBuilder {
             format!("_sourcedir {}", "/src").as_str(),
         ]);
 
-        b.execute()?;
+        b.execute(builder_opts)?;
 
         /* self.contain("rpm", project)
         .await?
@@ -267,7 +284,7 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub fn run_pre_script(&self, project: &Project) -> Result<(), BuilderError> {
+    pub fn run_pre_script(&self, project: &Project, opts: &BuilderOptions) -> Result<(), BuilderError> {
         eprintln!(":: {}", "Running pre-build script...".yellow());
         for command in &project.pre_script.as_ref().unwrap().commands {
             eprintln!("$ {}", command.black());
@@ -284,7 +301,7 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub fn run_post_script(&self, project: &Project) -> Result<(), BuilderError> {
+    pub fn run_post_script(&self, project: &Project, opts: &BuilderOptions) -> Result<(), BuilderError> {
         eprintln!(":: {}", "Running post-build script...".yellow());
         for command in &project.post_script.as_ref().unwrap().commands {
             eprintln!("$ {}", command.black());
@@ -293,7 +310,7 @@ impl ProjectBuilder {
                 .map_err(BuilderError::Script)?;
 
             if !command.status.success() {
-                println!(":: {}", "Post-build script failed".red());
+                eprintln!(":: {}", "Post-build script failed".red());
                 return Err(BuilderError::Command("post-script failed".to_string()));
             }
         }
@@ -301,10 +318,10 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub async fn contain(&self, name: &str, project: &Project) -> Result<Container, BuilderError> {
+    pub async fn contain(&self, name: &str, project: &Project, opts: &BuilderOptions) -> Result<Container, BuilderError> {
         //let config = crate::config::load_config(&self.root)?;
 
-        let envs = self.prepare_env(project)?;
+        let envs = self.prepare_env(project, opts)?;
 
         let conhdl = ContainerHdl::new();
         let cwd = self.root.canonicalize()?.to_str().unwrap().to_owned();
@@ -333,6 +350,7 @@ impl ProjectBuilder {
         stage: &crate::config::Stage,
         stage_name: &String,
         project: &Project,
+        builder_opts: &BuilderOptions,
     ) -> Result<(), BuilderError> {
         if !stage_name.eq("ANDA_UNTITLED_FINAL") {
             eprintln!(
@@ -346,7 +364,7 @@ impl ProjectBuilder {
             return Ok(());
         }
 
-        let envlist = self._prepare_env(project)?;
+        let envlist = self._prepare_env(project, builder_opts)?;
 
         let opts = BuildkitOptions {
             env: Some(envlist),
@@ -373,7 +391,7 @@ impl ProjectBuilder {
             b.command_nocontext(command.as_str());
         } */
 
-        b.execute()?;
+        b.execute(builder_opts)?;
         Ok(())
     }
 
@@ -381,8 +399,9 @@ impl ProjectBuilder {
         &self,
         project: &Project,
         stage: &crate::config::Stage,
+        opts: &BuilderOptions,
     ) -> Result<(), BuilderError> {
-        self.prepare_env(project)?;
+        self.prepare_env(project, opts)?;
         if project.rollback.is_some() {
             let rollback = project.rollback.as_ref().unwrap();
             let name = project
@@ -399,7 +418,7 @@ impl ProjectBuilder {
                     name.white().italic()
                 );
                 match self
-                    .contain("rollback", project)
+                    .contain("rollback", project, opts)
                     .await?
                     .run_cmds(stage.commands.iter().map(|c| c.as_str()).collect())
                     .await
@@ -425,9 +444,10 @@ impl ProjectBuilder {
         &self,
         project: &Project,
         stage: Option<String>,
+        opts: &BuilderOptions,
     ) -> Result<(), BuilderError> {
         // we should turn this into a tuple of (stage, stage_name)
-        self.prepare_env(project)?;
+        self.prepare_env(project, opts)?;
         let mut depgraph: DepGraph<&crate::config::Stage> = DepGraph::new();
         eprintln!(":: {}", "Running build script...".yellow());
         let script = project.script.as_ref().unwrap();
@@ -469,10 +489,11 @@ impl ProjectBuilder {
                                 .find_key_for_value(stage)
                                 .unwrap_or(&"ANDA_UNTITLED_FINAL".to_string()),
                             project,
+                            opts,
                         )
                         .await;
                     if result.is_err() {
-                        self.run_rollback(project, stage).await?;
+                        self.run_rollback(project, stage, opts).await?;
                         return Err(result.err().unwrap());
                     }
                 }
@@ -482,9 +503,9 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub async fn build_docker(&self, project: &Project) -> Result<(), BuilderError> {
-        println!(":: {}", "Building docker image...".yellow());
-        self.prepare_env(project)?;
+    pub async fn build_docker(&self, project: &Project, opts: &BuilderOptions) -> Result<(), BuilderError> {
+        eprintln!(":: {}", "Building docker image...".yellow());
+        self.prepare_env(project, opts)?;
 
         let mut tasks = Vec::new();
 
@@ -529,8 +550,9 @@ impl ProjectBuilder {
         &self,
         name: String,
         project: &Project,
+        opts: &BuilderOptions,
     ) -> Result<(), BuilderError> {
-        println!(
+        eprintln!(
             "{} `{}`...",
             "Building project".bright_cyan(),
             &name.white().bold()
@@ -539,33 +561,33 @@ impl ProjectBuilder {
         let mut tasks = Vec::new();
 
         if project.pre_script.is_some() {
-            self.run_pre_script(project)?;
+            self.run_pre_script(project, opts)?;
         }
         if project.script.is_some() {
-            tasks.push(self.run_build_script(project, None).boxed());
+            tasks.push(self.run_build_script(project, None, opts).boxed());
         }
         if project.rpmbuild.is_some() {
-            tasks.push(self.build_rpm(project).boxed());
+            tasks.push(self.build_rpm(project, opts).boxed());
         }
         if project.docker.is_some() {
-            tasks.push(self.build_docker(project).boxed());
+            tasks.push(self.build_docker(project, opts).boxed());
         }
         for task in tasks {
             task.await?;
         }
         if project.post_script.is_some() {
-            self.run_post_script(project)?;
+            self.run_post_script(project, opts)?;
         }
         // print empty line to separate projects
-        println!();
+        eprintln!();
         Ok(())
     }
     // project -> scope -> stage
     // example: project::script:stage, docker:image/image
-    pub async fn build_in_scope(&self, query: &str) -> Result<(), BuilderError> {
+    pub async fn build_in_scope(&self, query: &str, opts: &BuilderOptions) -> Result<(), BuilderError> {
         let re = regex::Regex::new(r"(.+)::([^:]+)(:(.+))?")
             .map_err(|e| BuilderError::Other(format!("Can't make regex: {}", e)))?;
-        let config = crate::config::load_config(&self.root)?;
+        let config = crate::config::load_config(&opts.config_location)?;
         for cap in re.captures_iter(query) {
             let project = &cap[1];
             let scope = &cap[2];
@@ -577,19 +599,19 @@ impl ProjectBuilder {
                 match scope {
                     "script" => {
                         project.script.as_ref().ok_or_else(close)?;
-                        self.run_build_script(project, None).await?;
+                        self.run_build_script(project, None, opts).await?;
                     }
                     "pre_script" => {
                         project.pre_script.as_ref().ok_or_else(close)?;
-                        self.run_pre_script(project)?;
+                        self.run_pre_script(project, opts)?;
                     }
                     "post_script" => {
                         project.post_script.as_ref().ok_or_else(close)?;
-                        self.run_post_script(project)?;
+                        self.run_post_script(project, opts)?;
                     }
                     "rpmbuild" => {
                         project.rpmbuild.as_ref().ok_or_else(close)?;
-                        self.build_rpm(project).await?;
+                        self.build_rpm(project, opts).await?;
                     }
                     _ => {}
                 }
@@ -598,12 +620,12 @@ impl ProjectBuilder {
                 match scope {
                     "script" => {
                         project.script.as_ref().ok_or_else(close)?;
-                        self.run_build_script(project, Some(stage.to_string()))
+                        self.run_build_script(project, Some(stage.to_string()), opts)
                             .await?;
                     }
                     "docker" => {
                         project.docker.as_ref().ok_or_else(close)?;
-                        self.build_docker(project).await?;
+                        self.build_docker(project, opts).await?;
                     }
                     _ => {}
                 }
@@ -614,8 +636,8 @@ impl ProjectBuilder {
     }
 
     ///  Builds an Andaman project.
-    pub async fn build(&self, projects: Vec<String>) -> Result<(), BuilderError> {
-        let config = crate::config::load_config(&self.root)?;
+    pub async fn build(&self, projects: Vec<String>, opts: &BuilderOptions) -> Result<(), BuilderError> {
+        let config = crate::config::load_config(&opts.config_location)?;
         let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
 
         if !projects.is_empty() {
@@ -624,13 +646,13 @@ impl ProjectBuilder {
                     .project
                     .get(&proj)
                     .ok_or_else(|| BuilderError::Other(format!("Project `{}` not found", &proj)))?;
-                self.run_whole_project(proj, project).await?;
+                self.run_whole_project(proj, project, opts).await?;
             }
             return Ok(());
         }
 
         for (name, project) in config.project {
-            self.run_whole_project(name, &project).await?;
+            self.run_whole_project(name, &project, opts).await?;
         }
         // if env var `ANDA_BUILD_ID` is set, we upload the artifacts
         if env::var("ANDA_BUILD_ID").is_ok() {

@@ -1,6 +1,6 @@
 //! Utility functions for Andaman.
 
-use crate::error::PackerError;
+use crate::{error::PackerError, build};
 use anyhow::Result;
 use async_zip::read::seek::ZipFileReader;
 use async_zip::write::{EntryOptions, ZipFileWriter};
@@ -143,6 +143,7 @@ impl ProjectPacker {
     pub async fn download_and_call_unpack_build(
         url: &str,
         workdir: Option<PathBuf>,
+        opts: &build::BuilderOptions,
     ) -> Result<(), PackerError> {
         let tmp_dir = tempfile::tempdir().unwrap();
         // download file using reqwest
@@ -172,12 +173,13 @@ impl ProjectPacker {
         let mut file = File::create(&dest).await?;
         tokio::io::copy(&mut data, &mut file).await?;
 
-        Self::unpack_and_build(&dest, workdir).await
+        Self::unpack_and_build(&dest, workdir, opts).await
     }
 
     pub async fn unpack_and_build(
         path: &PathBuf,
         workdir: Option<PathBuf>,
+        opts: &build::BuilderOptions,
     ) -> Result<(), PackerError> {
         //let tar = GzipDecoder::new(buf.as_slice());
 
@@ -244,7 +246,7 @@ impl ProjectPacker {
         debug!("{}", std::env::current_dir().unwrap().display());
         // execute anda build internally
         crate::build::ProjectBuilder::new(workdir)
-            .build(vec![])
+            .build(vec![], opts)
             .await?;
 
         Ok(())

@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use buildkit_llb::prelude::{MultiBorrowedOutput, Terminal};
 use clap::{AppSettings, ArgEnum, Parser, Subcommand};
 use log::{debug, error, info};
-use std::path::PathBuf;
+use std::{path::PathBuf, str::FromStr};
 use std::{collections::HashMap, fs, io::stdout};
 
 mod api;
@@ -29,6 +29,10 @@ struct Cli {
 
     #[clap(subcommand)]
     command: Command,
+
+    /// Path to the config file
+    #[clap(default_value = "anda.hcl", short, long)]
+    config: PathBuf,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
@@ -36,6 +40,34 @@ enum BuildBackend {
     System,
     Mock,
 }
+
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+pub enum BuildkitLog {
+    Auto,
+    Tty,
+    Plain
+}
+
+impl FromStr for BuildkitLog {
+    fn from_str(s: &str) -> Result<Self, anyhow::Error> {
+        match s {
+            "auto" => Ok(BuildkitLog::Auto),
+            "tty" => Ok(BuildkitLog::Tty),
+            "plain" => Ok(BuildkitLog::Plain),
+            _ => Err(anyhow!("Invalid buildkit log level: {}", s))
+        }
+    }
+
+    type Err = anyhow::Error;
+}
+
+impl Default for BuildkitLog {
+    fn default() -> Self {
+        BuildkitLog::Auto
+    }
+}
+
 
 #[derive(Subcommand)]
 enum Command {
@@ -60,6 +92,14 @@ enum Command {
         /// Scope of the project to be run.
         #[clap(short, long, value_name = "SCOPE")]
         scope: Option<String>,
+
+        /// Output LLB to stdout
+        #[clap(short, long, action, default_value = "false")]
+        llb: bool,
+
+        /// Log format
+        #[clap(short, long, value_name = "FORMAT")]
+        buildkit_log: Option<BuildkitLog>
     },
     /// Subcommand for interacting with the build system
     Backend {
@@ -78,7 +118,6 @@ enum Command {
         #[clap(short, long, value_name = "ANDA_PACK_OUTPUT")]
         output: Option<String>,
     },
-    Buildx,
 }
 
 #[tokio::main]
@@ -99,10 +138,20 @@ async fn main() -> Result<()> {
             workdir,
             projects,
             scope,
+            llb,
+            buildkit_log,
         } => {
+            // Build Options
+
+            let opts = build::BuilderOptions {
+                display_llb: llb,
+                config_location: cli.config,
+                buildkit_log: buildkit_log.unwrap_or_default(),
+            };
+
             if let Ok(url) = reqwest::Url::parse(&path) {
                 info!("path is a URL, calling downloader");
-                ProjectPacker::download_and_call_unpack_build(url.as_str(), workdir)
+                ProjectPacker::download_and_call_unpack_build(url.as_str(), workdir, &opts)
                     .await
                     .map_err(|e| {
                         error!("{}", e);
@@ -125,7 +174,7 @@ async fn main() -> Result<()> {
                     .ends_with(".andasrc.zip")
                 {
                     debug!("path is an andasrc tarball package, calling unpacker");
-                    ProjectPacker::unpack_and_build(&path, workdir)
+                    ProjectPacker::unpack_and_build(&path, workdir, &opts)
                         .await
                         .map_err(|e| {
                             error!("{}", e);
@@ -139,7 +188,7 @@ async fn main() -> Result<()> {
             } else if path.is_dir() {
                 if let Some(scope) = scope {
                     build::ProjectBuilder::new(path)
-                        .build_in_scope(&scope)
+                        .build_in_scope(&scope, &opts)
                         .await
                         .map_err(|e| {
                             error!("{}", e);
@@ -148,7 +197,7 @@ async fn main() -> Result<()> {
                     // cargo run --bin anda build -s anda::
                 } else {
                     build::ProjectBuilder::new(path)
-                        .build(projects)
+                        .build(projects, &opts)
                         .await
                         .map_err(|e| {
                             error!("{}", e);
@@ -194,25 +243,6 @@ async fn main() -> Result<()> {
 
                 println!("Packed to {}", p.display());
             }
-        }
-        Command::Buildx => {
-            let hash = std::collections::BTreeMap::from([("FOO".to_string(), "BAR".to_string())]);
-
-            let opts = container::BuildkitOptions {
-                env: Some(hash),
-                ..Default::default()
-            };
-            let mut b = container::Buildkit::new(Some(opts)).image("alpine:latest");
-            //b.command("sudo dnf install -y git");
-            b.command("echo 'hello world' > /builddir/file0");
-            //b.command("ls -la /src");
-            b.command("echo 'hello world' > /builddir/file1 && cat /builddir/file0");
-            b.command("echo 'hello world' > /builddir/file2 && cat /builddir/file1");
-            b.command("echo $FOO");
-
-            //Terminal::with(b.build_graph()).write_definition(std::io::stdout());
-
-            b.execute()?;
         }
     };
 

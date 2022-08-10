@@ -24,6 +24,8 @@ use std::{
 use std::{collections::HashMap, sync::Arc};
 use tokio_stream::StreamExt;
 
+use crate::{build, BuildkitLog};
+
 const IMAGE: &str = "fedora:36";
 
 pub struct ContainerHdl {
@@ -408,8 +410,6 @@ impl Buildkit {
             }
         }
 
-        let local = local.ref_counted();
-
         if let Some(image) = &self.image {
             let mut cmd = LLBCommand::run("/bin/sh")
                 .args(&["-c", command])
@@ -473,14 +473,6 @@ impl Buildkit {
         self
     }
 
-    pub fn merge_outputs(&mut self, output: Buildkit) -> &mut Buildkit {
-            let cmd = LLBCommand::run("true")
-                .mount(Mount::Layer(OutputIdx(0), output.cmd.as_ref().unwrap().output(0), "/"))
-                .mount(Mount::Layer(OutputIdx(1), output.cmd.as_ref().unwrap().output(1), "/src/anda-build"));
-            let cmd = cmd.ref_counted();
-            self.cmd = Some(cmd);
-        self
-    }
     pub fn build_graph(&mut self) -> OperationOutput<'_> {
         if self.cmd.is_none() {
             panic!("No output specified");
@@ -500,25 +492,30 @@ impl Buildkit {
         fs.ref_counted().output(0)
     }
 
-    pub fn execute(&mut self) -> Result<()> {
+    pub fn execute(&mut self, builder_opts: &build::BuilderOptions) -> Result<()> {
+
+        if builder_opts.display_llb {
+            Terminal::with(self.build_graph())
+            .write_definition(stdout())
+            .unwrap();
+
+            return Ok(());
+        }
+
         let mut extra_args = Vec::new();
 
-        if let Some(opt) = &self.options.progress {
-            match opt.as_str() {
-                "tty" => {
+
+            match builder_opts.buildkit_log {
+                BuildkitLog::Tty => {
                     extra_args.push("--progress=tty");
                 }
-                "auto" => {
+                BuildkitLog::Auto => {
                     extra_args.push("--progress=auto");
                 }
-                "plain" => {
+                BuildkitLog::Plain => {
                     extra_args.push("--progress=plain");
                 }
-                _ => {
-                    panic!("Unknown progress option");
-                }
             }
-        };
         if let Some(opt) = self.options.transfer_artifacts {
             if opt {
                 extra_args.push("--local");
@@ -536,8 +533,6 @@ impl Buildkit {
             .stdin(std::process::Stdio::piped())
             .spawn()?;
 
-        let stdin = cmd.stdin.as_mut().unwrap();
-
         Terminal::with(self.build_graph())
             .write_definition(cmd.stdin.as_mut().unwrap())
             .unwrap();
@@ -552,8 +547,6 @@ impl Buildkit {
 #[cfg(test)]
 mod test_docker {
     use bollard::service::HostConfig;
-    use std::io::stdout;
-
     use super::*;
 
     #[tokio::test]

@@ -90,7 +90,7 @@ pub struct DockerImage {
 }
 
 pub fn load_config(root: &PathBuf) -> Result<AndaConfig, ProjectError> {
-    let config_path = root.join("anda.hcl");
+    let config_path = root;
 
     if !config_path.exists() {
         return Err(ProjectError::NoManifest);
@@ -101,7 +101,7 @@ pub fn load_config(root: &PathBuf) -> Result<AndaConfig, ProjectError> {
             .with_context(|| {
                 format!(
                     "could not read `anda.toml` in directory {}",
-                    fs::canonicalize(root).unwrap().display()
+                    fs::canonicalize(root.parent().unwrap()).unwrap().display()
                 )
             })?
             .as_str(),
