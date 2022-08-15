@@ -118,6 +118,18 @@ enum Command {
         #[clap(short, long, value_name = "ANDA_PACK_OUTPUT")]
         output: Option<String>,
     },
+
+    /// Pushes the project into the registry
+    Push {
+        /// Path to the project.
+        /// If not specified, the current directory is used
+        #[clap(value_name = "ANDA_PROJECT_PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Target to build to
+        #[clap(short, long, value_name = "TARGET")]
+        target: String,
+    },
 }
 
 #[tokio::main]
@@ -243,6 +255,9 @@ async fn main() -> Result<()> {
 
                 println!("Packed to {}", p.display());
             }
+        }
+        Command::Push { path, target } => {
+            
         }
     };
 

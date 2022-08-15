@@ -84,7 +84,7 @@ project "anda" {
     }
 
     rpmbuild {
-        spec = "./anda.spec"
+        spec = "anda/tests/umpkg.spec"
     }
     post_script {
         commands = [

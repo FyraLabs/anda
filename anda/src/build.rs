@@ -214,26 +214,18 @@ impl ProjectBuilder {
             ..Default::default()
         };
         let mut b = Buildkit::new(Some(opts)).image("fedora:latest").context(buildkit_llb::prelude::Source::local("context"));
-
         b.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
-        b.command_nocontext("sudo dnf install -y rpm-build dnf-plugins-core");
+        b.command_nocontext("sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools");
+        b.inject_rpm_script();
         b.command(&format!(
-            "sudo dnf builddep -y {}",
+            "sudo dnf builddep -y --refresh {}",
             project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap()
         ));
-        b.command_args(vec![
-            "rpmbuild",
-            "-ba",
-            project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
-            "--define",
-            format!("_rpmdir {}", output_path).as_str(),
-            "--define",
-            format!("_srcrpmdir {}/src", output_path).as_str(),
-            "--define",
-            "_disable_source_fetch 0",
-            "--define",
-            format!("_sourcedir {}", "/src").as_str(),
-        ]);
+
+        b.command(&format!(
+            "export RPMSPEC={} && anda_build_rpm",
+            project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap()
+        ));
 
         b.execute(builder_opts)?;
 

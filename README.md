@@ -4,7 +4,7 @@
 
 # Andaman
 
-Andaman is a package build system and CI (Continuous Integration) tool written in Rust.
+Andaman is a package build system and CI (Continuous Integration) toolchain written in Rust, powered by BuildKit.
 It is inspired by Ultramarine Linux's `umpkg` project, and allows you to quickly build multiple types of projects into different artifacts.
 
 It also supports monorepos with configuration files, and can be run completely standalone without a server (Although it comes with one for distributed builds).

@@ -467,6 +467,60 @@ impl Buildkit {
 
             let cmd = cmd.ref_counted();
             self.cmd = Some(cmd);
+            
+        } else {
+            panic!("No image specified");
+        }
+        self
+    }
+
+    pub fn inject_rpm_script(&mut self) -> &mut Buildkit {
+
+        let script = include_str!("anda_build_rpm.sh");
+        let command = format!(r#"cat << 'EOF' > /usr/local/bin/anda_build_rpm
+        {}
+        "#, script);
+
+        if let Some(image) = &self.image {
+            let mut cmd = LLBCommand::run("/bin/sh")
+                .args(&["-c", &command])
+                //.custom_name("Inject RPM script into image")
+                .cwd("/src")
+                .custom_name("Installing RPM builder script")
+                .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
+                if let Some(out) = &self.cmd {
+                    cmd = cmd
+                        .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
+                        .mount(Mount::Layer(OutputIdx(1), out.output(1), "/src/anda-build"))
+                    //.env("FOO", "BAR");
+                } else {
+                    cmd = cmd
+                        .mount(Mount::Layer(OutputIdx(0), image.output(), "/"))
+                        .mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"))
+                }
+                cmd = cmd.mount(Mount::SharedCache("/var/cache/dnf"));
+                let cmd = cmd.ref_counted();
+                self.cmd = Some(cmd);
+
+            let mut cmd = LLBCommand::run("/bin/sh")
+                .args(&["-c", "chmod +x /usr/local/bin/anda_build_rpm"])
+                //.custom_name("Inject RPM script into image")
+                .cwd("/src")
+                .custom_name("Marking RPM builder script as executable")
+                .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
+                if let Some(out) = &self.cmd {
+                    cmd = cmd
+                        .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
+                        .mount(Mount::Layer(OutputIdx(1), out.output(1), "/src/anda-build"))
+                    //.env("FOO", "BAR");
+                } else {
+                    cmd = cmd
+                        .mount(Mount::Layer(OutputIdx(0), image.output(), "/"))
+                        .mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"))
+                }
+                cmd = cmd.mount(Mount::SharedCache("/var/cache/dnf"));
+                let cmd = cmd.ref_counted();
+                self.cmd = Some(cmd);
         } else {
             panic!("No image specified");
         }
@@ -529,16 +583,18 @@ impl Buildkit {
             .args(&["--local", "context=."])
             .args(&extra_args)
             //.arg("--opt")
-            .env("BUILDKIT_HOST", "docker-container://buildkitd")
+            //.env("BUILDKIT_HOST", "docker-container://buildkitd")
             .stdin(std::process::Stdio::piped())
             .spawn()?;
 
         Terminal::with(self.build_graph())
             .write_definition(cmd.stdin.as_mut().unwrap())
             .unwrap();
-        cmd.wait()?;
+        let ret = cmd.wait()?;
 
-        //Ok(cmd.wait()?)
+        if !ret.success() {
+            return Err(anyhow::anyhow!("Build failed"));
+        }
 
         Ok(())
     }
