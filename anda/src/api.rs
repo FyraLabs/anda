@@ -6,6 +6,7 @@
 
 use anyhow::{Ok, Result};
 use chrono::{DateTime, Utc};
+use log::debug;
 use reqwest::{multipart::{Form, self}, Client};
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncReadExt;
@@ -29,6 +30,14 @@ pub struct Build {
     pub project_id: Option<Uuid>,
     pub timestamp: DateTime<Utc>,
     pub compose_id: Option<Uuid>,
+}
+
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Target {
+    pub id: Uuid,
+    pub image: Option<String>,
+    pub name: String,
 }
 
 #[derive(Clone)]
@@ -112,20 +121,47 @@ impl AndaBackend {
     pub async fn upload_build(&self,target_id: Uuid, packfile_path: &PathBuf) -> Result<Build> {
         let url = format!("{}/builds", self.url);
 
+        debug!("{}", target_id);
+
         let mut buf = Vec::new();
 
         tokio::fs::File::open(packfile_path).await?.read_to_end(&mut buf).await?;
 
         let file_part = multipart::Part::bytes(buf)
+            .mime_str("application/octet-stream")?
             .file_name(packfile_path.file_name().unwrap().to_str().unwrap().to_owned());
-        let form = Form::new()
+
+        println!("{:?}", file_part);
+        let target_part = multipart::Part::text(target_id.to_string());
+            let form = Form::new()
             .percent_encode_noop()
-            .text("target_id", target_id.to_string())
-            .part("src_file", file_part);
+            //.part("target_id", target_part)
+            .part("src_file", file_part)
+            .text("target_id", target_id.to_string());
+
+        //debug!("{:?}", form);
 
         let resp = self.client.post(&url).multipart(form).send().await?;
+        //println!("{:?}", &resp.json().await?);
         let build: Build = resp.json().await?;
+        //todo!();
         Ok(build)
+    }
+
+    pub async fn get_target_by_id(&self, id: Uuid) -> Result<Target> {
+        let url = format!("{}/targets/{}", self.url, id);
+        let resp = self.client.get(&url).send().await?;
+        //println!("{:?}", &resp.json().await?);
+        let target: Target = resp.json().await?;
+        Ok(target)
+    }
+
+    pub async fn get_target_by_name(&self, name: &str) -> Result<Target> {
+        let url = format!("{}/targets/by_name/{}", self.url, name);
+        let resp = self.client.get(&url).send().await?;
+        //println!("{:?}", &resp.json().await?);
+        let target: Target = resp.json().await?;
+        Ok(target)
     }
 }
 

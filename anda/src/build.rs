@@ -87,7 +87,7 @@ impl ArtifactUploader {
             form = form.part(format!("files[{}]", path), file_part);
         }
 
-        debug!("form: {:?}", form);
+        //debug!("form: {:?}", form);
 
         let res = ClientBuilder::new()
             .build()?
@@ -95,7 +95,7 @@ impl ArtifactUploader {
             .multipart(form)
             .send()
             .await?;
-        debug!("res: {:#?}", res.text().await?);
+        // debug!("res: {:#?}", res.text().await?);
         Ok(())
     }
 }
@@ -283,6 +283,14 @@ impl ProjectBuilder {
             let command = execute::shell(command)
                 .execute_output()
                 .map_err(BuilderError::Script)?;
+
+            // create anda-build folder if it doesn't exist
+            if PathBuf::from("anda-build").exists() {
+                println!("anda-build folder exists");
+            } else {
+                println!("anda-build folder doesn't exist");
+                std::fs::create_dir("anda-build").unwrap();
+            }
 
             if !command.status.success() {
                 println!(":: {}", "Pre-build script failed".red());

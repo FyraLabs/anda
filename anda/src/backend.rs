@@ -1,6 +1,7 @@
 use crate::api;
 use anyhow::Result;
 use clap::Subcommand;
+use uuid::Uuid;
 //use log::{debug, error, info, trace};
 
 use std::io::Write;
@@ -72,4 +73,11 @@ pub(crate) async fn match_subcmd(cmd: &BackendCommand) -> Result<()> {
             Ok(())
         }
     }
+}
+
+
+pub async fn buildinfo(build_id: Uuid) -> Result<()> {
+    let build = api::AndaBackend::new(None).get_build(build_id).await?;
+    println!("{}", serde_json::to_string_pretty(&build)?);
+    Ok(())
 }

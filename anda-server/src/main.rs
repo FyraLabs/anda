@@ -107,6 +107,7 @@ async fn rocket() -> Rocket<Build> {
         .mount("/builds", api::builds_routes())
         .mount("/artifacts", api::artifacts_routes())
         .mount("/projects", api::projects_routes())
+        .mount("/targets", api::targets_routes())
         .mount("/app", routes![index])
         //.mount("/assets", FileServer::from("dist/assets"))
         .mount("/", routes![dist, root, callback])

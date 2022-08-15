@@ -557,7 +557,7 @@ impl Build {
     }
 }
 
-
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Target {
     pub id: Uuid,
     pub name: String,
@@ -576,6 +576,79 @@ impl From<crate::db_object::Target> for Target {
     }
 }
 
+
+impl Target {
+
+
+    pub fn new(name: String, image: Option<String>, arch: String) -> Self {
+        dotenv::dotenv().ok();
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            image,
+            arch,
+        }
+    }
+
+    pub async fn get(uuid: Uuid) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        //debug!("Getting target with uuid: {}", uuid);
+        //let uuid_string = uuid.to_string();
+        // Query the database for the target with the given uuid.
+        let target = crate::db_object::Target::get(uuid).await?;
+        Ok(Self::from(target))
+    }
+
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Self>>
+    where
+        Self: Sized,
+    {
+        // Query the database for the targets.
+        let targets = crate::db_object::Target::list(limit, page).await?;
+        Ok(targets
+            .iter()
+            .map(|target| Self::from(target.clone()))
+            .collect())
+    }
+
+
+    pub async fn add(self) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        // Add the target to the database.
+        let target = crate::db_object::Target::from(self).add().await?;
+        Ok(Self::from(target))
+    }
+
+    pub async fn get_by_name(name: String) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        // Query the database for the target with the given name.
+        let target = crate::db_object::Target::get_by_name(name).await?;
+        Ok(Self::from(target))
+    }
+
+    pub async fn update(self, id: Uuid) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        // Update the target in the database.
+        let target = crate::db_object::Target::from(self).update(id).await?;
+        Ok(Self::from(target))
+    }
+
+    pub async fn delete(self) -> Result<()>
+    where
+        Self: Sized,
+    {
+        // Delete the target from the database.
+        crate::db_object::Target::from(self).delete().await
+    }
+}
 
 // Artifact API
 // #[derive(Debug, Clone)]

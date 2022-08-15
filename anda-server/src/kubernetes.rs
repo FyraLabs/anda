@@ -84,7 +84,11 @@ pub async fn dispatch_build(
                                 value: Some(pack_url.clone()),
                                 ..EnvVar::default()
                             },
+
+
                         ]),
+                        command: Some(vec!["anda".to_string(), "build".to_string(), pack_url.clone()]),
+
                         ..Default::default()
                     }],
                     ..Default::default()

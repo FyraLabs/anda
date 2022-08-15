@@ -20,6 +20,7 @@
 mod artifacts;
 mod builds;
 mod projects;
+mod targets;
 
 #[derive(Responder)]
 #[response(status = 412, content_type = "json")]
@@ -30,3 +31,4 @@ pub(crate) struct InvalidPayloadError {
 pub(crate) use self::artifacts::routes as artifacts_routes;
 pub(crate) use self::builds::routes as builds_routes;
 pub(crate) use self::projects::routes as projects_routes;
+pub(crate) use self::targets::routes as targets_routes;

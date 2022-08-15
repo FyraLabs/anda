@@ -3,3 +3,5 @@
 **/.git
 **/node_modules
 **/anda-build
+*.dockerfile
+Dockerfile

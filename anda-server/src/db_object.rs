@@ -399,6 +399,18 @@ pub struct Target {
     pub arch: String,
 }
 
+
+impl From<crate::backend::Target> for Target {
+    fn from(model: crate::backend::Target) -> Self {
+        Target {
+            id: model.id,
+            name: model.name,
+            image: model.image,
+            arch: model.arch,
+        }
+    }
+}
+
 impl Target {
     pub fn new(id: Uuid, name: String, image: Option<String>, arch: String) -> Self {
         Self {
@@ -433,6 +445,53 @@ impl Target {
     pub async fn get(id: Uuid) -> Result<Target> {
         let db = DbPool::get().await;
         let target = target::Entity::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| {
+                error!("Target not found"); 
+                anyhow!("Target not found")
+            })?;
+        Ok(Target::from_model(target))
+    }
+
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Target>> {
+        let db = DbPool::get().await;
+        let target = target::Entity::find()
+            .paginate(db, limit)
+            .fetch_page(page)
+            .await?;
+        Ok(target.into_iter().map(Target::from_model).collect())
+    }
+
+
+    pub async fn update(&self, id: Uuid) -> Result<Target> {
+        let db = DbPool::get().await;
+        // get target by id, then update it
+        let target = target::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            name: ActiveValue::Set(self.name.clone()),
+            image: ActiveValue::Set(self.image.clone()),
+            arch: ActiveValue::Set(self.arch.clone()),
+        };
+        let res = target::ActiveModel::update(target, db).await?;
+        Ok(Target::from_model(res))
+    }
+
+    pub async fn delete(&self) -> Result<()> {
+        let db = DbPool::get().await;
+        // check if target exists
+        let _ = target::Entity::find_by_id(self.id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Target not found"))?;
+        target::Entity::delete_by_id(self.id).exec(db).await?;
+        Ok(())
+    }
+
+    pub async fn get_by_name(name: String) -> Result<Target> {
+        let db = DbPool::get().await;
+        let target = target::Entity::find()
+            .filter(target::Column::Name.eq(name))
             .one(db)
             .await?
             .ok_or_else(|| anyhow!("Target not found"))?;

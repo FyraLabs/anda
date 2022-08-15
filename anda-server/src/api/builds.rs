@@ -1,5 +1,5 @@
-use crate::backend::{AndaBackend, Build, BuildCache, S3Object};
-use crate::db_object::{Project, Target};
+use crate::backend::{AndaBackend, Build, BuildCache, S3Object, Target};
+use crate::db_object::{Project};
 use rocket::{
     form::Form,
     fs::TempFile,
@@ -45,16 +45,19 @@ pub struct BuildSubmission<'r> {
 
 #[post("/", data = "<data>")]
 async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> {
-    let target = Target::get(data.target_id)
-        .await
-        .map_err(|_| Status::BadRequest)?;
+    debug!("{:?}", data.target_id);
+    let target = Target::get(data.target_id).await.map_err(|_| Status::NotFound)?;
+
+    //println!("{:?}", target);
     // src_file build
     //let backend = AndaBackend::new_src_file(data.src_file.as_ref().unwrap(), data.build_type.as_ref().unwrap());
     // upload the file to S3
+
+    //println!("{:?}", data.src_file.name());
     let cache = BuildCache::new(
         data.src_file
             .raw_name()
-            .ok_or(Status::InternalServerError)?
+            .ok_or(Status::BadRequest)?
             .dangerous_unsafe_unsanitized_raw()
             .to_string(),
     )
@@ -67,6 +70,7 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
     .await
     .map_err(|_| Status::InternalServerError)?;
 
+    debug!("Generating build");
     let build_id = Uuid::new_v4();
 
     // process backend request
@@ -74,7 +78,7 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
     let build = AndaBackend::new(
         build_id,
         cache,
-        target.image.unwrap_or_else(|| "fedora:latest".to_string()),
+        target.image.unwrap_or_else(|| "local-registry:38675/anda/anda-client".to_string()),
     );
     build
         .build()

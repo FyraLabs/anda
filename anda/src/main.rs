@@ -130,6 +130,12 @@ enum Command {
         #[clap(short, long, value_name = "TARGET")]
         target: String,
     },
+
+    /// Shows build info
+    BuildInfo {
+        /// The build ID to show info for
+        id: String,
+    },
 }
 
 #[tokio::main]
@@ -257,7 +263,38 @@ async fn main() -> Result<()> {
             }
         }
         Command::Push { path, target } => {
-            
+            // pack the project, then push to backend
+
+            let p = ProjectPacker::pack(&path, None).await.map_err(|e| {
+                error!("{}", e);
+                anyhow!("{}", e)
+            })?;
+
+            // pushin p
+            let backend  = api::AndaBackend::new(None);
+            // get target by name
+            let target = backend.get_target_by_name(&target).await.map_err(|e| {
+                error!("{}", e);
+                anyhow!("{}", e)
+            })?;
+
+            //let target_id_test = uuid::Uuid::parse_str("ad84b005-a147-4235-a339-eea78157ec0c").unwrap();
+
+            // push da p
+            let b = backend.upload_build(target.id, &p).await.map_err(|e| {
+                error!("{}", e);
+                anyhow!("{}", e)
+            })?;
+            println!("{:?}", b);
+
+        }
+        Command::BuildInfo { id } => {
+            // try and parse the build id as uuid
+            if let Ok(uuid) = uuid::Uuid::parse_str(&id) {
+                crate::backend::buildinfo(uuid).await?;
+            } else {
+                anyhow::bail!("invalid build id");
+            }
         }
     };
 
