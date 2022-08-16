@@ -259,7 +259,7 @@ pub async fn push_build(root: &PathBuf) -> Result<crate::api::Build, PackerError
 
     let packfile = ProjectPacker::pack(root, None).await?;
 
-    let build_push = crate::api::AndaBackend::new(None)
+    let _build_push = crate::api::AndaBackend::new(None)
         .upload_build(Uuid::nil(), &packfile).await?;
 
     todo!()

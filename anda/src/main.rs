@@ -1,11 +1,11 @@
 #![deny(rust_2018_idioms)]
 
 use anyhow::{anyhow, Result};
-use buildkit_llb::prelude::{MultiBorrowedOutput, Terminal};
+
 use clap::{AppSettings, ArgEnum, Parser, Subcommand};
 use log::{debug, error, info};
 use std::{path::PathBuf, str::FromStr};
-use std::{collections::HashMap, fs, io::stdout};
+use std::{fs};
 
 mod api;
 mod backend;

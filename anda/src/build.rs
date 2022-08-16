@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use bollard::{container::Config, service::HostConfig};
 use execute::Execute;
 use futures::FutureExt;
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use mime_guess::MimeGuess;
 use owo_colors::OwoColorize;
 use reqwest::{multipart, ClientBuilder};
@@ -11,15 +11,14 @@ use solvent::DepGraph;
 use std::{
     collections::{HashMap, BTreeMap},
     env,
-    io::{BufRead, BufReader},
     path::PathBuf,
-    process::{Command, ExitStatus, Stdio},
+    process::{ExitStatus},
 };
 use tokio::{fs::File, io::AsyncReadExt};
 use walkdir::WalkDir;
 
 use crate::{
-    config::{AndaConfig, Project},
+    config::{Project},
     container::{Buildkit, BuildkitOptions, Container, ContainerHdl},
     error::{BuilderError, ProjectError},
     util,
@@ -89,7 +88,7 @@ impl ArtifactUploader {
 
         //debug!("form: {:?}", form);
 
-        let res = ClientBuilder::new()
+        let _res = ClientBuilder::new()
             .build()?
             .post(&endpoint)
             .multipart(form)
@@ -204,7 +203,7 @@ impl ProjectBuilder {
     }
 
     pub async fn build_rpm(&self, project: &Project, builder_opts: &BuilderOptions) -> Result<(), BuilderError> {
-        let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
+        let _output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
         eprintln!(":: {}", "Building RPMs".yellow());
 
         let envlist = self._prepare_env(project, builder_opts)?;
@@ -276,7 +275,7 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub fn run_pre_script(&self, project: &Project, opts: &BuilderOptions) -> Result<(), BuilderError> {
+    pub fn run_pre_script(&self, project: &Project, _opts: &BuilderOptions) -> Result<(), BuilderError> {
         eprintln!(":: {}", "Running pre-build script...".yellow());
         for command in &project.pre_script.as_ref().unwrap().commands {
             eprintln!("$ {}", command.black());
@@ -301,7 +300,7 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub fn run_post_script(&self, project: &Project, opts: &BuilderOptions) -> Result<(), BuilderError> {
+    pub fn run_post_script(&self, project: &Project, _opts: &BuilderOptions) -> Result<(), BuilderError> {
         eprintln!(":: {}", "Running post-build script...".yellow());
         for command in &project.post_script.as_ref().unwrap().commands {
             eprintln!("$ {}", command.black());

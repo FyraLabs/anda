@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 use async_once_cell::OnceCell;
 use bytes::Bytes;
-use futures::{stream, Stream, StreamExt, TryStreamExt};
+use futures::{stream, Stream, StreamExt};
 use k8s_openapi::api::{
-    batch::v1::{Job, JobSpec, JobStatus},
+    batch::v1::{Job, JobSpec},
     core::v1::{Container, EnvVar, Pod, PodSpec, PodTemplateSpec},
 };
 use kube::{
@@ -14,7 +14,7 @@ use kube::{
     Api, Client,
 };
 
-use crate::db_object::Build;
+
 /// Kubernetes client object
 pub struct K8S;
 
@@ -147,7 +147,7 @@ async fn watch_jobs() -> impl Stream<Item = BuildStatusEvent> {
 pub async fn get_logs(
     id: String,
 ) -> Result<impl Stream<Item = Result<Bytes, kube::Error>>, kube::Error> {
-    let jobs = K8S::jobs().await;
+    let _jobs = K8S::jobs().await;
     let pods = K8S::pods().await;
 
     // let job = jobs.get(format!("build-{}", id).as_str()).await?;

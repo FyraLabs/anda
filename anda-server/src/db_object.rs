@@ -464,7 +464,7 @@ impl Target {
     }
 
 
-    pub async fn update(&self, id: Uuid) -> Result<Target> {
+    pub async fn update(&self, _id: Uuid) -> Result<Target> {
         let db = DbPool::get().await;
         // get target by id, then update it
         let target = target::ActiveModel {
