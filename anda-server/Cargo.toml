@@ -2,7 +2,9 @@
 name = "anda-server"
 version = "0.1.0"
 edition = "2021"
-
+license = "MIT"
+#include = ["anda-frontend", "!node_modules", "dist", "!pnpm", "src", "test"]
+exclude = [ "node_modules" ]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -36,7 +38,7 @@ num = "0.4.0"
 num-derive = "0.3.3"
 num-traits = "0.2.15"
 npm_rs = "0.2.1"
-rust-embed = { version = "3.0.0" }
+rust-embed = { version = "6.4.0", features = ["interpolate-folder-path"] }
 pretty_env_logger = "0.4.0"
 [dependencies.sea-orm]
 version = "0.9.0"
@@ -45,3 +47,7 @@ features = ["runtime-tokio-rustls", "sqlx-postgres"]
 [build-dependencies]
 bindgen = "0.60.1"
 npm_rs = "0.2.1"
+
+[[bin]]
+name = "anda-server"
+path = "src/main.rs"

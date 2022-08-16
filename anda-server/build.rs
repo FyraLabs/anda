@@ -8,7 +8,7 @@ fn main() {
 
     let old_pwd = std::env::current_dir().unwrap();
     // change current directory to anda-frontend
-    std::env::set_current_dir("../anda-frontend").unwrap();
+    std::env::set_current_dir("anda-frontend").unwrap();
     NpmEnv::default()
         .with_node_env(&NodeEnv::from_cargo_profile().unwrap_or_default())
         .init_env()
@@ -38,15 +38,18 @@ fn main() {
         std::os::unix::fs::symlink("../anda-frontend/dist", "dist").unwrap();
     } */
 
+    // out dir
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+
     if let Ok(symlink_path) = symlink {
-        if symlink_path.to_str().unwrap() == "../anda-frontend/dist" {
+        if symlink_path.to_str().unwrap() == "anda-frontend/dist" {
             println!("symlink already exists");
             return;
         } else {
-            std::os::unix::fs::symlink("../anda-frontend/dist", "dist").unwrap();
+            std::os::unix::fs::symlink("anda-frontend/dist", format!("{}/dist", out_dir)).unwrap();
         }
     } else {
-        std::os::unix::fs::symlink("../anda-frontend/dist", "dist").unwrap();
+        std::os::unix::fs::symlink("anda-frontend/dist", format!("{}/dist", out_dir)).unwrap();
     }
 
     // copy anda-frontend/dist folder to anda-server/dist folder

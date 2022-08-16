@@ -45,25 +45,25 @@ mod s3_object;
 use rust_embed::RustEmbed;
 
 #[derive(RustEmbed)]
-#[folder = "dist/"]
+#[folder = "anda-frontend/dist"]
 struct Asset;
 
 #[get("/<_file..>")]
 fn index(_file: PathBuf) -> Option<RawHtml<Cow<'static, [u8]>>> {
     let asset = Asset::get("index.html")?;
-    Some(RawHtml(Cow::from(asset)))
+    Some(RawHtml(asset.data))
 }
 
 #[get("/callback/<_file..>")]
 fn callback(_file: PathBuf) -> Option<RawHtml<Cow<'static, [u8]>>> {
     let asset = Asset::get("index.html")?;
-    Some(RawHtml(Cow::from(asset)))
+    Some(RawHtml(asset.data))
 }
 
 #[get("/")]
 fn root() -> Option<RawHtml<Cow<'static, [u8]>>> {
     let asset = Asset::get("index.html")?;
-    Some(RawHtml(Cow::from(asset)))
+    Some(RawHtml(asset.data))
 }
 
 #[get("/<file..>", rank = 10)]
@@ -76,7 +76,7 @@ fn dist(file: PathBuf) -> Option<(ContentType, Cow<'static, [u8]>)> {
         .and_then(ContentType::from_extension)
         .unwrap_or(ContentType::Bytes);
 
-    Some((content_type, Cow::from(asset)))
+    Some((content_type, asset.data))
 }
 #[launch]
 async fn rocket() -> Rocket<Build> {

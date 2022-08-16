@@ -32,7 +32,7 @@ tabwriter = "1.2.1"  # tabwriter for pretty printing tables
 mime_guess = "2.0.4"
 proc-macro2 = "1.0.40"
 async-compression = { version = "0.3.14", features = ["flate2", "tokio", "gzip"] }
-async_zip = { git = "https://github.com/Majored/rs-async-zip.git", branch = "main" }
+async_zip = { git = "https://github.com/Majored/rs-async-zip.git", branch = "main", version = "0.0.8"}
 git2 = "0.14.4"
 tempfile = "3.3.0"
 ignore = "0.4.18"
