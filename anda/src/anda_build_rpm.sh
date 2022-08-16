@@ -50,12 +50,13 @@ anda_rpmbuild () {
     while [[ "$SRPM" == *".buildreqs."* ]]; do
         echo "SRPM: ${SRPM}"
         sudo dnf builddep -y "$SRPM"
+        rm -f "$SRPM"
         echo "SRPM contains .buildreqs. running again until no .buildreqs."
         SRPM=$(rpmdeps)
     done
 
     rpmbuild \
-        --rebuild ${SRPM} \
+        --rebuild "${SRPM}" \
         -ba \
         -D "_rpmdir $PWD/anda-build/rpm/" \
         -D "_sourcedir $PWD" \

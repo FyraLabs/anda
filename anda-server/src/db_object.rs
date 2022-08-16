@@ -448,7 +448,7 @@ impl Target {
             .one(db)
             .await?
             .ok_or_else(|| {
-                error!("Target not found"); 
+                error!("Target not found");
                 anyhow!("Target not found")
             })?;
         Ok(Target::from_model(target))

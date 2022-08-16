@@ -103,12 +103,16 @@ project "anda" {
     // before the package is built.
 }
 
-project "z" {
+project "test" {
     script {
         stage "build" {
+            image = "ubuntu:latest"
             commands = [
                 "echo 'build command here'"
             ]
         }
+    }
+    rpmbuild {
+        spec = "anda/tests/umpkg.spec"
     }
 }

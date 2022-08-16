@@ -26,6 +26,7 @@ impl AndaConfig {
 
 #[derive(Deserialize, PartialEq, Eq)]
 pub struct Project {
+    pub image: Option<String>,
     pub rpmbuild: Option<RpmBuild>,
     pub docker: Option<Docker>,
     pub pre_script: Option<PreScript>,
@@ -56,6 +57,7 @@ impl Script {
 
 #[derive(Deserialize, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct Stage {
+    pub image: Option<String>,
     pub depends: Option<Vec<String>>,
     pub commands: Vec<String>,
 }
@@ -72,6 +74,9 @@ pub struct PostScript {
 
 #[derive(Deserialize, PartialEq, Eq)]
 pub struct RpmBuild {
+    /// Image to build RPMs with
+    /// If not specified, the image of the project is used
+    pub image: Option<String>,
     pub spec: PathBuf,
     // serde default is standard
     /// Mode to use for the build.

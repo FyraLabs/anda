@@ -214,6 +214,14 @@ impl ProjectBuilder {
         project: &Project,
         builder_opts: &BuilderOptions,
     ) -> Result<(), BuilderError> {
+        let image = if let Some(image) = project.rpmbuild.as_ref().unwrap().image.as_ref() {
+            image.to_owned()
+        } else if let Some(image) = project.image.as_ref() {
+            image.to_owned()
+        } else {
+            "fedora:latest".to_owned()
+        };
+
         let _output_path =
             env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
         eprintln!(":: {}", "Building RPMs".yellow());
@@ -225,7 +233,7 @@ impl ProjectBuilder {
         match project.rpmbuild.as_ref().unwrap().mode {
             crate::config::RpmBuildMode::Standard => {
                 let mut b = Buildkit::new(Some(opts))
-                    .image("fedora:latest")
+                    .image(&image)
                     .context(buildkit_llb::prelude::Source::local("context"));
                 b.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
                 b.command_nocontext("sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools argbash");
@@ -247,7 +255,7 @@ impl ProjectBuilder {
             }
             crate::config::RpmBuildMode::Cargo => {
                 let mut b = Buildkit::new(Some(opts))
-                    .image("fedora:latest")
+                    .image(&image)
                     .context(buildkit_llb::prelude::Source::local("context"));
                 b.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
                 b.command_nocontext("sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools argbash");
@@ -426,8 +434,22 @@ impl ProjectBuilder {
             transfer_artifacts: Some(true),
             ..Default::default()
         };
+
+        //println!("{:?}", stage.image.as_ref());
+
+        let image = if let Some(image) = stage.image.as_ref() {
+            //println!("{}", image);
+            image.to_owned()
+        } else if let Some(image) = project.image.as_ref() {
+            image.to_owned()
+        } else {
+            "fedora:latest".to_owned()
+        };
+
+        //println!("{}", image);
+
         let mut b = Buildkit::new(Some(opts))
-            .image("fedora:latest")
+            .image(&image)
             .context(buildkit_llb::prelude::Source::local("context"));
 
         /* self.contain("stage", project)
@@ -468,7 +490,7 @@ impl ProjectBuilder {
                 .unwrap();
             if rollback.get_stage(name).is_some() {
                 let stage = rollback.get_stage(name).unwrap();
-                println!(
+                eprintln!(
                     " -> {}: `{}`",
                     "Rolling back".yellow(),
                     name.white().italic()
@@ -523,6 +545,7 @@ impl ProjectBuilder {
         let final_stage = &crate::config::Stage {
             depends: None,
             commands: vec![],
+            image: None,
         };
         depgraph.register_dependencies(
             final_stage,

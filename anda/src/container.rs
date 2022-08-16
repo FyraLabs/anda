@@ -320,7 +320,7 @@ impl Buildkit {
     }
 
     pub fn image(mut self, image_name: &str) -> Buildkit {
-        let img = Source::image("fedora:latest")
+        let img = Source::image(image_name)
             .custom_name(format!("Using image {}", image_name))
             .ref_counted();
 
