@@ -85,6 +85,8 @@ project "anda" {
 
     rpmbuild {
         spec = "anda/tests/umpkg.spec"
+        mode = "cargo"
+        package = "anda"
     }
     post_script {
         commands = [

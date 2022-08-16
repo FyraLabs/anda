@@ -76,9 +76,10 @@ pub struct RpmBuild {
     // serde default is standard
     /// Mode to use for the build.
     /// Default is `standard`. Builds an RPM normally from the spec file.
-    /// `cargo-rpm` builds uses the `cargo-rpm` crate to build an RPM from the Cargo.toml file, using templated values from the spec file.
+    /// `cargo-rpm` builds uses the `cargo-generate-rpm` crate to build an RPM from the Cargo.toml file, using templated values from the spec file.
     #[serde(default = "default_rpm_mode")]
-    pub mode: RpmBuildMode
+    pub mode: RpmBuildMode,
+    pub package: Option<String>,
 
 
 }
@@ -90,7 +91,7 @@ fn default_rpm_mode() -> RpmBuildMode {
 #[serde(rename_all = "kebab-case")]
 pub enum RpmBuildMode {
     Standard,
-    CargoRpm,
+    Cargo,
 }
 
 

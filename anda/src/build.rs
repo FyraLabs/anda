@@ -9,16 +9,16 @@ use reqwest::{multipart, ClientBuilder};
 use serde::Serialize;
 use solvent::DepGraph;
 use std::{
-    collections::{HashMap, BTreeMap},
+    collections::{BTreeMap, HashMap},
     env,
     path::PathBuf,
-    process::{ExitStatus},
+    process::ExitStatus,
 };
 use tokio::{fs::File, io::AsyncReadExt};
 use walkdir::WalkDir;
 
 use crate::{
-    config::{Project},
+    config::Project,
     container::{Buildkit, BuildkitOptions, Container, ContainerHdl},
     error::{BuilderError, ProjectError},
     util,
@@ -99,7 +99,6 @@ impl ArtifactUploader {
     }
 }
 
-
 #[derive(Clone)]
 pub struct BuilderOptions {
     pub display_llb: bool,
@@ -144,7 +143,11 @@ impl ProjectBuilder {
         Ok(())
     }
     /// Prepares environment variables for the build process.
-    pub fn _prepare_env(&self, project: &Project, opts: &BuilderOptions) -> Result<BTreeMap<String, String>, BuilderError> {
+    pub fn _prepare_env(
+        &self,
+        project: &Project,
+        opts: &BuilderOptions,
+    ) -> Result<BTreeMap<String, String>, BuilderError> {
         let config = crate::config::load_config(&opts.config_location)?;
 
         let mut envlist: BTreeMap<String, String> = BTreeMap::new();
@@ -173,7 +176,11 @@ impl ProjectBuilder {
 
         Ok(envlist)
     }
-    pub fn prepare_env(&self, project: &Project, opts: &BuilderOptions) -> Result<Vec<String>, BuilderError> {
+    pub fn prepare_env(
+        &self,
+        project: &Project,
+        opts: &BuilderOptions,
+    ) -> Result<Vec<String>, BuilderError> {
         let config = crate::config::load_config(&opts.config_location)?;
 
         let mut envlist = Vec::new();
@@ -202,31 +209,57 @@ impl ProjectBuilder {
         Ok(envlist)
     }
 
-    pub async fn build_rpm(&self, project: &Project, builder_opts: &BuilderOptions) -> Result<(), BuilderError> {
-        let _output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
+    pub async fn build_rpm(
+        &self,
+        project: &Project,
+        builder_opts: &BuilderOptions,
+    ) -> Result<(), BuilderError> {
+        let _output_path =
+            env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
         eprintln!(":: {}", "Building RPMs".yellow());
-
         let envlist = self._prepare_env(project, builder_opts)?;
-
         let opts = BuildkitOptions {
             env: Some(envlist),
             ..Default::default()
         };
-        let mut b = Buildkit::new(Some(opts)).image("fedora:latest").context(buildkit_llb::prelude::Source::local("context"));
-        b.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
-        b.command_nocontext("sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools");
-        b.inject_rpm_script();
-        b.command(&format!(
-            "sudo dnf builddep -y --refresh {}",
-            project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap()
-        ));
+        match project.rpmbuild.as_ref().unwrap().mode {
+            crate::config::RpmBuildMode::Standard => {
+                let mut b = Buildkit::new(Some(opts))
+                    .image("fedora:latest")
+                    .context(buildkit_llb::prelude::Source::local("context"));
+                b.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
+                b.command_nocontext("sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools argbash");
+                b.inject_rpm_script();
+                b.command(&format!(
+                    "sudo dnf builddep -y --refresh {}",
+                    project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap()
+                ));
+                b.command(&format!(
+                    "anda_build_rpm rpmbuild -p {}",
+                    project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap()
+                ));
+                b.execute(builder_opts)?;
+            }
+            crate::config::RpmBuildMode::Cargo => {
+                let mut b = Buildkit::new(Some(opts))
+                    .image("fedora:latest")
+                    .context(buildkit_llb::prelude::Source::local("context"));
+                b.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
+                b.command_nocontext("sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools argbash");
+                b.inject_rpm_script();
+                // we're not putting this in the same command becuase caching will take more time
+                b.command_nocontext("sudo dnf install -y rustc cargo");
+                b.command_nocontext("cargo install cargo-generate-rpm");
 
-        b.command(&format!(
-            "export RPMSPEC={} && anda_build_rpm",
-            project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap()
-        ));
+                if let Some(package) = project.rpmbuild.as_ref().unwrap().package.as_ref() {
+                    b.command(&format!("anda_build_rpm cargo -p {}", package));
+                } else {
+                    b.command("anda_build_rpm cargo");
+                }
+                b.execute(builder_opts)?;
 
-        b.execute(builder_opts)?;
+            }
+        };
 
         /* self.contain("rpm", project)
         .await?
@@ -275,7 +308,11 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub fn run_pre_script(&self, project: &Project, _opts: &BuilderOptions) -> Result<(), BuilderError> {
+    pub fn run_pre_script(
+        &self,
+        project: &Project,
+        _opts: &BuilderOptions,
+    ) -> Result<(), BuilderError> {
         eprintln!(":: {}", "Running pre-build script...".yellow());
         for command in &project.pre_script.as_ref().unwrap().commands {
             eprintln!("$ {}", command.black());
@@ -300,7 +337,11 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub fn run_post_script(&self, project: &Project, _opts: &BuilderOptions) -> Result<(), BuilderError> {
+    pub fn run_post_script(
+        &self,
+        project: &Project,
+        _opts: &BuilderOptions,
+    ) -> Result<(), BuilderError> {
         eprintln!(":: {}", "Running post-build script...".yellow());
         for command in &project.post_script.as_ref().unwrap().commands {
             eprintln!("$ {}", command.black());
@@ -317,7 +358,12 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub async fn contain(&self, name: &str, project: &Project, opts: &BuilderOptions) -> Result<Container, BuilderError> {
+    pub async fn contain(
+        &self,
+        name: &str,
+        project: &Project,
+        opts: &BuilderOptions,
+    ) -> Result<Container, BuilderError> {
         //let config = crate::config::load_config(&self.root)?;
 
         let envs = self.prepare_env(project, opts)?;
@@ -370,15 +416,16 @@ impl ProjectBuilder {
             transfer_artifacts: Some(true),
             ..Default::default()
         };
-        let mut b = Buildkit::new(Some(opts)).image("fedora:latest").context(buildkit_llb::prelude::Source::local("context"));
-
+        let mut b = Buildkit::new(Some(opts))
+            .image("fedora:latest")
+            .context(buildkit_llb::prelude::Source::local("context"));
 
         /* self.contain("stage", project)
-            .await?
-            .run_cmds(stage.commands.iter().map(|c| c.as_str()).collect())
-            .await?
-            .finish()
-            .await?; */
+        .await?
+        .run_cmds(stage.commands.iter().map(|c| c.as_str()).collect())
+        .await?
+        .finish()
+        .await?; */
 
         for command in &stage.commands {
             b.command(command);
@@ -502,7 +549,11 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub async fn build_docker(&self, project: &Project, opts: &BuilderOptions) -> Result<(), BuilderError> {
+    pub async fn build_docker(
+        &self,
+        project: &Project,
+        opts: &BuilderOptions,
+    ) -> Result<(), BuilderError> {
         eprintln!(":: {}", "Building docker image...".yellow());
         self.prepare_env(project, opts)?;
 
@@ -583,7 +634,11 @@ impl ProjectBuilder {
     }
     // project -> scope -> stage
     // example: project::script:stage, docker:image/image
-    pub async fn build_in_scope(&self, query: &str, opts: &BuilderOptions) -> Result<(), BuilderError> {
+    pub async fn build_in_scope(
+        &self,
+        query: &str,
+        opts: &BuilderOptions,
+    ) -> Result<(), BuilderError> {
         let re = regex::Regex::new(r"(.+)::([^:]+)(:(.+))?")
             .map_err(|e| BuilderError::Other(format!("Can't make regex: {}", e)))?;
         let config = crate::config::load_config(&opts.config_location)?;
@@ -635,7 +690,11 @@ impl ProjectBuilder {
     }
 
     ///  Builds an Andaman project.
-    pub async fn build(&self, projects: Vec<String>, opts: &BuilderOptions) -> Result<(), BuilderError> {
+    pub async fn build(
+        &self,
+        projects: Vec<String>,
+        opts: &BuilderOptions,
+    ) -> Result<(), BuilderError> {
         let config = crate::config::load_config(&opts.config_location)?;
         let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
 

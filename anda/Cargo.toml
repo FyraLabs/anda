@@ -48,11 +48,9 @@ regex = "1.6.0"
 buildkit-llb = "0.2.0"
 
 
-[package.metadata.rpm]
-package = "anda"
+[package.metadata.generate-rpm]
 
-[package.metadata.rpm.cargo]
-buildflags = ["--release"]
-
-[package.metadata.rpm.targets]
-anda = { path = "/usr/bin/anda" }
+[[package.metadata.generate-rpm.assets]]
+source = "./target/release/anda"
+dest = "/usr/bin/anda"
+mode = "755"

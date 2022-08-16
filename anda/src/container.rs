@@ -500,7 +500,7 @@ impl Buildkit {
                 self.cmd = Some(cmd);
 
             let mut cmd = LLBCommand::run("/bin/sh")
-                .args(&["-c", "chmod +x /usr/local/bin/anda_build_rpm"])
+                .args(&["-c", "argbash -i /usr/local/bin/anda_build_rpm && chmod +x /usr/local/bin/anda_build_rpm"])
                 //.custom_name("Inject RPM script into image")
                 .cwd("/src")
                 .custom_name("Marking RPM builder script as executable")
@@ -599,6 +599,8 @@ impl Buildkit {
 
 #[cfg(test)]
 mod test_docker {
+    use std::env;
+
     use bollard::service::HostConfig;
     use super::*;
 
