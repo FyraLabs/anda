@@ -67,12 +67,13 @@ anda_rpmbuild () {
 
 cargo_generate_rpm () {
     # Generate RPMs using cargo-generate-rpm
+    mkdir -p anda-build/rpm
     if [ -z "$project" ]; then
         cargo build --release
-        cargo generate-rpm
+        cargo generate-rpm -o anda-build/rpm
     else
         cargo build --release --package "$project"
-        cargo generate-rpm -p "$project"
+        cargo generate-rpm -p "$project" -o anda-build/rpm
 
     fi
 }

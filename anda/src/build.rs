@@ -230,6 +230,11 @@ impl ProjectBuilder {
                 b.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
                 b.command_nocontext("sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools argbash");
                 b.inject_rpm_script();
+                if let Some(buildeps) = project.rpmbuild.as_ref().unwrap().build_deps.as_ref() {
+                    let mut cmd = vec!["dnf", "install", "-y"];
+                    cmd.extend(buildeps.iter().map(|x| x.as_str()));
+                    b.command_args(cmd);
+                }
                 b.command(&format!(
                     "sudo dnf builddep -y --refresh {}",
                     project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap()
@@ -250,6 +255,11 @@ impl ProjectBuilder {
                 // we're not putting this in the same command becuase caching will take more time
                 b.command_nocontext("sudo dnf install -y rustc cargo");
                 b.command_nocontext("cargo install cargo-generate-rpm");
+                if let Some(buildeps) = project.rpmbuild.as_ref().unwrap().build_deps.as_ref() {
+                    let mut cmd = vec!["dnf", "install", "-y"];
+                    cmd.extend(buildeps.iter().map(|x| x.as_str()));
+                    b.command_args(cmd);
+                }
 
                 if let Some(package) = project.rpmbuild.as_ref().unwrap().package.as_ref() {
                     b.command(&format!("anda_build_rpm cargo -p {}", package));

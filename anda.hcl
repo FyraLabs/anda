@@ -87,6 +87,7 @@ project "anda" {
         spec = "anda/tests/umpkg.spec"
         mode = "cargo"
         package = "anda"
+        build_deps = ["openssl-devel", "rust-packaging"]
     }
     post_script {
         commands = [

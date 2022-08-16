@@ -80,8 +80,7 @@ pub struct RpmBuild {
     #[serde(default = "default_rpm_mode")]
     pub mode: RpmBuildMode,
     pub package: Option<String>,
-
-
+    pub build_deps: Option<Vec<String>>,
 }
 
 fn default_rpm_mode() -> RpmBuildMode {
