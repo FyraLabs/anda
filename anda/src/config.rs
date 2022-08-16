@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use log::warn;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::fs;
 use std::path::PathBuf;
 
@@ -9,7 +9,7 @@ use crate::error::ProjectError;
 
 #[derive(Deserialize)]
 pub struct AndaConfig {
-    pub project: HashMap<String, Project>,
+    pub project: BTreeMap<String, Project>,
 }
 
 impl AndaConfig {
@@ -37,7 +37,7 @@ pub struct Project {
 }
 #[derive(Deserialize, PartialEq, Eq)]
 pub struct Script {
-    pub stage: HashMap<String, Stage>,
+    pub stage: BTreeMap<String, Stage>,
 }
 
 impl Script {
@@ -81,7 +81,7 @@ pub struct RpmBuild {
     // serde default is standard
     /// Mode to use for the build.
     /// Default is `standard`. Builds an RPM normally from the spec file.
-    /// `cargo-rpm` builds uses the `cargo-generate-rpm` crate to build an RPM from the Cargo.toml file, using templated values from the spec file.
+    /// `cargo-rpm` builds uses the `cargo-generate-rpm` crate to build an RPM from the Cargo.toml file
     #[serde(default = "default_rpm_mode")]
     pub mode: RpmBuildMode,
     pub package: Option<String>,
