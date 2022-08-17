@@ -226,107 +226,39 @@ impl ProjectBuilder {
             env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
         eprintln!(":: {}", "Building RPMs".yellow());
         let envlist = self._prepare_env(project, builder_opts)?;
-        let opts = BuildkitOptions {
+        /* let opts = BuildkitOptions {
             env: Some(envlist),
             ..Default::default()
-        };
-        match project.rpmbuild.as_ref().unwrap().mode {
-            crate::config::RpmBuildMode::Standard => {
-                let mut b = Buildkit::new(Some(opts))
+        }; */
+
+        let mut b = Buildkit::new(Some(BuildkitOptions {
+            env: Some(envlist),
+            ..Default::default()
+        }))
                     .image(&image)
                     .context(buildkit_llb::prelude::Source::local("context"));
-                b.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
-                b.command_nocontext("sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools argbash");
-                b.inject_rpm_script();
-                if let Some(buildeps) = project.rpmbuild.as_ref().unwrap().build_deps.as_ref() {
-                    if !buildeps.is_empty() {
-                        let mut cmd = vec!["dnf", "install", "-y"];
-                        cmd.extend(buildeps.iter().map(|x| x.as_str()));
-                        b.command_args(cmd);
-                    }
-                }
-                b.command(&format!(
-                    "sudo dnf builddep -y --refresh {}",
-                    project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap()
-                ));
-                b.command(&format!(
-                    "anda_build_rpm rpmbuild -p {}",
-                    project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap()
-                ));
+        let mode = &project.rpmbuild.as_ref().unwrap().mode;
+            match mode {
+            crate::config::RpmBuildMode::Standard => {
+                b.build_rpm(project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
+                crate::config::RpmBuildMode::Standard,
+                project.rpmbuild.as_ref().unwrap().build_deps.as_ref());
                 b.execute(builder_opts)?;
             }
             crate::config::RpmBuildMode::Cargo => {
-                let mut b = Buildkit::new(Some(opts))
-                    .image(&image)
-                    .context(buildkit_llb::prelude::Source::local("context"));
-                b.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
-                b.command_nocontext("sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools argbash");
-                b.inject_rpm_script();
-                // we're not putting this in the same command becuase caching will take more time
-                b.command_nocontext("sudo dnf install -y rustc cargo");
-                b.command_nocontext("cargo install cargo-generate-rpm");
-                if let Some(buildeps) = project.rpmbuild.as_ref().unwrap().build_deps.as_ref() {
-                    if !buildeps.is_empty() {
-                        let mut cmd = vec!["dnf", "install", "-y"];
-                        cmd.extend(buildeps.iter().map(|x| x.as_str()));
-                        b.command_args(cmd);
-                    }
-                }
-
-                if let Some(package) = project.rpmbuild.as_ref().unwrap().package.as_ref() {
-                    b.command(&format!("anda_build_rpm cargo -p {}", package));
+                let cargo_project = if let Some(proj) = project.rpmbuild.as_ref().unwrap().package.as_ref() {
+                    proj.to_owned()
                 } else {
-                    b.command("anda_build_rpm cargo");
-                }
+                    "".to_owned()
+                };
+                b.build_rpm(&cargo_project,
+                crate::config::RpmBuildMode::Cargo,
+                project.rpmbuild.as_ref().unwrap().build_deps.as_ref());
                 b.execute(builder_opts)?;
 
             }
         };
 
-        /* self.contain("rpm", project)
-        .await?
-        .run_cmd(vec![
-            "sudo",
-            "dnf",
-            "install",
-            "-y",
-            "rpm-build",
-            "dnf-plugins-core",
-        ])
-        .await?
-        .run_cmd(vec![
-            "sudo",
-            "dnf",
-            "builddep",
-            "-y",
-            project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
-        ])
-        .await?
-        .run_cmd(vec![
-            "rpmbuild",
-            "-ba",
-            project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
-            "--define",
-            format!("_rpmdir {}", output_path).as_str(),
-            "--define",
-            format!("_srcrpmdir {}/src", output_path).as_str(),
-            "--define",
-            "_disable_source_fetch 0",
-            "--define",
-            format!(
-                "_sourcedir {}",
-                tokio::fs::canonicalize(&self.root)
-                    .await?
-                    .to_str()
-                    .ok_or_else(|| BuilderError::Other(
-                        "invalid unicode for path".to_string()
-                    ))?
-            )
-            .as_str(),
-        ])
-        .await?
-        .finish()
-        .await?; */
         Ok(())
     }
 

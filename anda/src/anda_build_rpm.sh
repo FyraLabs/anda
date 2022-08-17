@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # anda_build_rpm.sh
 # Script to process rpmbuild and build RPMs inside a docker container for Andaman.
 
@@ -47,11 +47,20 @@ anda_rpmbuild () {
 
     SRPM=$(rpmdeps)
 
+    TRIES=0
+
     while [[ "$SRPM" == *".buildreqs."* ]]; do
+        if [ $TRIES -ge 10 ]; then
+            >&2 echo "Buildreqs failed to resolve after 10 tries. Exiting..."
+            exit 1
+        fi
+        TRIES=$((TRIES+1))
+        >&2 echo "Resolving buildreqs: attempt $TRIES out of 10"
         echo "SRPM: ${SRPM}"
         sudo dnf builddep -y "$SRPM"
         rm -f "$SRPM"
         echo "SRPM contains .buildreqs. running again until no .buildreqs."
+        # try for 5 times, if it still contains .buildreqs. then exit
         SRPM=$(rpmdeps)
     done
 
