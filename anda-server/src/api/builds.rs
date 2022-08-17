@@ -46,7 +46,9 @@ pub struct BuildSubmission<'r> {
 #[post("/", data = "<data>")]
 async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> {
     debug!("{:?}", data.target_id);
-    let target = Target::get(data.target_id).await.map_err(|_| Status::NotFound)?;
+    let target = Target::get(data.target_id)
+        .await
+        .map_err(|_| Status::NotFound)?;
 
     //println!("{:?}", target);
     // src_file build
@@ -78,7 +80,9 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
     let build = AndaBackend::new(
         build_id,
         cache,
-        target.image.unwrap_or_else(|| "local-registry:38675/anda/anda-client".to_string()),
+        target
+            .image
+            .unwrap_or_else(|| "local-registry:38675/anda/anda-client".to_string()),
     );
     build
         .build()

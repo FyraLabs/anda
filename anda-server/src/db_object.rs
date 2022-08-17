@@ -399,7 +399,6 @@ pub struct Target {
     pub arch: String,
 }
 
-
 impl From<crate::backend::Target> for Target {
     fn from(model: crate::backend::Target) -> Self {
         Target {
@@ -462,7 +461,6 @@ impl Target {
             .await?;
         Ok(target.into_iter().map(Target::from_model).collect())
     }
-
 
     pub async fn update(&self, _id: Uuid) -> Result<Target> {
         let db = DbPool::get().await;

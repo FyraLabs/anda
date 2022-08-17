@@ -576,10 +576,7 @@ impl From<crate::db_object::Target> for Target {
     }
 }
 
-
 impl Target {
-
-
     pub fn new(name: String, image: Option<String>, arch: String) -> Self {
         dotenv::dotenv().ok();
         Self {
@@ -612,7 +609,6 @@ impl Target {
             .map(|target| Self::from(target.clone()))
             .collect())
     }
-
 
     pub async fn add(self) -> Result<Self>
     where

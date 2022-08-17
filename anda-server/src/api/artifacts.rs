@@ -76,7 +76,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_new_artifact() {
-        let target = Target::new(Uuid::new_v4(),"test".to_string(), None, "noarch".to_string());
+        let target = Target::new(
+            Uuid::new_v4(),
+            "test".to_string(),
+            None,
+            "noarch".to_string(),
+        );
         Target::add(&target).await.unwrap();
         let build = Build::new(0, None, "test");
         Build::add(&build).await.unwrap();

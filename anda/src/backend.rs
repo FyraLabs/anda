@@ -75,7 +75,6 @@ pub(crate) async fn match_subcmd(cmd: &BackendCommand) -> Result<()> {
     }
 }
 
-
 pub async fn buildinfo(build_id: Uuid) -> Result<()> {
     let build = api::AndaBackend::new(None).get_build(build_id).await?;
     println!("{}", serde_json::to_string_pretty(&build)?);

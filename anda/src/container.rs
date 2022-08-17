@@ -1,27 +1,24 @@
 use anyhow::{anyhow, Result};
 
-
-
 use buildkit_llb::{
     prelude::{
-        fs::SequenceOperation, source::{ImageSource, LocalSource}, Command as LLBCommand, MultiOwnedOutput, *,
+        fs::SequenceOperation,
+        source::{ImageSource, LocalSource},
+        Command as LLBCommand, MultiOwnedOutput, *,
     },
     utils::{OperationOutput, OutputIdx, OwnOutputIdx},
 };
 //use buildkit_llb::prelude::*;
 use owo_colors::OwoColorize;
 
+use std::sync::Arc;
 use std::{
+    collections::BTreeMap,
     io::{stdout, BufRead},
-    path::PathBuf, collections::BTreeMap,
+    path::PathBuf,
 };
-use std::{collections::HashMap, sync::Arc};
-use tokio_stream::StreamExt;
 
 use crate::{build, BuildkitLog};
-
-const IMAGE: &str = "fedora:36";
-
 
 #[derive(Default)]
 pub struct BuildkitOptions {
@@ -64,7 +61,6 @@ impl Buildkit {
         self
     }
 
-
     pub fn context(mut self, ctx: LocalSource) -> Buildkit {
         let mut context = ctx;
 
@@ -105,9 +101,9 @@ impl Buildkit {
         let mut artifact_cache = {
             FileSystem::sequence()
                 .custom_name("Getting artifact cache")
-                .append(
-                    FileSystem::mkdir(OutputIdx(0), LayerPath::Scratch("/")).make_parents(true),
-                ).ref_counted().output(0)
+                .append(FileSystem::mkdir(OutputIdx(0), LayerPath::Scratch("/")).make_parents(true))
+                .ref_counted()
+                .output(0)
         };
 
         if let Some(switch) = self.options.transfer_artifacts {
@@ -119,9 +115,7 @@ impl Buildkit {
         let cache = {
             FileSystem::sequence()
                 .custom_name("Getting artifact cache")
-                .append(
-                    FileSystem::mkdir(OutputIdx(0), LayerPath::Scratch("/")).make_parents(true),
-                )
+                .append(FileSystem::mkdir(OutputIdx(0), LayerPath::Scratch("/")).make_parents(true))
                 .append(
                     FileSystem::copy()
                         .from(LayerPath::Other(artifact_cache, "/"))
@@ -144,7 +138,7 @@ impl Buildkit {
 
     pub fn command_args(&mut self, command: Vec<&str>) -> &mut Buildkit {
         // find dockerignore file
-        let mut local = self.context_source("context");
+        //let mut local = self.context_source("context");
 
         //let local = local.ref_counted();
         if let Some(image) = &self.image {
@@ -168,7 +162,11 @@ impl Buildkit {
                 //TODO: Make this a list of shared caches so it's distro-agnostic
             }
             cmd = cmd
-                .mount(Mount::Layer(OutputIdx(2), self.context.as_ref().unwrap().to_owned(), "/src"))
+                .mount(Mount::Layer(
+                    OutputIdx(2),
+                    self.context.as_ref().unwrap().to_owned(),
+                    "/src",
+                ))
                 .mount(Mount::SharedCache("/var/cache/dnf"));
 
             let cmd = cmd.ref_counted();
@@ -205,7 +203,7 @@ impl Buildkit {
 
     pub fn command(&mut self, command: &str) -> &mut Buildkit {
         // find dockerignore file
-        let mut local = self.context_source("context");
+        //let mut local = self.context_source("context");
         if let Some(image) = &self.image {
             let mut cmd = LLBCommand::run("/bin/sh")
                 .args(&["-c", command])
@@ -216,13 +214,20 @@ impl Buildkit {
                     //.mount(Mount::ReadOnlyLayer(image.output(), "/"))
                     .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
             } else {
-                cmd = cmd
-                    .mount(Mount::Layer(OutputIdx(0), image.output(), "/"));
+                cmd = cmd.mount(Mount::Layer(OutputIdx(0), image.output(), "/"));
             }
             let art = self.artifact_cache.as_ref().unwrap();
             cmd = cmd
-                .mount(Mount::Layer(OutputIdx(1), art.to_owned(), "/src/anda-build"))
-                .mount(Mount::Layer(OutputIdx(2), self.context.as_ref().unwrap().to_owned(), "/src"))
+                .mount(Mount::Layer(
+                    OutputIdx(1),
+                    art.to_owned(),
+                    "/src/anda-build",
+                ))
+                .mount(Mount::Layer(
+                    OutputIdx(2),
+                    self.context.as_ref().unwrap().to_owned(),
+                    "/src",
+                ))
                 .mount(Mount::SharedCache("/var/cache/dnf"));
 
             let cmd = cmd.ref_counted();
@@ -240,7 +245,7 @@ impl Buildkit {
                 .args(&["-c", command])
                 .cwd("/src")
                 .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
-            let art = self.artifact_cache.as_ref().unwrap();
+            //let art = self.artifact_cache.as_ref().unwrap();
             if let Some(out) = &self.cmd {
                 cmd = cmd
                     .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
@@ -262,11 +267,13 @@ impl Buildkit {
     }
 
     pub fn inject_rpm_script(&mut self) -> &mut Buildkit {
-
         let script = include_str!("anda_build_rpm.sh");
-        let command = format!(r#"cat << 'EOF' > /usr/local/bin/anda_build_rpm
+        let command = format!(
+            r#"cat << 'EOF' > /usr/local/bin/anda_build_rpm
         {}
-        "#, script);
+        "#,
+            script
+        );
 
         if let Some(image) = &self.image {
             let mut cmd = LLBCommand::run("/bin/sh")
@@ -275,19 +282,19 @@ impl Buildkit {
                 .cwd("/src")
                 .custom_name("Installing RPM builder script")
                 .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
-                if let Some(out) = &self.cmd {
-                    cmd = cmd
-                        .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
-                        .mount(Mount::Layer(OutputIdx(1), out.output(1), "/src/anda-build"))
-                    //.env("FOO", "BAR");
-                } else {
-                    cmd = cmd
-                        .mount(Mount::Layer(OutputIdx(0), image.output(), "/"))
-                        .mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"))
-                }
-                cmd = cmd.mount(Mount::SharedCache("/var/cache/dnf"));
-                let cmd = cmd.ref_counted();
-                self.cmd = Some(cmd);
+            if let Some(out) = &self.cmd {
+                cmd = cmd
+                    .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
+                    .mount(Mount::Layer(OutputIdx(1), out.output(1), "/src/anda-build"))
+                //.env("FOO", "BAR");
+            } else {
+                cmd = cmd
+                    .mount(Mount::Layer(OutputIdx(0), image.output(), "/"))
+                    .mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"))
+            }
+            cmd = cmd.mount(Mount::SharedCache("/var/cache/dnf"));
+            let cmd = cmd.ref_counted();
+            self.cmd = Some(cmd);
 
             let mut cmd = LLBCommand::run("/bin/sh")
                 .args(&["-c", "argbash -i /usr/local/bin/anda_build_rpm && chmod +x /usr/local/bin/anda_build_rpm"])
@@ -295,29 +302,36 @@ impl Buildkit {
                 .cwd("/src")
                 .custom_name("Marking RPM builder script as executable")
                 .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
-                if let Some(out) = &self.cmd {
-                    cmd = cmd
-                        .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
-                        .mount(Mount::Layer(OutputIdx(1), out.output(1), "/src/anda-build"))
-                    //.env("FOO", "BAR");
-                } else {
-                    cmd = cmd
-                        .mount(Mount::Layer(OutputIdx(0), image.output(), "/"))
-                        .mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"))
-                }
-                cmd = cmd.mount(Mount::SharedCache("/var/cache/dnf"));
-                let cmd = cmd.ref_counted();
-                self.cmd = Some(cmd);
+            if let Some(out) = &self.cmd {
+                cmd = cmd
+                    .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
+                    .mount(Mount::Layer(OutputIdx(1), out.output(1), "/src/anda-build"))
+                //.env("FOO", "BAR");
+            } else {
+                cmd = cmd
+                    .mount(Mount::Layer(OutputIdx(0), image.output(), "/"))
+                    .mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"))
+            }
+            cmd = cmd.mount(Mount::SharedCache("/var/cache/dnf"));
+            let cmd = cmd.ref_counted();
+            self.cmd = Some(cmd);
         } else {
             panic!("No image specified");
         }
         self
     }
 
-    pub fn build_rpm(&mut self, rpm: &str, mode: crate::config::RpmBuildMode, pre_buildreqs: Option<&Vec<String>>) -> &mut Buildkit {
+    pub fn build_rpm(
+        &mut self,
+        rpm: &str,
+        mode: crate::config::RpmBuildMode,
+        pre_buildreqs: Option<&Vec<String>>,
+    ) -> &mut Buildkit {
         if let Some(image) = &self.image.clone() {
             self.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
-            self.command_nocontext("sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools argbash rustc cargo");
+            self.command_nocontext(
+                "sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools argbash rustc cargo",
+            );
             self.command_nocontext("cargo install cargo-generate-rpm");
             self.inject_rpm_script();
 
@@ -329,9 +343,8 @@ impl Buildkit {
                 }
             }
 
-
             let mut cmd = LLBCommand::run("/bin/bash")
-            .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
+                .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
             match mode {
                 crate::config::RpmBuildMode::Standard => {
                     self.command(&format!("sudo dnf builddep -y {}", rpm));
@@ -347,18 +360,24 @@ impl Buildkit {
                     //.mount(Mount::ReadOnlyLayer(image.output(), "/"))
                     .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
             } else {
-                cmd = cmd
-                    .mount(Mount::Layer(OutputIdx(0), image.output(), "/"));
+                cmd = cmd.mount(Mount::Layer(OutputIdx(0), image.output(), "/"));
             }
             cmd = cmd
-                .mount(Mount::Layer(OutputIdx(1), art.to_owned(), "/src/anda-build"))
-                .mount(Mount::Layer(OutputIdx(2), self.context.as_ref().unwrap().to_owned(), "/src"))
+                .mount(Mount::Layer(
+                    OutputIdx(1),
+                    art.to_owned(),
+                    "/src/anda-build",
+                ))
+                .mount(Mount::Layer(
+                    OutputIdx(2),
+                    self.context.as_ref().unwrap().to_owned(),
+                    "/src",
+                ))
                 .cwd("/src")
                 .mount(Mount::SharedCache("/var/cache/dnf"));
             let cmd = cmd.ref_counted();
             self.artifact_cache = Some(cmd.output(1));
             self.cmd = Some(cmd);
-
         } else {
             panic!("No image specified");
         }
@@ -369,16 +388,21 @@ impl Buildkit {
     /// This is useful if you want to generate one big LLB that fetches the artifact cache from all the other builds
     /// To use this, call it for each output you recieve.
     // TODO: Implement this for the builds
-    pub fn merge_artifact_output(&mut self, output_merge: OperationOutput<'static>) -> &mut Buildkit {
-
-        let fs: SequenceOperation<'_> =  {
+    pub fn merge_artifact_output(
+        &mut self,
+        output_merge: OperationOutput<'static>,
+    ) -> &mut Buildkit {
+        let fs: SequenceOperation<'_> = {
             FileSystem::sequence()
                 .custom_name("Merging artifact cache")
                 .append(
                     FileSystem::copy()
                         .from(LayerPath::Other(output_merge, "/"))
-                        .to(OutputIdx(0), LayerPath::Other(self.artifact_cache.as_ref().unwrap().to_owned(), "/"))
-                        .recursive(true)
+                        .to(
+                            OutputIdx(0),
+                            LayerPath::Other(self.artifact_cache.as_ref().unwrap().to_owned(), "/"),
+                        )
+                        .recursive(true),
                 )
         };
         self.artifact_cache = Some(fs.ref_counted().output(0));
@@ -411,30 +435,28 @@ impl Buildkit {
     }
 
     pub fn execute(&mut self, builder_opts: &build::BuilderOptions) -> Result<()> {
-
         //println!("{:#?}", self.artifact_cache);
         if builder_opts.display_llb {
             Terminal::with(self.build_graph())
-            .write_definition(stdout())
-            .unwrap();
+                .write_definition(stdout())
+                .unwrap();
 
             return Ok(());
         }
 
         let mut extra_args = Vec::new();
 
-
-            match builder_opts.buildkit_log {
-                BuildkitLog::Tty => {
-                    extra_args.push("--progress=tty");
-                }
-                BuildkitLog::Auto => {
-                    extra_args.push("--progress=auto");
-                }
-                BuildkitLog::Plain => {
-                    extra_args.push("--progress=plain");
-                }
+        match builder_opts.buildkit_log {
+            BuildkitLog::Tty => {
+                extra_args.push("--progress=tty");
             }
+            BuildkitLog::Auto => {
+                extra_args.push("--progress=auto");
+            }
+            BuildkitLog::Plain => {
+                extra_args.push("--progress=plain");
+            }
+        }
         if let Some(opt) = self.options.transfer_artifacts {
             if opt {
                 extra_args.push("--local");
@@ -463,60 +485,6 @@ impl Buildkit {
 
         Ok(())
     }
-
-    pub fn execute_output(&mut self, builder_opts: &build::BuilderOptions, output: OperationOutput<'static>) -> Result<()> {
-
-        if builder_opts.display_llb {
-            Terminal::with(output)
-            .write_definition(stdout())
-            .unwrap();
-
-            return Ok(());
-        }
-
-        let mut extra_args = Vec::new();
-
-
-            match builder_opts.buildkit_log {
-                BuildkitLog::Tty => {
-                    extra_args.push("--progress=tty");
-                }
-                BuildkitLog::Auto => {
-                    extra_args.push("--progress=auto");
-                }
-                BuildkitLog::Plain => {
-                    extra_args.push("--progress=plain");
-                }
-            }
-        if let Some(opt) = self.options.transfer_artifacts {
-            if opt {
-                extra_args.push("--local");
-                extra_args.push("artifacts=anda-build");
-            }
-        }
-        let mut cmd = std::process::Command::new("buildctl")
-            .arg("build")
-            .arg("--output")
-            .arg("type=local,dest=anda-build")
-            .args(&["--local", "context=."])
-            .args(&extra_args)
-            //.arg("--opt")
-            //.env("BUILDKIT_HOST", "docker-container://buildkitd")
-            .stdin(std::process::Stdio::piped())
-            .spawn()?;
-
-        Terminal::with(output)
-            .write_definition(cmd.stdin.as_mut().unwrap())
-            .unwrap();
-        let ret = cmd.wait()?;
-
-        if !ret.success() {
-            return Err(anyhow::anyhow!("Build failed"));
-        }
-
-        Ok(())
-    }
-
 }
 
 #[cfg(test)]
@@ -524,5 +492,4 @@ mod test_docker {
     use std::env;
 
     use super::*;
-
 }

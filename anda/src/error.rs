@@ -81,7 +81,7 @@ pub enum PackerError {
     Io(std::io::Error),
     //Other(String),
     Git(git2::Error),
-    Other(String)
+    Other(String),
 }
 
 impl Display for PackerError {

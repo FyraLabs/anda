@@ -1,6 +1,6 @@
 //! Utility functions for Andaman.
 
-use crate::{error::PackerError, build};
+use crate::{build, error::PackerError};
 use anyhow::Result;
 use async_zip::read::seek::ZipFileReader;
 use async_zip::write::{EntryOptions, ZipFileWriter};
@@ -8,13 +8,13 @@ use async_zip::Compression;
 use futures::stream::TryStreamExt;
 use git2::Repository;
 use log::{debug, info};
-use uuid::Uuid;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
+use uuid::Uuid;
 
 /// Returns the current commit hash of the given repository located at the given path.
 pub fn current_commit(path: &Path) -> Option<String> {
@@ -253,14 +253,13 @@ impl ProjectPacker {
     }
 }
 
-
 /// Packs the project and pushes it to the server
 pub async fn push_build(root: &PathBuf) -> Result<crate::api::Build, PackerError> {
-
     let packfile = ProjectPacker::pack(root, None).await?;
 
     let _build_push = crate::api::AndaBackend::new(None)
-        .upload_build(Uuid::nil(), &packfile).await?;
+        .upload_build(Uuid::nil(), &packfile)
+        .await?;
 
     todo!()
 }

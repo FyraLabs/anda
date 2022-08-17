@@ -6,7 +6,6 @@ use rocket::serde::uuid::Uuid;
 use rocket::Route;
 use serde::{Deserialize, Serialize};
 
-
 pub(crate) fn routes() -> Vec<Route> {
     routes![index, get, get_by_name, new, update, delete]
 }
@@ -47,7 +46,6 @@ async fn new(data: Json<TargetForm>) -> Result<Json<Target>, Status> {
     Ok(Json(t))
 }
 
-
 #[post("/<id>", data = "<data>")]
 async fn update(id: Uuid, data: Json<TargetForm>) -> Result<Json<Target>, Status> {
     let mut target = Target::get(id).await.map_err(|_| Status::BadRequest)?;
@@ -65,6 +63,8 @@ async fn update(id: Uuid, data: Json<TargetForm>) -> Result<Json<Target>, Status
 #[delete("/<id>")]
 async fn delete(id: Uuid) -> Result<(), Status> {
     let target = Target::get(id).await.map_err(|_| Status::BadRequest)?;
-    Target::delete(target).await.map_err(|_| Status::InternalServerError)?;
+    Target::delete(target)
+        .await
+        .map_err(|_| Status::InternalServerError)?;
     Ok(())
 }

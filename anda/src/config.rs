@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use log::warn;
 use serde::Deserialize;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::PathBuf;
 
@@ -97,7 +97,6 @@ pub enum RpmBuildMode {
     Standard,
     Cargo,
 }
-
 
 #[derive(Deserialize, PartialEq, Eq)]
 pub struct Docker {

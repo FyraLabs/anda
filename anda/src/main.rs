@@ -4,8 +4,8 @@ use anyhow::{anyhow, Result};
 
 use clap::{AppSettings, ArgEnum, Parser, Subcommand};
 use log::{debug, error, info};
+use std::fs;
 use std::{path::PathBuf, str::FromStr};
-use std::{fs};
 
 mod api;
 mod backend;
@@ -41,12 +41,11 @@ enum BuildBackend {
     Mock,
 }
 
-
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
 pub enum BuildkitLog {
     Auto,
     Tty,
-    Plain
+    Plain,
 }
 
 impl FromStr for BuildkitLog {
@@ -55,7 +54,7 @@ impl FromStr for BuildkitLog {
             "auto" => Ok(BuildkitLog::Auto),
             "tty" => Ok(BuildkitLog::Tty),
             "plain" => Ok(BuildkitLog::Plain),
-            _ => Err(anyhow!("Invalid buildkit log level: {}", s))
+            _ => Err(anyhow!("Invalid buildkit log level: {}", s)),
         }
     }
 
@@ -67,7 +66,6 @@ impl Default for BuildkitLog {
         BuildkitLog::Auto
     }
 }
-
 
 #[derive(Subcommand)]
 enum Command {
@@ -99,7 +97,7 @@ enum Command {
 
         /// Log format
         #[clap(short, long, value_name = "FORMAT")]
-        buildkit_log: Option<BuildkitLog>
+        buildkit_log: Option<BuildkitLog>,
     },
     /// Subcommand for interacting with the build system
     Backend {
@@ -271,7 +269,7 @@ async fn main() -> Result<()> {
             })?;
 
             // pushin p
-            let backend  = api::AndaBackend::new(None);
+            let backend = api::AndaBackend::new(None);
             // get target by name
             let target = backend.get_target_by_name(&target).await.map_err(|e| {
                 error!("{}", e);
@@ -286,7 +284,6 @@ async fn main() -> Result<()> {
                 anyhow!("{}", e)
             })?;
             println!("{:?}", b);
-
         }
         Command::BuildInfo { id } => {
             // try and parse the build id as uuid

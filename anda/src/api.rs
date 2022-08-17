@@ -7,7 +7,10 @@
 use anyhow::{Ok, Result};
 use chrono::{DateTime, Utc};
 use log::debug;
-use reqwest::{multipart::{Form, self}, Client};
+use reqwest::{
+    multipart::{self, Form},
+    Client,
+};
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncReadExt;
 
@@ -31,7 +34,6 @@ pub struct Build {
     pub timestamp: DateTime<Utc>,
     pub compose_id: Option<Uuid>,
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Target {
@@ -118,22 +120,32 @@ impl AndaBackend {
         Ok(build)
     }
 
-    pub async fn upload_build(&self,target_id: Uuid, packfile_path: &PathBuf) -> Result<Build> {
+    pub async fn upload_build(&self, target_id: Uuid, packfile_path: &PathBuf) -> Result<Build> {
         let url = format!("{}/builds", self.url);
 
         debug!("{}", target_id);
 
         let mut buf = Vec::new();
 
-        tokio::fs::File::open(packfile_path).await?.read_to_end(&mut buf).await?;
+        tokio::fs::File::open(packfile_path)
+            .await?
+            .read_to_end(&mut buf)
+            .await?;
 
         let file_part = multipart::Part::bytes(buf)
             .mime_str("application/octet-stream")?
-            .file_name(packfile_path.file_name().unwrap().to_str().unwrap().to_owned());
+            .file_name(
+                packfile_path
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_owned(),
+            );
 
         println!("{:?}", file_part);
         let _target_part = multipart::Part::text(target_id.to_string());
-            let form = Form::new()
+        let form = Form::new()
             .percent_encode_noop()
             //.part("target_id", target_part)
             .part("src_file", file_part)

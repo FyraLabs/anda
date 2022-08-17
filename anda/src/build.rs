@@ -1,5 +1,8 @@
 use anyhow::{anyhow, Result};
-use buildkit_llb::{utils::{OperationOutput, OutputIdx}, prelude::{FileSystem, OperationBuilder, MultiOwnedOutput, LayerPath}};
+use buildkit_llb::{
+    prelude::{FileSystem, LayerPath, MultiOwnedOutput, OperationBuilder},
+    utils::{OperationOutput, OutputIdx},
+};
 use execute::Execute;
 use futures::FutureExt;
 use log::{debug, error, info};
@@ -150,7 +153,7 @@ impl ProjectBuilder {
     ) -> Result<BTreeMap<String, String>, BuilderError> {
         let config = crate::config::load_config(&opts.config_location)?;
 
-        println!("{:#?}", project.env);
+        //println!("{:#?}", project.env);
 
         let mut envlist: BTreeMap<String, String> = BTreeMap::new();
 
@@ -202,27 +205,31 @@ impl ProjectBuilder {
             env: Some(envlist),
             ..Default::default()
         }))
-                    .image(&image)
-                    .context(buildkit_llb::prelude::Source::local("context"));
+        .image(&image)
+        .context(buildkit_llb::prelude::Source::local("context"));
         let mode = &project.rpmbuild.as_ref().unwrap().mode;
-            match mode {
+        match mode {
             crate::config::RpmBuildMode::Standard => {
-                b.build_rpm(project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
-                crate::config::RpmBuildMode::Standard,
-                project.rpmbuild.as_ref().unwrap().build_deps.as_ref());
+                b.build_rpm(
+                    project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
+                    crate::config::RpmBuildMode::Standard,
+                    project.rpmbuild.as_ref().unwrap().build_deps.as_ref(),
+                );
                 b.execute(builder_opts)?;
             }
             crate::config::RpmBuildMode::Cargo => {
-                let cargo_project = if let Some(proj) = project.rpmbuild.as_ref().unwrap().package.as_ref() {
-                    proj.to_owned()
-                } else {
-                    "".to_owned()
-                };
-                b.build_rpm(&cargo_project,
-                crate::config::RpmBuildMode::Cargo,
-                project.rpmbuild.as_ref().unwrap().build_deps.as_ref());
+                let cargo_project =
+                    if let Some(proj) = project.rpmbuild.as_ref().unwrap().package.as_ref() {
+                        proj.to_owned()
+                    } else {
+                        "".to_owned()
+                    };
+                b.build_rpm(
+                    &cargo_project,
+                    crate::config::RpmBuildMode::Cargo,
+                    project.rpmbuild.as_ref().unwrap().build_deps.as_ref(),
+                );
                 b.execute(builder_opts)?;
-
             }
         };
 
@@ -296,9 +303,7 @@ impl ProjectBuilder {
         }
 
         if stage.commands.is_empty() {
-            return Ok({
-                prev_output.unwrap()
-            });
+            return Ok({ prev_output.unwrap() });
         }
 
         let envlist = self._prepare_env(project, builder_opts)?;
@@ -413,12 +418,17 @@ impl ProjectBuilder {
         };
 
         let mut b = Buildkit::new(Some(bk_opts))
-            .image(project.image.as_ref().unwrap_or(&"fedora:latest".to_string()))
+            .image(
+                project
+                    .image
+                    .as_ref()
+                    .unwrap_or(&"fedora:latest".to_string()),
+            )
             .context(buildkit_llb::prelude::Source::local("context"));
 
         let mut dummyout = None;
 
-            for node in depgraph
+        for node in depgraph
             .dependencies_of(
                 &stage
                     .map(|s| script.get_stage(s.as_str()).expect("Stage not found"))
@@ -431,9 +441,7 @@ impl ProjectBuilder {
                     let result = self
                         .run_stage(
                             stage,
-                            script
-                                .find_key_for_value(stage)
-                                .unwrap_or(&"".to_string()),
+                            script.find_key_for_value(stage).unwrap_or(&"".to_string()),
                             project,
                             opts,
                             dummyout,
