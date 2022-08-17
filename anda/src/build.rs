@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use bollard::{container::Config, service::HostConfig};
 use buildkit_llb::{utils::{OperationOutput, OutputIdx}, prelude::{FileSystem, OperationBuilder, MultiOwnedOutput, LayerPath}};
 use execute::Execute;
 use futures::FutureExt;
@@ -20,7 +19,7 @@ use walkdir::WalkDir;
 
 use crate::{
     config::Project,
-    container::{Buildkit, BuildkitOptions, Container, ContainerHdl},
+    container::{Buildkit, BuildkitOptions},
     error::{BuilderError, ProjectError},
     util,
 };
@@ -151,17 +150,16 @@ impl ProjectBuilder {
     ) -> Result<BTreeMap<String, String>, BuilderError> {
         let config = crate::config::load_config(&opts.config_location)?;
 
+        println!("{:#?}", project.env);
+
         let mut envlist: BTreeMap<String, String> = BTreeMap::new();
 
         if let Some(env) = project.env.as_ref() {
-            for key in env {
-                let (k, v) = key.split_once('=').unwrap();
+            for (k, v) in env {
                 envlist.insert(k.to_string(), v.to_string());
             }
         }
         if let Some(cid) = util::current_commit(&self.root) {
-            //env::set_var("COMMIT_ID", cid);
-            //println!("COMMIT_ID: {}", cid);
             envlist.insert("COMMIT_ID".to_owned(), cid);
         };
 
@@ -173,38 +171,6 @@ impl ProjectBuilder {
         if let Some(project_name) = config.find_key_for_value(project) {
             //env::set_var("PROJECT_NAME", project_name);
             envlist.insert("PROJECT_NAME".to_owned(), project_name.to_owned());
-        };
-
-        Ok(envlist)
-    }
-    pub fn prepare_env(
-        &self,
-        project: &Project,
-        opts: &BuilderOptions,
-    ) -> Result<Vec<String>, BuilderError> {
-        let config = crate::config::load_config(&opts.config_location)?;
-
-        let mut envlist = Vec::new();
-        if let Some(env) = project.env.as_ref() {
-            for key in env {
-                envlist.push(key.to_owned())
-            }
-        }
-
-        if let Some(cid) = util::current_commit(&self.root) {
-            //env::set_var("COMMIT_ID", cid);
-            //println!("COMMIT_ID: {}", cid);
-            envlist.push(format!("COMMIT_ID={}", cid));
-        }
-
-        if let Some(branch) = util::branch_name(&self.root) {
-            //env::set_var("BRANCH", branch);
-            envlist.push(format!("BRANCH={}", branch));
-        }
-
-        if let Some(project_name) = config.find_key_for_value(project) {
-            //env::set_var("PROJECT_NAME", project_name);
-            envlist.push(format!("PROJECT_NAME={}", project_name));
         };
 
         Ok(envlist)
@@ -313,38 +279,6 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    pub async fn contain(
-        &self,
-        name: &str,
-        project: &Project,
-        opts: &BuilderOptions,
-    ) -> Result<Container, BuilderError> {
-        //let config = crate::config::load_config(&self.root)?;
-
-        let envs = self.prepare_env(project, opts)?;
-
-        let conhdl = ContainerHdl::new();
-        let cwd = self.root.canonicalize()?.to_str().unwrap().to_owned();
-
-        //println!("{}", cwd);
-        let hostconf = HostConfig {
-            binds: Some(vec![format!("{}:{}", cwd, cwd)]),
-            ..Default::default()
-        };
-        let cfg = Config {
-            image: Some("fedora:latest".to_owned()),
-            hostname: Some(name.to_string()),
-            tty: Some(true),
-            working_dir: Some(cwd),
-            host_config: Some(hostconf),
-            env: Some(envs),
-            ..Default::default()
-        };
-        let c = Container::new(conhdl, Some(cfg)).await?.start().await;
-
-        c.map_err(|e| BuilderError::Command(e.to_string()))
-    }
-
     pub async fn run_stage(
         &self,
         stage: &crate::config::Stage,
@@ -424,7 +358,6 @@ impl ProjectBuilder {
         stage: &crate::config::Stage,
         opts: &BuilderOptions,
     ) -> Result<(), BuilderError> {
-        self.prepare_env(project, opts)?;
         if project.rollback.is_some() {
             let rollback = project.rollback.as_ref().unwrap();
             let name = project
@@ -434,30 +367,7 @@ impl ProjectBuilder {
                 .find_key_for_value(stage)
                 .unwrap();
             if rollback.get_stage(name).is_some() {
-                let stage = rollback.get_stage(name).unwrap();
-                eprintln!(
-                    " -> {}: `{}`",
-                    "Rolling back".yellow(),
-                    name.white().italic()
-                );
-                match self
-                    .contain("rollback", project, opts)
-                    .await?
-                    .run_cmds(stage.commands.iter().map(|c| c.as_str()).collect())
-                    .await
-                {
-                    Ok(con) => {
-                        return con
-                            .finish()
-                            .await
-                            .map(|()| ())
-                            .map_err(|e| BuilderError::Other(e.to_string()))
-                    }
-                    Err(_) => {
-                        error!("{}", "Rollback failed".red());
-                        return Err(BuilderError::Command("rollback failed".to_string()));
-                    }
-                }
+                todo!();
             }
         }
         Ok(())
@@ -470,7 +380,6 @@ impl ProjectBuilder {
         opts: &BuilderOptions,
     ) -> Result<(), BuilderError> {
         // we should turn this into a tuple of (stage, stage_name)
-        self.prepare_env(project, opts)?;
         let mut depgraph: DepGraph<&crate::config::Stage> = DepGraph::new();
         eprintln!(":: {}", "Running build script...".yellow());
         let script = project.script.as_ref().unwrap();
@@ -553,7 +462,8 @@ impl ProjectBuilder {
         opts: &BuilderOptions,
     ) -> Result<(), BuilderError> {
         eprintln!(":: {}", "Building docker image...".yellow());
-        self.prepare_env(project, opts)?;
+        todo!();
+        // TODO: Rewrite this with BuildKit in mind
 
         let mut tasks = Vec::new();
 

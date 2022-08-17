@@ -96,9 +96,9 @@ project "anda" {
         ]
     }
 
-    env = [
-        "TEST=test"
-    ]
+    env = {
+        TEST = "test"
+    }
 
     // if scripts are defined and type is docker or rpm, the scripts will be executed
     // before the package is built.
