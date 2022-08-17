@@ -233,8 +233,8 @@ pub struct Buildkit {
     cmd: Option<Arc<Command<'static>>>,
     options: BuildkitOptions,
     context: Option<OperationOutput<'static>>,
-    artifact_cache: Option<OperationOutput<'static>>,
-    project_cache: Option<OperationOutput<'static>>,
+    pub artifact_cache: Option<OperationOutput<'static>>,
+    pub project_cache: Option<OperationOutput<'static>>,
 }
 
 impl Buildkit {
@@ -301,7 +301,7 @@ impl Buildkit {
 
         let mut artifact_cache = {
             FileSystem::sequence()
-                //.custom_name("Getting artifact cache")
+                .custom_name("Getting artifact cache")
                 .append(
                     FileSystem::mkdir(OutputIdx(0), LayerPath::Scratch("/")).make_parents(true),
                 ).ref_counted().output(0)
@@ -315,7 +315,7 @@ impl Buildkit {
         }
         let cache = {
             FileSystem::sequence()
-                //.custom_name("Getting artifact cache")
+                .custom_name("Getting artifact cache")
                 .append(
                     FileSystem::mkdir(OutputIdx(0), LayerPath::Scratch("/")).make_parents(true),
                 )
@@ -437,6 +437,7 @@ impl Buildkit {
                 .args(&["-c", command])
                 .cwd("/src")
                 .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
+            let art = self.artifact_cache.as_ref().unwrap();
             if let Some(out) = &self.cmd {
                 cmd = cmd
                     .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
@@ -451,7 +452,6 @@ impl Buildkit {
 
             let cmd = cmd.ref_counted();
             self.cmd = Some(cmd);
-            
         } else {
             panic!("No image specified");
         }
@@ -538,6 +538,7 @@ impl Buildkit {
                     cmd = cmd.args(&["anda_build_rpm", "cargo", "-p", rpm]);
                 }
             }
+            let art = self.artifact_cache.as_ref().unwrap();
             if let Some(out) = &self.cmd {
                 cmd = cmd
                     //.mount(Mount::ReadOnlyLayer(image.output(), "/"))
@@ -546,7 +547,6 @@ impl Buildkit {
                 cmd = cmd
                     .mount(Mount::Layer(OutputIdx(0), image.output(), "/"));
             }
-            let art = self.artifact_cache.as_ref().unwrap();
             cmd = cmd
                 .mount(Mount::Layer(OutputIdx(1), art.to_owned(), "/src/anda-build"))
                 .mount(Mount::Layer(OutputIdx(2), self.context.as_ref().unwrap().to_owned(), "/src"))
@@ -570,23 +570,24 @@ impl Buildkit {
 
         let fs: SequenceOperation<'_> =  {
             FileSystem::sequence()
+                .custom_name("Merging artifact cache")
                 .append(
                     FileSystem::copy()
                         .from(LayerPath::Other(output_merge, "/"))
-                        .to(OutputIdx(0), LayerPath::Other(self.artifact_cache.as_ref().unwrap().to_owned(), "/")),
+                        .to(OutputIdx(0), LayerPath::Other(self.artifact_cache.as_ref().unwrap().to_owned(), "/"))
+                        .recursive(true)
                 )
         };
-
         self.artifact_cache = Some(fs.ref_counted().output(0));
         self
     }
 
     pub fn build_graph(&mut self) -> OperationOutput<'_> {
-        if self.cmd.is_none() {
+        /* if self.cmd.is_none() {
             panic!("No output specified");
-        }
+        } */
 
-        let output = self.cmd.take().unwrap().output(1);
+        let output = self.artifact_cache.as_ref().unwrap().to_owned();
         let fs: SequenceOperation<'_> = {
             FileSystem::sequence()
                 .custom_name("Copy over artifacts")
@@ -600,8 +601,15 @@ impl Buildkit {
         fs.ref_counted().output(0)
     }
 
+    // Simply outputs the raw output, no artifact copying is done
+    pub fn build_graph_builder(self) -> OperationOutput<'static> {
+        let output = self.artifact_cache.as_ref().unwrap().to_owned();
+        output
+    }
+
     pub fn execute(&mut self, builder_opts: &build::BuilderOptions) -> Result<()> {
 
+        //println!("{:#?}", self.artifact_cache);
         if builder_opts.display_llb {
             Terminal::with(self.build_graph())
             .write_definition(stdout())
@@ -652,6 +660,60 @@ impl Buildkit {
 
         Ok(())
     }
+
+    pub fn execute_output(&mut self, builder_opts: &build::BuilderOptions, output: OperationOutput<'static>) -> Result<()> {
+
+        if builder_opts.display_llb {
+            Terminal::with(output)
+            .write_definition(stdout())
+            .unwrap();
+
+            return Ok(());
+        }
+
+        let mut extra_args = Vec::new();
+
+
+            match builder_opts.buildkit_log {
+                BuildkitLog::Tty => {
+                    extra_args.push("--progress=tty");
+                }
+                BuildkitLog::Auto => {
+                    extra_args.push("--progress=auto");
+                }
+                BuildkitLog::Plain => {
+                    extra_args.push("--progress=plain");
+                }
+            }
+        if let Some(opt) = self.options.transfer_artifacts {
+            if opt {
+                extra_args.push("--local");
+                extra_args.push("artifacts=anda-build");
+            }
+        }
+        let mut cmd = std::process::Command::new("buildctl")
+            .arg("build")
+            .arg("--output")
+            .arg("type=local,dest=anda-build")
+            .args(&["--local", "context=."])
+            .args(&extra_args)
+            //.arg("--opt")
+            //.env("BUILDKIT_HOST", "docker-container://buildkitd")
+            .stdin(std::process::Stdio::piped())
+            .spawn()?;
+
+        Terminal::with(output)
+            .write_definition(cmd.stdin.as_mut().unwrap())
+            .unwrap();
+        let ret = cmd.wait()?;
+
+        if !ret.success() {
+            return Err(anyhow::anyhow!("Build failed"));
+        }
+
+        Ok(())
+    }
+
 }
 
 #[cfg(test)]

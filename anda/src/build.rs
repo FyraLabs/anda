@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use bollard::{container::Config, service::HostConfig};
+use buildkit_llb::{utils::{OperationOutput, OutputIdx}, prelude::{FileSystem, OperationBuilder, MultiOwnedOutput, LayerPath}};
 use execute::Execute;
 use futures::FutureExt;
 use log::{debug, error, info};
@@ -350,8 +351,9 @@ impl ProjectBuilder {
         stage_name: &String,
         project: &Project,
         builder_opts: &BuilderOptions,
-    ) -> Result<(), BuilderError> {
-        if !stage_name.eq("ANDA_UNTITLED_FINAL") {
+        prev_output: Option<OperationOutput<'static>>,
+    ) -> Result<OperationOutput<'static>, BuilderError> {
+        if !stage_name.eq("") {
             eprintln!(
                 " -> {}: `{}`",
                 "Starting script stage".yellow(),
@@ -360,14 +362,16 @@ impl ProjectBuilder {
         }
 
         if stage.commands.is_empty() {
-            return Ok(());
+            return Ok({
+                prev_output.unwrap()
+            });
         }
 
         let envlist = self._prepare_env(project, builder_opts)?;
 
         let opts = BuildkitOptions {
             env: Some(envlist),
-            transfer_artifacts: Some(true),
+            //transfer_artifacts: Some(true),
             ..Default::default()
         };
 
@@ -388,6 +392,11 @@ impl ProjectBuilder {
             .image(&image)
             .context(buildkit_llb::prelude::Source::local("context"));
 
+        if let Some(ref _out) = prev_output {
+            //println!("{:?}", _out);
+            b.artifact_cache = Some(prev_output.as_ref().unwrap().clone());
+        }
+
         /* self.contain("stage", project)
         .await?
         .run_cmds(stage.commands.iter().map(|c| c.as_str()).collect())
@@ -404,9 +413,9 @@ impl ProjectBuilder {
         for command in cmdn.iter() {
             b.command_nocontext(command.as_str());
         } */
+        //b.execute(builder_opts)?;
 
-        b.execute(builder_opts)?;
-        Ok(())
+        Ok(b.build_graph_builder())
     }
 
     pub async fn run_rollback(
@@ -487,7 +496,20 @@ impl ProjectBuilder {
             final_stage,
             script.stage.iter().map(|(_, stage)| stage).collect(),
         );
-        for node in depgraph
+
+        // dummy buildkit output for the final stage
+        let bk_opts = BuildkitOptions {
+            env: Some(self._prepare_env(project, opts)?),
+            ..Default::default()
+        };
+
+        let mut b = Buildkit::new(Some(bk_opts))
+            .image(project.image.as_ref().unwrap_or(&"fedora:latest".to_string()))
+            .context(buildkit_llb::prelude::Source::local("context"));
+
+        let mut dummyout = None;
+
+            for node in depgraph
             .dependencies_of(
                 &stage
                     .map(|s| script.get_stage(s.as_str()).expect("Stage not found"))
@@ -502,19 +524,26 @@ impl ProjectBuilder {
                             stage,
                             script
                                 .find_key_for_value(stage)
-                                .unwrap_or(&"ANDA_UNTITLED_FINAL".to_string()),
+                                .unwrap_or(&"".to_string()),
                             project,
                             opts,
+                            dummyout,
                         )
                         .await;
                     if result.is_err() {
                         self.run_rollback(project, stage, opts).await?;
                         return Err(result.err().unwrap());
                     }
+
+                    let cache: OperationOutput<'_> = result.ok().unwrap();
+                    dummyout = Some(cache);
+                    b.artifact_cache = dummyout.clone();
                 }
                 Err(e) => return Err(BuilderError::Other(format!("solvent: {:?}", e))),
             }
         }
+        b.merge_artifact_output(dummyout.unwrap());
+        b.execute(opts)?;
         Ok(())
     }
 

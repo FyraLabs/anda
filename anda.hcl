@@ -55,6 +55,7 @@ project "anda" {
         stage "test" {
             depends = ["build"]
             commands = [
+                "ls -la anda-build",
                 "echo 'test command here'",
                 "echo $TEST",
                 "cat anda-build/build.txt",
@@ -109,6 +110,16 @@ project "test" {
             image = "ubuntu:latest"
             commands = [
                 "echo 'build command here'"
+                "echo 'test' > anda-build/build.txt",
+                "ls -la anda-build"
+            ]
+        }
+        stage "test" {
+            depends = ["build"]
+            commands = [
+                "echo 'test command here'",
+                "cat anda-build/build.txt",
+                "ls -la anda-build"
             ]
         }
     }
