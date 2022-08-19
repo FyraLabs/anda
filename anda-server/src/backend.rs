@@ -13,7 +13,7 @@ use aws_sdk_s3::types::{ByteStream, DateTime};
 use chrono::Utc;
 //use aws_smithy_types::DateTime;
 use rocket::serde::uuid::Uuid;
-use tokio::{fs::File, io::AsyncReadExt};
+use tokio::{fs::File, io::{AsyncReadExt, AsyncWriteExt}, process::Command};
 
 use crate::s3_object::{S3Artifact, BUCKET, S3_ENDPOINT};
 use num_derive::FromPrimitive;
@@ -98,6 +98,10 @@ impl UploadCache {
     }
 }
 
+/// Build caches
+/// ----------------
+/// Build caches are temporary files that are uploaded to S3.
+/// They are used when one uploads a build to the server.
 #[derive(Debug, Clone)]
 pub struct BuildCache {
     pub id: Uuid,
@@ -188,6 +192,15 @@ impl S3Object for BuildCache {
     }
 }
 
+/// Artifacts API
+/// ------------------------------
+/// Artifacts are files that are outputted by the build process.
+/// They are collected from the build process and automatically uploaded to S3.
+/// Special non-file artifacts are also supported. These are:
+/// - Docker/OCI images
+/// - OSTree composes
+/// These will be uploaded in a different way, and will be stored in a different location.
+/// The artifacts will have a different kind of path for each type.
 #[derive(Debug, Clone)]
 pub struct Artifact {
     pub id: Uuid,
@@ -209,7 +222,7 @@ impl Artifact {
         }
     }
 
-    pub async fn get_for_build(&self, build_id: Uuid) -> Result<Vec<Self>> {
+    pub async fn get_for_build(build_id: Uuid) -> Result<Vec<Self>> {
         let arts = crate::db_object::Artifact::get_by_build_id(build_id).await?;
 
         Ok(arts
@@ -289,6 +302,16 @@ impl S3Object for Artifact {
     }
 }
 
+
+/// Projects API
+/// ------------
+/// Projects are the top organizational unit in the system.
+/// They represent various projects that will be organized
+/// and then collected into a compose.
+///
+/// A project can have a description, a name, and an ID.
+/// You should be able to create a project, and then tag various targets
+/// for that project.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub id: Uuid,
@@ -399,6 +422,11 @@ impl Project {
     }
 }
 
+/// Builds API
+/// ----------
+/// Builds are the main entry point for Andaman.
+/// They are tasks that are executed by the build system.
+/// Its outputs are artifacts that are stored in S3.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Build {
     pub id: Uuid,
@@ -488,6 +516,18 @@ impl Build {
             .collect())
     }
 
+    pub async fn get_by_compose_id(compose_id: Uuid) -> Result<Vec<Self>>
+    where
+        Self: Sized,
+    {
+        // Query the database for the builds with the given compose_id.
+        let builds = crate::db_object::Build::get_by_compose_id(compose_id).await?;
+        Ok(builds
+            .iter()
+            .map(|build| Self::from(build.clone()))
+            .collect())
+    }
+
     pub async fn add(self) -> Result<Self>
     where
         Self: Sized,
@@ -557,6 +597,13 @@ impl Build {
     }
 }
 
+/// Target API
+/// ----------
+/// Targets are where the builds are targeted for.
+/// A target can be a specific distribution version, or platorm
+/// with a specific architecture.
+/// There can also be a special docker image option for the target,
+/// where native packages can be built from.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Target {
     pub id: Uuid,
@@ -646,8 +693,154 @@ impl Target {
     }
 }
 
-// Artifact API
-// #[derive(Debug, Clone)]
+/// Compose API
+/// ------------
+/// Composes are a way to group build artifacts together.
+/// A compose is a collection of builds made for a specific target.
+/// Its output is a folder containing all the artifacts from all the tagged builds
+/// compiled into a repository.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Compose {
+    pub id: Uuid,
+    pub compose_ref: Option<String>,
+    pub target_id: Uuid,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+}
+
+impl From<crate::db_object::Compose> for Compose {
+    fn from(compose: crate::db_object::Compose) -> Self {
+        Self {
+            id: compose.id,
+            compose_ref: compose.compose_ref,
+            target_id: compose.target_id,
+            timestamp: compose.timestamp,
+        }
+    }
+}
+
+
+impl Compose {
+    pub fn new(target_id: Uuid) -> Self {
+        dotenv::dotenv().ok();
+        Self {
+            id: Uuid::new_v4(),
+            compose_ref: None,
+            target_id,
+            timestamp: chrono::Utc::now(),
+        }
+    }
+    pub async fn get(uuid: Uuid) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        // Query the database for the compose with the given uuid.
+        let compose = crate::db_object::Compose::get(uuid).await?;
+        Ok(Self::from(compose))
+    }
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Self>>
+    where
+        Self: Sized,
+    {
+        // Query the database for the composes.
+        let composes = crate::db_object::Compose::list(limit, page).await?;
+        Ok(composes
+            .iter()
+            .map(|compose| Self::from(compose.clone()))
+            .collect())
+    }
+    pub async fn add(self) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        // Add the compose to the database.
+        let compose = crate::db_object::Compose::from(self).add().await?;
+        Ok(Self::from(compose))
+    }
+    pub async fn update(self, id: Uuid) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        // Update the compose in the database.
+        let compose = crate::db_object::Compose::from(self).update().await?;
+        Ok(Self::from(compose))
+    }
+
+    pub async fn get_builds(self) -> Result<Vec<Build>>
+    where
+        Self: Sized,
+    {
+        // Query the database for the builds tagged with the compose.
+        let builds = Build::get_by_compose_id(self.id).await?;
+        Ok(builds)
+    }
+
+    pub async fn tag_builds(self) -> Result<()>
+    where
+        Self: Sized,
+    {
+        // Tag the builds with the compose.
+        let builds = Build::get_by_target_id(self.target_id).await?;
+
+        for build in builds {
+            build.tag_compose(self.id).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn compose(self) -> Result<()>
+    where
+        Self: Sized,
+    {
+        // TODO: probably move this to a dedicated compose function/executable.
+
+        let tmpdir = tempfile::tempdir()?;
+
+        let rpmdir = tmpdir.path().join("rpm");
+
+        let builds = Build::get_by_compose_id(self.id).await?;
+        for build in builds {
+            let artifacts = Artifact::get_for_build(build.id).await?;
+            for artifact in artifacts {
+                let filename = &artifact.filename;
+
+                // download the artifacts
+                if filename.ends_with(".rpm") {
+                    let pkgs_dir = tmpdir.path().join("packages");
+
+                    // create rpmdir if it doesn't exist
+                    if !pkgs_dir.exists() {
+                        tokio::fs::create_dir_all(&pkgs_dir).await?;
+                    }
+                    // download the rpm artifact
+                    let rpm_path = pkgs_dir.join(filename);
+                    // get the file stream from the artifact
+                    let stream = artifact.pull_bytes().await?;
+                    // write the stream to the rpm file
+                    let mut rpm_file = File::create(&rpm_path).await?;
+                    let mut buf = vec![];
+
+                    stream.into_async_read().read_to_end(&mut buf).await?;
+
+                    rpm_file.write_all(&buf).await?;
+
+                }
+
+            }
+            // Compile the RPMs into a repository
+            // check if there is an rpmdir
+            if rpmdir.exists() {
+                // use createrepo to create the repository
+                let mut output = Command::new("createrepo")
+                    .arg(".")
+                    .current_dir(&rpmdir)
+                    .spawn()?;
+                let status = output.wait().await?;
+            }
+
+        }
+        Ok(())
+    }
+}
 #[cfg(test)]
 mod test_super {
     use super::*;

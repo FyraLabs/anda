@@ -1,6 +1,6 @@
 use anyhow::Result;
 use aws_sdk_s3::{
-    output::PutObjectOutput,
+    output::{PutObjectOutput, ListObjectsOutput},
     types::ByteStream,
     {Client, Config, Credentials, Endpoint, Region},
 };
@@ -95,6 +95,34 @@ impl S3Artifact {
             .await?;
         Ok(ret.body)
     }
+
+    pub async fn list_files(&self, dest: &str) -> Result<ListObjectsOutput> {
+        Ok(self
+            .connection
+            .list_objects()
+            .bucket(BUCKET.as_str())
+            .prefix(dest)
+            .send()
+            .await?)
+    }
+
+    pub async fn is_file(&self, dest: &str) -> Result<bool> {
+        let ret = self
+            .connection
+            .head_object()
+            .key(dest)
+            .bucket(BUCKET.as_str())
+            .send()
+            .await?;
+
+        let a = ret.content_length;
+
+        if a == 0 {
+            Ok(false)
+        } else {
+            Ok(true)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -110,6 +138,7 @@ mod test_s3 {
             .connection
             .list_objects()
             .bucket(BUCKET.as_str())
+            .prefix("artifacts/")
             .send()
             .await
             .unwrap();

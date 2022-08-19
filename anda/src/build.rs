@@ -300,13 +300,13 @@ impl ProjectBuilder {
     ) -> Result<OperationOutput<'static>, BuilderError> {
         // load config
         let config = crate::config::load_config(&builder_opts.config_location)?;
-        if !stage_name.eq("") {
+/*         if !stage_name.eq("") {
             eprintln!(
                 " -> {}: `{}`",
                 "Starting script stage".yellow(),
                 stage_name.white().italic()
             );
-        }
+        } */
 
         if stage.commands.is_empty() {
             return Ok(prev_output.unwrap());

@@ -8,7 +8,7 @@
 
 use crate::{
     db,
-    entity::{artifact, build, project, target},
+    entity::{artifact, build, project, target, compose},
 };
 use anyhow::{anyhow, Result};
 use chrono::{offset::Utc, DateTime};
@@ -290,6 +290,16 @@ impl Build {
             .await?;
         Ok(build.into_iter().map(Build::from).collect())
     }
+
+    pub async fn get_by_compose_id(compose_id: Uuid) -> Result<Vec<Build>> {
+        let db = DbPool::get().await;
+        let build = build::Entity::find()
+            .order_by(build::Column::Timestamp, Order::Desc)
+            .filter(build::Column::ComposeId.eq(compose_id))
+            .all(db)
+            .await?;
+        Ok(build.into_iter().map(Build::from).collect())
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -386,9 +396,88 @@ impl Project {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Compose {
     pub id: Uuid,
-    pub r#ref: Option<String>,
-    pub project_id: Uuid,
+    pub compose_ref: Option<String>,
+    pub target_id: Uuid,
     pub timestamp: DateTime<Utc>,
+}
+
+impl From<compose::Model> for Compose {
+    fn from(model: compose::Model) -> Self {
+        Compose {
+            id: model.id,
+            compose_ref: model.compose_ref,
+            target_id: model.project_id,
+            timestamp: DateTime::from_utc(model.timestamp, Utc),
+        }
+    }
+}
+
+impl From<crate::backend::Compose> for Compose {
+    fn from(model: crate::backend::Compose) -> Self {
+        Compose {
+            id: model.id,
+            compose_ref: model.compose_ref,
+            target_id: model.target_id,
+            timestamp: model.timestamp,
+        }
+    }
+}
+
+impl Compose {
+    pub fn new(id: Uuid, compose_ref: Option<String>, project_id: Uuid) -> Compose {
+        Compose {
+            id,
+            compose_ref,
+            target_id: project_id,
+            timestamp: Utc::now(),
+        }
+    }
+
+
+    pub async fn add(&self) -> Result<Compose> {
+        let db = DbPool::get().await;
+        let compose = compose::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            compose_ref: ActiveValue::Set(self.compose_ref.clone()),
+            project_id: ActiveValue::Set(self.target_id),
+            timestamp: ActiveValue::Set(self.timestamp.naive_utc()),
+            ..Default::default()
+        };
+        let res = compose::ActiveModel::insert(compose, db).await?;
+        Ok(Compose::from(res))
+    }
+
+    /// Get compose by ID
+    pub async fn get(id: Uuid) -> Result<Compose> {
+        let db = DbPool::get().await;
+        let compose = compose::Entity::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Compose not found"))?;
+        Ok(Compose::from(compose))
+    }
+
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Compose>> {
+        let db = DbPool::get().await;
+        let compose = compose::Entity::find()
+            .paginate(db, limit)
+            .fetch_page(page)
+            .await?;
+        Ok(compose.into_iter().map(Compose::from).collect())
+    }
+
+    pub async fn update(&self) -> Result<Compose> {
+        let db = DbPool::get().await;
+        let compose = compose::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            compose_ref: ActiveValue::Set(self.compose_ref.clone()),
+            project_id: ActiveValue::Set(self.target_id),
+            timestamp: ActiveValue::Set(self.timestamp.naive_utc()),
+            ..Default::default()
+        };
+        let res = compose::ActiveModel::update(compose, db).await?;
+        Ok(Compose::from(res))
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

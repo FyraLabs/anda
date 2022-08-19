@@ -4,12 +4,13 @@ use rocket::{
     form::Form,
     fs::TempFile,
     serde::{json::Json, uuid::Uuid},
-    Route,
+    Route, http::ContentType,
 };
-use std::collections::HashMap;
+use tokio::io::AsyncReadExt;
+use std::{collections::HashMap, path::PathBuf};
 
 pub(crate) fn routes() -> Vec<Route> {
-    routes![index, get, upload, search]
+    routes![index, get, upload, search, get_file]
 }
 
 #[derive(FromForm)]
@@ -33,6 +34,30 @@ async fn index(page: Option<usize>, limit: Option<usize>) -> Json<Vec<Artifact>>
 async fn get(id: Uuid) -> Option<Json<Artifact>> {
     //NOTE: ID is a path string to the file, so we probably need to see if Rocket can handle escaping slashes
     Artifact::get(id).await.ok().map(Json)
+}
+
+
+/// WIP: Directory Listing
+#[get("/files/<path..>")]
+async fn get_file(path: PathBuf) -> Option<(ContentType, Vec<u8>)> {
+    // check if path is a file
+    let s = crate::s3_object::S3Artifact::new().unwrap();
+    // check if path is folder and get list of files
+
+    let file = s.get_file(path.to_str().unwrap()).await.ok();
+
+    if file.is_none() {
+        // This code is in fact, reachable
+        //#[allow(unreachable_code)]
+        return Some((ContentType::Text,format!("{:#?}",s.list_files(path.to_str().unwrap()).await.unwrap()).as_bytes().to_vec()))
+    } else {
+        let file = file.unwrap();
+        let mut buf = Vec::new();
+        file.into_async_read().read_to_end(&mut buf).await.ok();
+        return Some((ContentType::Binary, buf))
+    }
+
+    //todo!()
 }
 
 // Upload artifact (entire folders) with form data
