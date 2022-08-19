@@ -85,6 +85,8 @@ pub struct RpmBuild {
     #[serde(default = "default_rpm_mode")]
     pub mode: RpmBuildMode,
     pub package: Option<String>,
+    /// Internal project dependencies
+    pub project_depends: Option<Vec<String>>,
     pub build_deps: Option<Vec<String>>,
 }
 
@@ -123,7 +125,7 @@ pub fn load_config(root: &PathBuf) -> Result<AndaConfig, ProjectError> {
         std::fs::read_to_string(config_path)
             .with_context(|| {
                 format!(
-                    "could not read `anda.toml` in directory {}",
+                    "could not read `anda.hcl` in directory {}",
                     fs::canonicalize(root.parent().unwrap()).unwrap().display()
                 )
             })?
@@ -160,6 +162,28 @@ pub fn check_config(config: AndaConfig) -> Result<AndaConfig, ProjectError> {
                 }
             }
         }
+        if let Some(rpmbuild) = &value.rpmbuild {
+            if !rpmbuild.spec.exists() && rpmbuild.mode == RpmBuildMode::Standard {
+                errors.push(ProjectError::InvalidManifest(format!(
+                    "error loading spec file `{}` for project `{}`: file does not exist",
+                    rpmbuild.spec.display(), key
+                )));
+            }
+            if let Some(projects) = &rpmbuild.project_depends {
+                for project in projects {
+                    if !config.project.contains_key(project) {
+                        errors.push(ProjectError::InvalidManifest(format!(
+                            "project `{}` depends on project `{}` for RPMs, which does not exist",
+                            key, project
+                        )));
+                    }
+                }
+            }
+        }
     }
+    if !errors.is_empty() {
+        return Err(ProjectError::Multiple(errors));
+    }
+
     Ok(config)
 }

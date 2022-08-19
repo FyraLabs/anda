@@ -104,6 +104,12 @@ case $mode in
 esac
 
 
+# find RPMs in the artifact cache and copy them to global anda rpm cache
+mkdir -p /var/cache/anda/rpm
+find anda-build/rpm -name '*.rpm' -exec cp -v {} /var/cache/anda/rpm \;
+
+createrepo --verbose /var/cache/anda/rpm
+
 # ] <-- needed because of Argbash
 
 

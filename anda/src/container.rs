@@ -26,6 +26,7 @@ pub struct BuildkitOptions {
     pub cwd: Option<String>,
     pub progress: Option<String>,
     pub transfer_artifacts: Option<bool>,
+    pub context_name: Option<String>,
 }
 
 pub struct Buildkit {
@@ -124,6 +125,16 @@ impl Buildkit {
         };
         self.artifact_cache = Some(cache.ref_counted().output(1));
 
+        let project_cache = {
+            FileSystem::sequence()
+                .custom_name("Getting project collection cache")
+                .append(FileSystem::mkdir(OutputIdx(0), LayerPath::Scratch("/")).make_parents(true))
+                .ref_counted()
+                .output(0)
+        };
+
+        self.project_cache = Some(project_cache);
+
         self
     }
 
@@ -204,10 +215,18 @@ impl Buildkit {
     pub fn command(&mut self, command: &str) -> &mut Buildkit {
         // find dockerignore file
         //let mut local = self.context_source("context");
+
+        let name = if let Some(context_name) = &self.options.context_name {
+            format!("[{}] {}", context_name, command)
+        } else {
+            command.to_owned()
+        };
+
         if let Some(image) = &self.image {
             let mut cmd = LLBCommand::run("/bin/sh")
                 .args(&["-c", command])
                 .cwd("/src")
+                .custom_name(name)
                 .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
             if let Some(out) = &self.cmd {
                 cmd = cmd
@@ -228,7 +247,8 @@ impl Buildkit {
                     self.context.as_ref().unwrap().to_owned(),
                     "/src",
                 ))
-                .mount(Mount::SharedCache("/var/cache/dnf"));
+                .mount(Mount::SharedCache("/var/cache/dnf"))
+                .mount(Mount::SharedCache("/var/cache/anda"));
 
             let cmd = cmd.ref_counted();
             self.artifact_cache = Some(cmd.output(1));
@@ -240,10 +260,16 @@ impl Buildkit {
     }
 
     pub fn command_nocontext(&mut self, command: &str) -> &mut Buildkit {
+        let name = if let Some(context_name) = &self.options.context_name {
+            format!("[{}] {}", context_name, command)
+        } else {
+            command.to_owned()
+        };
         if let Some(image) = &self.image {
             let mut cmd = LLBCommand::run("/bin/sh")
                 .args(&["-c", command])
                 .cwd("/src")
+                .custom_name(name)
                 .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
             //let art = self.artifact_cache.as_ref().unwrap();
             if let Some(out) = &self.cmd {
@@ -256,7 +282,39 @@ impl Buildkit {
                     .mount(Mount::Layer(OutputIdx(0), image.output(), "/"))
                     .mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"))
             }
-            cmd = cmd.mount(Mount::SharedCache("/var/cache/dnf"));
+            cmd = cmd.mount(Mount::SharedCache("/var/cache/dnf"))
+                .mount(Mount::SharedCache("/var/cache/anda"));
+
+            let cmd = cmd.ref_counted();
+            self.cmd = Some(cmd);
+        } else {
+            panic!("No image specified");
+        }
+        self
+    }
+
+    pub fn cargo_builddeps(&mut self) -> &mut Buildkit {
+        if let Some(image) = &self.image {
+            let mut cmd = LLBCommand::run("cargo")
+                .args(&["install", "cargo-generate-rpm"])
+                .cwd("/src")
+                .custom_name("Installing Andaman build dependencies")
+                .env("CARGO_HOME", "/var/cache/anda/cargo")
+                .env("CARGO_TARGET_DIR", "/var/cache/anda/target")
+                .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
+            //let art = self.artifact_cache.as_ref().unwrap();
+            if let Some(out) = &self.cmd {
+                cmd = cmd
+                    .mount(Mount::Layer(OutputIdx(0), out.output(0), "/"))
+                    .mount(Mount::Layer(OutputIdx(1), out.output(1), "/src/anda-build"))
+                //.env("FOO", "BAR");
+            } else {
+                cmd = cmd
+                    .mount(Mount::Layer(OutputIdx(0), image.output(), "/"))
+                    .mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"))
+            }
+            cmd = cmd.mount(Mount::SharedCache("/var/cache/dnf"))
+                .mount(Mount::SharedCache("/var/cache/anda"));
 
             let cmd = cmd.ref_counted();
             self.cmd = Some(cmd);
@@ -328,11 +386,16 @@ impl Buildkit {
         pre_buildreqs: Option<&Vec<String>>,
     ) -> &mut Buildkit {
         if let Some(image) = &self.image.clone() {
+            let name = if let Some(context_name) = &self.options.context_name {
+                format!("[{}] Building RPM using Andaman build script", context_name)
+            } else {
+                "Building RPM using Andaman build script".to_owned()
+            };
             self.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
             self.command_nocontext(
-                "sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools argbash rustc cargo",
+                "sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools argbash rustc cargo createrepo_c",
             );
-            self.command_nocontext("cargo install cargo-generate-rpm");
+            self.cargo_builddeps();
             self.inject_rpm_script();
 
             if let Some(pre_buildreqs) = pre_buildreqs {
@@ -344,6 +407,7 @@ impl Buildkit {
             }
 
             let mut cmd = LLBCommand::run("/bin/bash")
+                .custom_name(name)
                 .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
             match mode {
                 crate::config::RpmBuildMode::Standard => {
@@ -374,7 +438,8 @@ impl Buildkit {
                     "/src",
                 ))
                 .cwd("/src")
-                .mount(Mount::SharedCache("/var/cache/dnf"));
+                .mount(Mount::SharedCache("/var/cache/dnf"))
+                .mount(Mount::SharedCache("/var/cache/anda"));
             let cmd = cmd.ref_counted();
             self.artifact_cache = Some(cmd.output(1));
             self.cmd = Some(cmd);

@@ -192,6 +192,9 @@ impl ProjectBuilder {
             "fedora:latest".to_owned()
         };
 
+        let config = crate::config::load_config(&builder_opts.config_location)?;
+        let project_name = config.find_key_for_value(project).unwrap();
+
         let _output_path =
             env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
         eprintln!(":: {}", "Building RPMs".yellow());
@@ -203,6 +206,7 @@ impl ProjectBuilder {
 
         let mut b = Buildkit::new(Some(BuildkitOptions {
             env: Some(envlist),
+            context_name: Some(format!("{}::{}", project_name, "rpmbuild")),
             ..Default::default()
         }))
         .image(&image)
@@ -294,6 +298,8 @@ impl ProjectBuilder {
         builder_opts: &BuilderOptions,
         prev_output: Option<OperationOutput<'static>>,
     ) -> Result<OperationOutput<'static>, BuilderError> {
+        // load config
+        let config = crate::config::load_config(&builder_opts.config_location)?;
         if !stage_name.eq("") {
             eprintln!(
                 " -> {}: `{}`",
@@ -303,14 +309,17 @@ impl ProjectBuilder {
         }
 
         if stage.commands.is_empty() {
-            return Ok({ prev_output.unwrap() });
+            return Ok(prev_output.unwrap());
         }
 
         let envlist = self._prepare_env(project, builder_opts)?;
 
+        let project_name = config.find_key_for_value(project).unwrap();
+
         let opts = BuildkitOptions {
             env: Some(envlist),
             //transfer_artifacts: Some(true),
+            context_name: Some(format!("{}::{}", project_name, stage_name)),
             ..Default::default()
         };
 

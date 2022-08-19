@@ -5,6 +5,7 @@ use std::fmt::{Display, Formatter};
 pub enum ProjectError {
     NoManifest,
     InvalidManifest(String),
+    Multiple(Vec<Self>),
     HclError(hcl::error::Error),
     Other(String),
 }
@@ -36,6 +37,13 @@ impl std::fmt::Display for ProjectError {
                     .map(|l| format!(" at {}:{}", l.line, l.col))
                     .unwrap_or_default()
             ),
+            ProjectError::Multiple(errors) => {
+                write!(f, "Multiple errors:")?;
+                for error in errors {
+                    write!(f, "\n - {}", error)?;
+                }
+                Ok(())
+            }
         }
     }
 }
