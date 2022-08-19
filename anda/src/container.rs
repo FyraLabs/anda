@@ -11,7 +11,7 @@ use buildkit_llb::{
 //use buildkit_llb::prelude::*;
 use owo_colors::OwoColorize;
 
-use std::sync::Arc;
+use std::{sync::Arc, env};
 use std::{
     collections::BTreeMap,
     io::{stdout, BufRead},
@@ -296,7 +296,7 @@ impl Buildkit {
     pub fn cargo_builddeps(&mut self) -> &mut Buildkit {
         if let Some(image) = &self.image {
             let mut cmd = LLBCommand::run("cargo")
-                .args(&["install", "cargo-generate-rpm"])
+                .args(&["install", "cargo-generate-rpm", "--root", "/usr/local"])
                 .cwd("/src")
                 .custom_name("Installing Andaman build dependencies")
                 .env("CARGO_HOME", "/var/cache/anda/cargo")
@@ -528,16 +528,23 @@ impl Buildkit {
                 extra_args.push("artifacts=anda-build");
             }
         }
-        let mut cmd = std::process::Command::new("buildctl")
-            .arg("build")
+        let buildkit_host = if let Ok(buildkit_host) = env::var("BUILDKIT_HOST") {
+            buildkit_host
+        } else {
+            "docker-container://anda-buildkitd".to_string()
+        };
+        let mut cmd = std::process::Command::new("buildctl");
+
+        cmd.arg("build")
             .arg("--output")
             .arg("type=local,dest=anda-build")
             .args(&["--local", "context=."])
             .args(&extra_args)
             //.arg("--opt")
-            //.env("BUILDKIT_HOST", "docker-container://buildkitd")
-            .stdin(std::process::Stdio::piped())
-            .spawn()?;
+            .env("BUILDKIT_HOST", buildkit_host)
+            .stdin(std::process::Stdio::piped());
+
+        let mut cmd = cmd.spawn()?;
 
         Terminal::with(self.build_graph())
             .write_definition(cmd.stdin.as_mut().unwrap())

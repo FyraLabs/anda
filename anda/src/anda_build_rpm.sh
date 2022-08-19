@@ -23,6 +23,7 @@ project=$_arg_project
 
 echo "Running in $mode mode"
 
+set -x
 
 # PUT YOUR CODE HERE
 
@@ -108,7 +109,7 @@ esac
 mkdir -p /var/cache/anda/rpm
 find anda-build/rpm -name '*.rpm' -exec cp -v {} /var/cache/anda/rpm \;
 
-createrepo --verbose /var/cache/anda/rpm
+#createrepo --verbose /var/cache/anda/rpm
 
 # ] <-- needed because of Argbash
 

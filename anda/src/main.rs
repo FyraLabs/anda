@@ -134,6 +134,9 @@ enum Command {
         /// The build ID to show info for
         id: String,
     },
+
+    /// Sets up buildkit using docker
+    Setup,
 }
 
 #[tokio::main]
@@ -292,6 +295,24 @@ async fn main() -> Result<()> {
             } else {
                 anyhow::bail!("invalid build id");
             }
+        }
+        Command::Setup => {
+            // run docker
+            let c = std::process::Command::new("docker")
+                .arg("run")
+                .arg("-d")
+                .arg("--name")
+                .arg("anda-buildkitd")
+                .arg("--privileged")
+                .arg("--restart")
+                .arg("always")
+                .arg("moby/buildkit:latest")
+                .status()?;
+
+            if !c.success() {
+                anyhow::bail!("failed to start buildkitd docker service");
+            }
+
         }
     };
 
