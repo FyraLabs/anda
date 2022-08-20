@@ -15,6 +15,7 @@ use chrono::{offset::Utc, DateTime};
 use db::DbPool;
 use sea_orm::{prelude::Uuid, *};
 use serde::{Deserialize, Serialize};
+use crate::backend::S3Object;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Artifact {
@@ -23,6 +24,18 @@ pub struct Artifact {
     pub url: String,
     pub build_id: Uuid,
     pub timestamp: DateTime<Utc>,
+}
+
+impl From<crate::backend::Artifact> for Artifact {
+    fn from(artifact: crate::backend::Artifact) -> Self {
+        Artifact {
+            id: artifact.id,
+            name: artifact.filename.clone(),
+            url: artifact.get_url().clone(),
+            build_id: artifact.build_id,
+            timestamp: artifact.timestamp,
+        }
+    }
 }
 
 impl From<artifact::Model> for Artifact {

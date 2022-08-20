@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 body {
-  @apply bg-white dark:bg-black;
+  @apply bg-white dark:bg-zinc-900;
   color-scheme: light dark;
+  font-family: "InterVariable", sans-serif;
 }

@@ -16,10 +16,14 @@ import About from "./pages/Project/About";
 import Composes from "./pages/Project/Composes";
 import Artifacts from "./pages/Project/Artifacts";
 import User from "./pages/User";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import Explore from "./pages/Explore";
+import { getAllProjects, getProject } from "./api/projects";
 
 const config: LogtoConfig = {
   endpoint: "https://accounts.fyralabs.com",
-  appId: "by2Xk45J3sx0zI2tijr0Y",
+  appId: "Qcg1z97f7oO6Xph0sX4xF",
 };
 
 const location = new ReactLocation();
@@ -47,43 +51,78 @@ const routes: Route<DefaultGenerics>[] = [
         element: <Home />,
       },
       {
-        path: "/:user",
+        path: "/explore",
+        element: <Explore />,
+        loader: () =>
+          queryClient.getQueryData(["projects"]) ??
+          queryClient.fetchQuery(["projects"], getAllProjects),
+      },
+      {
+        path: "/projects/:projectID",
+        element: <Project />,
+        loader: ({ params: { projectID } }) =>
+          queryClient.getQueryData(["projects", projectID]) ??
+          queryClient.fetchQuery(["projects", projectID], ({ queryKey }) =>
+            getProject(queryKey[1])
+          ),
         children: [
           {
-            path: "/",
-            element: <User />,
+            path: "/about",
+            element: <About />,
           },
           {
-            path: "/:project",
-            element: <Project />,
-            children: [
-              {
-                path: "/about",
-                element: <About />,
-              },
-              {
-                path: "/composes",
-                element: <Composes />,
-              },
-              {
-                path: "/artifacts",
-                element: <Artifacts />,
-              },
-            ],
+            path: "/composes",
+            element: <Composes />,
+          },
+          {
+            path: "/artifacts",
+            element: <Artifacts />,
           },
         ],
       },
+      // {
+      //   path: "/:user",
+      //   children: [
+      //     {
+      //       path: "/",
+      //       element: <User />,
+      //     },
+      //     {
+      //       path: "/:project",
+      //       element: <Project />,
+      //       children: [
+      //         {
+      //           path: "/about",
+      //           element: <About />,
+      //         },
+      //         {
+      //           path: "/composes",
+      //           element: <Composes />,
+      //         },
+      //         {
+      //           path: "/artifacts",
+      //           element: <Artifacts />,
+      //         },
+      //       ],
+      //     },
+      //   ],
+      // },
     ],
   },
 ];
+
+const queryClient = new QueryClient();
 
 const App = () => {
   const darkMode = useDarkMode(true);
 
   return (
-    <LogtoProvider config={config}>
-      <Router location={location} routes={routes} />
-    </LogtoProvider>
+    <QueryClientProvider client={queryClient}>
+      <LogtoProvider config={config}>
+        <Router location={location} routes={routes} />
+      </LogtoProvider>
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
   );
 };
 

@@ -1,4 +1,5 @@
-use crate::backend::Project;
+use crate::backend::{Project};
+use crate::db_object::Artifact;
 use rocket::form::Form;
 use rocket::http::Status;
 use rocket::serde::json::Json;
@@ -6,7 +7,7 @@ use rocket::serde::uuid::Uuid;
 use rocket::Route;
 
 pub(crate) fn routes() -> Vec<Route> {
-    routes![index, get, new,]
+    routes![index, get, new, get_artifacts]
 }
 
 #[get("/?<limit>&<page>")]
@@ -24,6 +25,14 @@ async fn get(id: Uuid) -> Option<Json<Project>> {
 struct ProjectNew {
     name: String,
     description: Option<String>,
+}
+
+
+#[get("/<id>/artifacts")]
+async fn get_artifacts(id: Uuid) -> Option<Json<Vec<Artifact>>> {
+    let project = Project::get(id).await.ok()?;
+    let a = project.list_artifacts().await.ok()?.iter().map(|a| Artifact::from(a.clone())).collect();
+    Some(Json(a))
 }
 
 #[post("/", data = "<data>")]

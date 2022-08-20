@@ -37,7 +37,7 @@ const User = () => {
           </div>
         </div>
       </div>
-      <div className="flex divide-y-[1px] divide-neutral-800 flex-col">
+      <div className="flex divide-y-[1px] divide-neutral-700 flex-col">
         <div className="flex gap-5 items-center py-2">
           <div className="flex flex-col">
             <p>neko</p>

@@ -20,7 +20,7 @@ const Landing = () => {
           <div className="flex flex-row gap-3">
             <button
               className="rounded-lg bg-blue-600 px-6 py-2.5 text-white font-medium text-xs shadow-md hover:bg-blue-800 transition"
-              onClick={() => signIn("http://localhost:3000/callback")}
+              onClick={() => signIn("http://127.0.0.1:5173/callback")}
             >
               Sign Up
             </button>

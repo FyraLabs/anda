@@ -360,6 +360,20 @@ impl Project {
             .collect())
     }
 
+    pub async fn list_artifacts(&self) -> Result<Vec<Artifact>>
+    where
+        Self: Sized,
+    {
+        // get all the builds tagged with this project
+        let builds = crate::db_object::Build::get_by_project_id(self.id).await?;
+        let mut artifacts = Vec::new();
+        for build in builds {
+            artifacts.extend(Artifact::get_for_build(build.id).await?);
+        }
+        Ok(artifacts)
+
+    }
+
     pub async fn add(self) -> Result<Self>
     where
         Self: Sized,

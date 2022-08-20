@@ -41,6 +41,7 @@ mod db_object;
 mod entity;
 mod kubernetes;
 mod s3_object;
+mod cors;
 
 use rust_embed::RustEmbed;
 
@@ -103,11 +104,13 @@ async fn rocket() -> Rocket<Build> {
     );
     info!("Starting up server...");
     rocket::build()
+        .attach(cors::CORS)
         .attach(db::Db::init())
         .mount("/builds", api::builds_routes())
         .mount("/artifacts", api::artifacts_routes())
         .mount("/projects", api::projects_routes())
         .mount("/targets", api::targets_routes())
+        .mount("/composes", api::composes_routes())
         .mount("/app", routes![index])
         //.mount("/assets", FileServer::from("dist/assets"))
         .mount("/", routes![dist, root, callback])

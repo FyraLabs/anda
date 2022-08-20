@@ -13,7 +13,7 @@ const Home = () => {
         <div className="flex-1 mr-10">
           <p className="font-bold text-3xl mb-2">Recent</p>
 
-          <div className="flex divide-y-[1px] divide-neutral-800 flex-col">
+          <div className="flex divide-y-[1px] divide-neutral-700 flex-col">
             <div className="flex gap-5 items-center py-2">
               <div className="flex flex-col">
                 <p>neko</p>
@@ -52,7 +52,7 @@ const Home = () => {
         <div className="max-w-xs">
           <p className="font-medium text-xl mb-3">Activity</p>
 
-          <div className="flex divide-y-[1px] divide-neutral-800 flex-col">
+          <div className="flex divide-y-[1px] divide-neutral-700 flex-col">
             <div className="flex pb-3">
               <div className="rounded-full bg-teal-500 h-10 w-10 self-center mr-3 aspect-square" />
 

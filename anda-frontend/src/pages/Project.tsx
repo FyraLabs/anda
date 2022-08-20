@@ -10,15 +10,25 @@ import {
   faInfoCircle,
 } from "@fortawesome/free-solid-svg-icons";
 import { faDocker } from "@fortawesome/free-brands-svg-icons";
+import { useQuery } from "@tanstack/react-query";
+import { getProject } from "../api/projects";
 
 const Project = () => {
+  const {
+    params: { projectID },
+  } = useMatch();
+  const query = useQuery(["projects", projectID], ({ queryKey }) =>
+    getProject(queryKey[1])
+  );
+
+  if (!query.data) return <></>;
+
   return (
     <div className="flex flex-col dark:text-gray-300 flex-1">
       <div className="flex h-full flex-1 items-stretch">
         <div className="p-5 flex flex-col light:bg-neutral-100 dark:bg-neutral-900 w-72 gap-2">
           <p className="text-xl text-gray-400 font-medium">
-            <Link to="..">lleyton</Link> /{" "}
-            <span className="text-white">neko</span>
+            <span className="text-white">{query.data.name}</span>
           </p>
           <Link className="flex gap-2 items-center rounded h-8" to="about">
             <FontAwesomeIcon icon={faInfoCircle} fixedWidth />
@@ -35,17 +45,6 @@ const Project = () => {
         </div>
         <div className="p-5 dark:text-gray-300 flex-1">
           <Outlet />
-          {/* <p className="text-3xl font-medium mb-3 flex items-center gap-3">
-            <span className="flex h-[12px] w-[12px] relative">
-              <span className="relative inline-flex rounded-full h-[12px] w-[12px] bg-green-500"></span>
-            </span>
-            Compose #1
-          </p>
-
-          <div className="flex flex-row">
-            <p>Logs</p>
-            <p>Artifacts</p>
-          </div> */}
         </div>
       </div>
     </div>
