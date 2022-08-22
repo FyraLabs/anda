@@ -1,4 +1,5 @@
 use crate::{backend::S3Object, db_object::*};
+use crate::backend::Artifact;
 use log::debug;
 use rocket::{
     form::Form,
@@ -81,9 +82,6 @@ async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
             .upload_file(file.path().unwrap().to_path_buf())
             .await
             .expect("Failed to upload build file to S3")
-            .metadata()
-            .await
-            .expect("Failed to get metadata"),
         );
     }
 
@@ -95,30 +93,4 @@ async fn search(query: String) -> Json<Vec<Artifact>> {
     Json(Artifact::search(&query).await)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[tokio::test]
-    async fn test_new_artifact() {
-        let target = Target::new(
-            Uuid::new_v4(),
-            "test".to_string(),
-            None,
-            "noarch".to_string(),
-        );
-        Target::add(&target).await.unwrap();
-        let build = Build::new(0, None, "test");
-        Build::add(&build).await.unwrap();
-        let art = Artifact::new(
-            Uuid::new_v4(),
-            build.id,
-            "test".to_string(),
-            "url".to_string(),
-        );
-
-        let test = Artifact::add(&art).await.unwrap();
-
-        println!("{:?}", test);
-    }
-}

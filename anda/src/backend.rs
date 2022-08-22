@@ -29,7 +29,7 @@ pub(crate) async fn match_subcmd(cmd: &BackendCommand) -> Result<()> {
                     format!(
                         "{}\t{}\t{}\t{}\n",
                         artifact.id.simple(),
-                        artifact.name,
+                        artifact.filename,
                         artifact.build_id.simple(),
                         artifact.timestamp
                     )

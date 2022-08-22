@@ -31,7 +31,7 @@ impl From<crate::backend::Artifact> for Artifact {
         Artifact {
             id: artifact.id,
             name: artifact.filename.clone(),
-            url: artifact.get_url().clone(),
+            url: artifact.get_url(),
             build_id: artifact.build_id,
             timestamp: artifact.timestamp,
         }

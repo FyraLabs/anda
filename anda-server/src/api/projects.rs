@@ -1,5 +1,4 @@
-use crate::backend::{Project};
-use crate::db_object::Artifact;
+use crate::backend::{Project, Artifact};
 use rocket::form::Form;
 use rocket::http::Status;
 use rocket::serde::json::Json;
@@ -31,8 +30,8 @@ struct ProjectNew {
 #[get("/<id>/artifacts")]
 async fn get_artifacts(id: Uuid) -> Option<Json<Vec<Artifact>>> {
     let project = Project::get(id).await.ok()?;
-    let a = project.list_artifacts().await.ok()?.iter().map(|a| Artifact::from(a.clone())).collect();
-    Some(Json(a))
+    let a = project.list_artifacts().await.ok();
+    a.map(Json)
 }
 
 #[post("/", data = "<data>")]

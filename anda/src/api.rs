@@ -20,7 +20,7 @@ use uuid::Uuid;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Artifact {
     pub id: Uuid,
-    pub name: String,
+    pub filename: String,
     pub url: String,
     pub build_id: Uuid,
     pub timestamp: DateTime<Utc>,

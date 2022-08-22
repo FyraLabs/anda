@@ -202,13 +202,31 @@ impl S3Object for BuildCache {
 /// - OSTree composes
 /// These will be uploaded in a different way, and will be stored in a different location.
 /// The artifacts will have a different kind of path for each type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Artifact {
     pub id: Uuid,
     pub filename: String,
     pub path: String,
+    pub url: String,
     pub build_id: Uuid,
     pub timestamp: chrono::DateTime<chrono::Utc>,
+}
+
+impl From<crate::db_object::Artifact> for Artifact {
+    fn from(art: crate::db_object::Artifact) -> Self {
+        let filepath = art.name.clone();
+        let filename = filepath.split("/").last().unwrap().to_string();
+        //let id = art.id;
+
+        Self {
+            id: art.id,
+            filename,
+            path: filepath,
+            url: art.url.clone(),
+            build_id: art.build_id,
+            timestamp: art.timestamp,
+        }
+    }
 }
 
 impl Artifact {
@@ -220,6 +238,7 @@ impl Artifact {
             path,
             build_id,
             timestamp: chrono::Utc::now(),
+            url: String::new(),
         }
     }
 
@@ -228,20 +247,44 @@ impl Artifact {
 
         Ok(arts
             .iter()
-            .map(|art| Self {
-                id: art.id,
-                filename: art.name.clone().split('/').last().unwrap().to_string(),
-                path: art.name.clone(),
-                build_id: art.build_id,
-                timestamp: art.timestamp,
-            })
+            .map(|art| Self::from(art.clone()))
             .collect())
     }
 
     pub async fn metadata(&self) -> Result<crate::db_object::Artifact> {
         crate::db_object::Artifact::get(self.id).await
     }
+
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Self>>
+    where
+        Self: Sized,
+    {
+        // Query the database for the projects.
+        let artifacts = crate::db_object::Artifact::list(limit, page).await?;
+
+        Ok(artifacts
+            .iter()
+            .map(|art| Self::from(art.clone()))
+            .collect()
+        )
+    }
+
+    pub async fn search(query: &str) -> Vec<Self> {
+        let artifacts = crate::db_object::Artifact::search(query).await;
+        artifacts
+            .iter()
+            .map(|art| Self::from(art.clone()))
+            .collect()
+    }
+
+    pub async fn add(&self) -> Result<Self> {
+        let a = crate::db_object::Artifact::add(&crate::db_object::Artifact::from(self.clone())).await;
+        Ok(Self::from(a?))
+    }
 }
+
+
+
 
 #[async_trait]
 impl S3Object for Artifact {
@@ -255,12 +298,12 @@ impl S3Object for Artifact {
             filename = self.filename
         )
     }
-    async fn upload_file(self, path: PathBuf) -> Result<Self> {
+    async fn upload_file(mut self, path: PathBuf) -> Result<Self> {
         let obj = crate::s3_object::S3Artifact::new()?;
         let dest_path = format!("artifacts/{}/{}", self.id.simple(), self.path);
         let _ = obj.upload_file(&dest_path, path.to_owned()).await?;
         // now update the database
-        crate::db_object::Artifact::new(
+        /* crate::db_object::Artifact::new(
             self.id,
             self.build_id,
             dest_path
@@ -270,10 +313,17 @@ impl S3Object for Artifact {
             self.get_url(),
         )
         .add()
-        .await?;
+        .await?; */
+
+        self.path = dest_path
+        .strip_prefix(&format!("artifacts/{}/", self.id.simple()))
+        .unwrap()
+        .to_string();
+
+        self.url = self.get_url();
 
         println!("Uploaded {}", dest_path);
-        Ok(self)
+        Ok(self.add().await?)
     }
     async fn pull_bytes(&self) -> Result<ByteStream> {
         // Get from S3
@@ -289,17 +339,10 @@ impl S3Object for Artifact {
         // Query the database for the artifact with the given uuid.
         let artifact_meta = crate::db_object::Artifact::get(uuid).await?;
 
-        let filepath = artifact_meta.name.clone();
-        let filename = filepath.strip_prefix("artifacts/").unwrap().to_string();
-        let id = artifact_meta.id;
-
-        Ok(Artifact {
-            id,
-            filename,
-            path: filepath,
-            build_id: artifact_meta.build_id,
-            timestamp: artifact_meta.timestamp,
-        })
+        //let filepath = artifact_meta.name.clone();
+        //let filename = filepath.strip_prefix("artifacts/").unwrap().to_string();
+        //let id = artifact_meta.id;
+        Ok(Self::from(artifact_meta))
     }
 }
 
