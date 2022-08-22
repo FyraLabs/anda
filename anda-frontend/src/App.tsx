@@ -20,6 +20,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import Explore from "./pages/Explore";
 import { getAllProjects, getProject } from "./api/projects";
+import { getAllBuilds } from "./api/builds";
+import Builds from "./pages/Builds";
 
 const config: LogtoConfig = {
   endpoint: "https://accounts.fyralabs.com",
@@ -56,6 +58,13 @@ const routes: Route<DefaultGenerics>[] = [
         loader: () =>
           queryClient.getQueryData(["projects"]) ??
           queryClient.fetchQuery(["projects"], getAllProjects),
+      },
+      {
+        path: "/builds",
+        element: <Builds />,
+        loader: () =>
+          queryClient.getQueryData(["builds"]) ??
+          queryClient.fetchQuery(["builds"], getAllBuilds),
       },
       {
         path: "/projects/:projectID",

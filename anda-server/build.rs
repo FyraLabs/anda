@@ -4,7 +4,7 @@ use std::fs;
 // use std::path::PathBuf;
 
 fn main() {
-    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=anda-frontend/");
 
     let old_pwd = std::env::current_dir().unwrap();
     // change current directory to anda-frontend
@@ -48,8 +48,6 @@ fn main() {
         } else {
             std::os::unix::fs::symlink("anda-frontend/dist", format!("{}/dist", out_dir)).unwrap();
         }
-    } else {
-        std::os::unix::fs::symlink("anda-frontend/dist", format!("{}/dist", out_dir)).unwrap();
     }
 
     // copy anda-frontend/dist folder to anda-server/dist folder

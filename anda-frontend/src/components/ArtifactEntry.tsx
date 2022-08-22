@@ -15,19 +15,14 @@ import { Link, useMatch } from "@tanstack/react-location";
 // artifactentry takes an artifact[] as a parameter and returns a div with the artifact information
 export const ArtifactEntry = (artifacts: Artifact[]) => {
   return artifacts.map((artifact: Artifact) => (
-    <div className="flex gap-5 items-center py-2">
+    <div className="flex gap-5 items-center py-2" key={artifact.id}>
         {iconFromArtifact(artifact)}
-      <div className="flex flex-col">
+      <div className="flex flex-col h-14">
         <p>{artifact.filename}</p>
         <p className="text-xs font-light">
           12MB • <code>v1.2.0</code> • 6h
         </p>
 
-        {/* <p className="text-xs font-extralight">
-          {artifact.path}
-        </p> */}
-        {// if path doesnt match the filename, display the path
-        }
         {artifact.path !== artifact.filename ? (
           <p className="text-xs font-extralight">
             {artifact.path}
@@ -86,7 +81,8 @@ function iconFromArtifact(artifact: Artifact) {
     icon = faFileLines;
   } else if (
     name.toLowerCase().endsWith("dockerfile") ||
-    name.toLowerCase().endsWith("docker-compose.yml")
+    name.toLowerCase().endsWith("docker-compose.yml") ||
+    name.toLowerCase().endsWith("docker-compose.yaml")
   ) {
     icon = faDocker;
   }

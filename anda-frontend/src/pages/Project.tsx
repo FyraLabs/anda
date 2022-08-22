@@ -28,7 +28,7 @@ const Project = () => {
       <div className="flex h-full flex-1 items-stretch">
         <div className="p-5 flex flex-col light:bg-neutral-100 dark:bg-neutral-900 w-72 gap-2">
           <p className="text-xl text-gray-400 font-medium">
-            <span className="text-white">{query.data.name}</span>
+            <span className="dark:text-white text-black">{query.data.name}</span>
           </p>
           <Link className="flex gap-2 items-center rounded h-8" to="about">
             <FontAwesomeIcon icon={faInfoCircle} fixedWidth />
