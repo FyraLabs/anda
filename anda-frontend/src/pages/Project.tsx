@@ -44,6 +44,7 @@ const Project = () => {
           </Link>
         </div>
         <div className="p-5 dark:text-gray-300 flex-1">
+          {/* default outlet: about */}
           <Outlet />
         </div>
       </div>

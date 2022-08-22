@@ -8,9 +8,8 @@ import {
   faFileLines,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { useQuery } from "@tanstack/react-query";
 import { Artifact } from "../api/artifacts";
-import { Link, useMatch } from "@tanstack/react-location";
+import moment from "moment";
 
 // artifactentry takes an artifact[] as a parameter and returns a div with the artifact information
 export const ArtifactEntry = (artifacts: Artifact[]) => {
@@ -20,7 +19,7 @@ export const ArtifactEntry = (artifacts: Artifact[]) => {
       <div className="flex flex-col h-14">
         <p>{artifact.filename}</p>
         <p className="text-xs font-light">
-          12MB • <code>v1.2.0</code> • 6h
+          12MB • <code>v1.2.0</code> • {moment(artifact.timestamp).fromNow()}
         </p>
 
         {artifact.path !== artifact.filename ? (

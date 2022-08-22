@@ -74,7 +74,11 @@ const routes: Route<DefaultGenerics>[] = [
           queryClient.fetchQuery(["projects", projectID], ({ queryKey }) =>
             getProject(queryKey[1])
           ),
-        children: [
+          children: [
+          {
+            path: "/",
+            element: <About />,
+          },
           {
             path: "/about",
             element: <About />,

@@ -57,15 +57,15 @@ const Navbar = () => {
       ) : (
         <div className="flex-1 flex justify-center" />
       )}
-
       <button
         id="theme-toggle"
         type="button"
-        className="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5 justify-self-end"
+        className="text-gray-100 dark:text-gray-400 hover:bg-zinc-700 focus:ring-gray-200 rounded-lg text-sm p-2.5 justify-self-end"
         onClick={toggleDarkMode}
       >
-        <FontAwesomeIcon icon={darkMode ? faMoon : faSun} />
+        <FontAwesomeIcon icon={darkMode ? faSun : faMoon} />
       </button>
+
     </div>
   );
 };

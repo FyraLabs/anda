@@ -1,7 +1,18 @@
 import { useLogto } from "@logto/react";
 import { Link } from "@tanstack/react-location";
+import { useState } from "react";
 
 const Landing = () => {
+  const mode = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+  // get dark mode state from localStorage or use `mode` as default
+  const [darkMode, setDarkMode] = useState(localStorage.getItem("color-theme") === "true" || mode);
+
+  if (darkMode) {
+    document.documentElement.classList.add("dark");
+  } else {
+    document.documentElement.classList.remove("dark");
+  }
   const { signIn } = useLogto();
 
   return (

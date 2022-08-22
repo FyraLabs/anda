@@ -1,18 +1,19 @@
 import { Link } from "@tanstack/react-location";
 import { useQuery } from "@tanstack/react-query";
+// import moment.js
+import moment from "moment";
 
-import { Build } from "../api/builds";
 import { getAllBuilds } from "../api/builds";
 import { getProject } from "../api/projects";
 
 export const BuildsTable = () => {
   const query = useQuery(["builds"], getAllBuilds);
   if (!query.data) return <></>;
-  console.log(query.data);
+  //console.debug(query.data);
   return (
-    <div className="overflow-x-auto relative">
+    <div className="relative shadow-md sm:rounded-lg overflow-y-hidden">
       <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-        <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+        <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-zinc-700 dark:text-gray-400">
           <tr>
             <th scope="col" className="py-3 px-6">
               Build
@@ -30,29 +31,43 @@ export const BuildsTable = () => {
               Status
             </th>
             <th scope="col" className="py-3 px-6">
-              Created At
+              Created
             </th>
           </tr>
         </thead>
         <tbody>
           {query.data.map((build) => (
-            <tr className="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+            <tr className="bg-white border-b dark:bg-zinc-800 dark:border-gray-700">
               <th className="py-3 px-6">{build.build_type}</th>
               <td className="py-3 px-6">{build.id}</td>
               <td className="py-3 px-6">{build.target_id}</td>
               <td className="py-3 px-6">
                 {/* if project id is not null */}
                 {build.project_id ? (
-                    <Link to={`/app/projects/${build.project_id}`} className="dark:text-blue-300 text-blue-500 underline">
-                        {/* Get project name from build id */}
-                        {ProjectName(build.project_id)}
-                    </Link>
+                  <Link
+                    to={`/app/projects/${build.project_id}`}
+                    className="dark:text-blue-300 text-blue-500 underline"
+                  >
+                    {/* Get project name from build id */}
+                    {ProjectName(build.project_id)}
+                  </Link>
                 ) : (
-                    "-"
+                  "-"
                 )}
               </td>
               <td className="py-3 px-6">{StatusBanner(build.status)}</td>
-              <td className="py-3 px-6">{build.timestamp}</td>
+              <td className="py-3 px-6">
+                <div
+                  id="tooltip-no"
+                  role="tooltip"
+                  className="inline-block absolute invisible z-10 py-2 px-3 text-sm font-medium text-white bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700"
+                >
+                  Tooltip content
+                </div>
+                <p data-tooltip-target="tooltip-no" role="text">
+                  {moment(build.timestamp).fromNow()}
+                </p>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -61,12 +76,12 @@ export const BuildsTable = () => {
   );
 };
 
-
 function ProjectName(id: string) {
-    const query = useQuery(["project", id], ({ queryKey }) =>
-    getProject(queryKey[1]));
-    if (!query.data) return <></>
-    return query.data.name
+  const query = useQuery(["project", id], ({ queryKey }) =>
+    getProject(queryKey[1])
+  );
+  if (!query.data) return <></>;
+  return query.data.name;
 }
 
 const StatusBanner = (status: string) => {
@@ -92,6 +107,12 @@ const StatusBanner = (status: string) => {
     case "failure":
       return (
         <span className="uppercase bg-red-100 text-red-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded dark:bg-red-200 dark:text-red-900">
+          {status}
+        </span>
+      );
+    default:
+      return (
+        <span className="uppercase bg-gray-100 text-gray-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-300">
           {status}
         </span>
       );
