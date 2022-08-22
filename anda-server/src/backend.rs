@@ -46,12 +46,13 @@ impl AndaBackend {
 
     // Proxy function to the actual build method.
     // Matches the method enum and calls the appropriate method.
-    pub async fn build(&self) -> Result<()> {
+    pub async fn build(&self, project_scope: Option<&str>) -> Result<()> {
         dispatch_build(
             self.build_id.to_string(),
             self.image.to_string(),
             self.pack.get_url(),
             "owo".to_string(),
+            project_scope.map(|s| s.to_string()),
         )
         .await?;
         Ok(())

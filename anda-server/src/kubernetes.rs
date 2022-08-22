@@ -46,6 +46,7 @@ pub async fn dispatch_build(
     image: String,
     pack_url: String,
     token: String,
+    scope: Option<String>
 ) -> Result<()> {
     let jobs = K8S::jobs().await;
 
@@ -53,6 +54,21 @@ pub async fn dispatch_build(
 
     let mut labels = BTreeMap::new();
     labels.insert("anda-build-id".to_string(), id.clone());
+
+    let mut cmd = vec![
+        "anda".to_string(),
+        "build".to_string(),
+    ];
+
+    if let Some(scope) = scope {
+        cmd.extend(vec![
+            "-p".to_string(),
+            scope,
+        ])
+    }
+
+    cmd.push(pack_url.clone());
+    // TODO: add buildkit host here
 
     let spec = Job {
         metadata: ObjectMeta {
@@ -83,12 +99,19 @@ pub async fn dispatch_build(
                                 value: Some(pack_url.clone()),
                                 ..EnvVar::default()
                             },
+                            // replace this with proper host
+                            EnvVar {
+                                name: "BUILDKIT_HOST".to_string(),
+                                value: std::env::var("ANDA_BUILDKIT_HOST").ok(),
+                                ..EnvVar::default()
+                            },
+                            EnvVar {
+                                name: "ANDA_ENDPOINT".to_string(),
+                                value: std::env::var("ANDA_ENDPOINT").ok(),
+                                ..EnvVar::default()
+                            }
                         ]),
-                        command: Some(vec![
-                            "anda".to_string(),
-                            "build".to_string(),
-                            pack_url.clone(),
-                        ]),
+                        command: Some(cmd),
 
                         ..Default::default()
                     }],

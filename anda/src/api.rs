@@ -120,7 +120,7 @@ impl AndaBackend {
         Ok(build)
     }
 
-    pub async fn upload_build(&self, target_id: Uuid, packfile_path: &PathBuf) -> Result<Build> {
+    pub async fn upload_build(&self, target_id: Uuid, packfile_path: &PathBuf, scope: Option<String>) -> Result<Build> {
         let url = format!("{}/builds", self.url);
 
         debug!("{}", target_id);
@@ -145,13 +145,17 @@ impl AndaBackend {
 
         println!("{:?}", file_part);
         let _target_part = multipart::Part::text(target_id.to_string());
-        let form = Form::new()
+        let mut form = Form::new()
             .percent_encode_noop()
             //.part("target_id", target_part)
             .part("src_file", file_part)
             .text("target_id", target_id.to_string());
 
         //debug!("{:?}", form);
+
+        if let Some(scope) = scope {
+            form = form.text("project", scope);
+        }
 
         let resp = self.client.post(&url).multipart(form).send().await?;
         //println!("{:?}", &resp.json().await?);

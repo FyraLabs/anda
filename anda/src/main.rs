@@ -127,6 +127,10 @@ enum Command {
         /// Target to build to
         #[clap(short, long, value_name = "TARGET")]
         target: String,
+
+        /// Optional project scope to push with
+        #[clap(short, long, value_name = "SCOPE")]
+        scope: Option<String>,
     },
 
     /// Shows build info
@@ -170,7 +174,7 @@ async fn main() -> Result<()> {
 
             if let Ok(url) = reqwest::Url::parse(&path) {
                 info!("path is a URL, calling downloader");
-                ProjectPacker::download_and_call_unpack_build(url.as_str(), workdir, &opts)
+                ProjectPacker::download_and_call_unpack_build(url.as_str(), workdir, &opts, projects)
                     .await
                     .map_err(|e| {
                         error!("{}", e);
@@ -193,7 +197,7 @@ async fn main() -> Result<()> {
                     .ends_with(".andasrc.zip")
                 {
                     debug!("path is an andasrc tarball package, calling unpacker");
-                    ProjectPacker::unpack_and_build(&path, workdir, &opts)
+                    ProjectPacker::unpack_and_build(&path, workdir, &opts, projects)
                         .await
                         .map_err(|e| {
                             error!("{}", e);
@@ -263,7 +267,7 @@ async fn main() -> Result<()> {
                 println!("Packed to {}", p.display());
             }
         }
-        Command::Push { path, target } => {
+        Command::Push { path, target, scope } => {
             // pack the project, then push to backend
 
             let p = ProjectPacker::pack(&path, None).await.map_err(|e| {
@@ -282,7 +286,7 @@ async fn main() -> Result<()> {
             //let target_id_test = uuid::Uuid::parse_str("ad84b005-a147-4235-a339-eea78157ec0c").unwrap();
 
             // push da p
-            let b = backend.upload_build(target.id, &p).await.map_err(|e| {
+            let b = backend.upload_build(target.id, &p, scope).await.map_err(|e| {
                 error!("{}", e);
                 anyhow!("{}", e)
             })?;

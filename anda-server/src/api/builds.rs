@@ -41,6 +41,7 @@ pub struct BuildSubmission<'r> {
     project_id: Option<Uuid>,
     target_id: Uuid,
     src_file: TempFile<'r>,
+    project: Option<String>,
 }
 
 #[post("/", data = "<data>")]
@@ -85,7 +86,7 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
             .unwrap_or_else(|| "local-registry:38675/anda/anda-client".to_string()),
     );
     build
-        .build()
+        .build(data.project.as_deref())
         .await
         .map_err(|_| Status::InternalServerError)?;
 

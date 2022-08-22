@@ -144,6 +144,7 @@ impl ProjectPacker {
         url: &str,
         workdir: Option<PathBuf>,
         opts: &build::BuilderOptions,
+        projects: Vec<String>
     ) -> Result<(), PackerError> {
         let tmp_dir = tempfile::tempdir().unwrap();
         // download file using reqwest
@@ -173,13 +174,14 @@ impl ProjectPacker {
         let mut file = File::create(&dest).await?;
         tokio::io::copy(&mut data, &mut file).await?;
 
-        Self::unpack_and_build(&dest, workdir, opts).await
+        Self::unpack_and_build(&dest, workdir, opts, projects).await
     }
 
     pub async fn unpack_and_build(
         path: &PathBuf,
         workdir: Option<PathBuf>,
         opts: &build::BuilderOptions,
+        projects: Vec<String>
     ) -> Result<(), PackerError> {
         //let tar = GzipDecoder::new(buf.as_slice());
 
@@ -246,7 +248,7 @@ impl ProjectPacker {
         debug!("{}", std::env::current_dir().unwrap().display());
         // execute anda build internally
         crate::build::ProjectBuilder::new(workdir)
-            .build(vec![], opts)
+            .build(projects, opts)
             .await?;
 
         Ok(())
@@ -258,7 +260,7 @@ pub async fn push_build(root: &PathBuf) -> Result<crate::api::Build, PackerError
     let packfile = ProjectPacker::pack(root, None).await?;
 
     let _build_push = crate::api::AndaBackend::new(None)
-        .upload_build(Uuid::nil(), &packfile)
+        .upload_build(Uuid::nil(), &packfile, None)
         .await?;
 
     todo!()

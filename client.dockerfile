@@ -20,8 +20,8 @@ RUN wget https://github.com/moby/buildkit/releases/download/v0.10.3/buildkit-v0.
 
 RUN tar -xzf /buildkit.tar.gz -C /usr/local/
 
-COPY --from=builder  /usr/bin/anda /usr/bin/anda
-
 RUN dnf install -y openssl-libs
+
+COPY --from=builder  /usr/bin/anda /usr/bin/anda
 
 ENTRYPOINT ["/usr/bin/anda"]
