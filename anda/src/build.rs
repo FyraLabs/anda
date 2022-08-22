@@ -631,6 +631,10 @@ impl ProjectBuilder {
                     .ok_or_else(|| BuilderError::Other(format!("Project `{}` not found", &proj)))?;
                 self.run_whole_project(proj, project, opts).await?;
             }
+            if env::var("ANDA_BUILD_ID").is_ok() {
+                info!("uploading artifacts...");
+                self.push_folder(PathBuf::from(output_path.clone())).await?;
+            };
             return Ok(());
         }
 

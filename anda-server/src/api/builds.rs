@@ -74,30 +74,30 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
     .map_err(|_| Status::InternalServerError)?;
 
     debug!("Generating build");
-    let build_id = Uuid::new_v4();
-
     // process backend request
+    let int_build = Build::new(
+        Some(target.id),
+        data.project_id,
+        None,
+        "BuildSubmission".to_string(),
+    ).add().await.map_err(|_| Status::InternalServerError)?;
 
     let build = AndaBackend::new(
-        build_id,
+        int_build.id,
         cache,
         target
             .image
             .unwrap_or_else(|| "local-registry:38675/anda/anda-client".to_string()),
     );
+
+    debug!("{:?}", int_build);
+    // actually add build to database
     build
         .build(data.project.as_deref())
         .await
         .map_err(|_| Status::InternalServerError)?;
 
-    let build = Build::new(
-        Some(target.id),
-        data.project_id,
-        None,
-        "BuildSubmission".to_string(),
-    );
-
-    Ok(Json(build))
+    Ok(Json(int_build))
 }
 
 #[derive(FromForm)]

@@ -54,7 +54,7 @@ async fn get_file(path: PathBuf) -> Option<(ContentType, Vec<u8>)> {
         let file = file.unwrap();
         let mut buf = Vec::new();
         file.into_async_read().read_to_end(&mut buf).await.ok();
-        return Some((ContentType::Binary, buf))
+        Some((ContentType::Binary, buf))
     }
 
     //todo!()
