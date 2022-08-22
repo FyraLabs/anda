@@ -149,7 +149,7 @@ impl MigrationTrait for Migration {
                         ForeignKey::create()
                             .name("fk-build-projectid-to-project-id")
                             .from(Build::Table, Build::ProjectId)
-                            .to(Target::Table, Project::Id),
+                            .to(Project::Table, Project::Id),
                     )
                     .col(ColumnDef::new(Build::Timestamp).timestamp().not_null())
                     // I'm adding this back, but this time this will be nullable.

@@ -575,6 +575,17 @@ impl Build {
         Ok(Self::from(build_meta))
     }
 
+    pub async fn tag_project(self, project_id: Uuid) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        // Tag the build with the given project id.
+        let build_meta = crate::db_object::Build::from(self)
+            .tag_project(project_id)
+            .await?;
+        Ok(Self::from(build_meta))
+    }
+
     pub async fn tag(self, target_id: Uuid) -> Result<Self>
     where
         Self: Sized,

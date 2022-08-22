@@ -264,6 +264,17 @@ impl Build {
         Ok(Build::from(res))
     }
 
+    pub async fn tag_project(&self, project_id: Uuid) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            project_id: ActiveValue::Set(Some(project_id)),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Ok(Build::from(res))
+    }
+
     /// Gets a build by ID
     pub async fn get(id: Uuid) -> Result<Build> {
         let db = DbPool::get().await;

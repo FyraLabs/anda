@@ -17,6 +17,7 @@ pub(crate) fn routes() -> Vec<Route> {
         update_status,
         tag_compose,
         tag,
+        tag_project,
     ]
 }
 
@@ -119,13 +120,13 @@ async fn update_status(data: Form<BuildUpdateStatus>) -> Json<Build> {
 // TODO: Tag target?
 
 #[derive(FromForm)]
-struct BuildTagCompose {
+struct BuildTag {
     id: Uuid,
     tag: Uuid,
 }
 
 #[post("/tag_compose", data = "<data>")]
-async fn tag_compose(data: Form<BuildTagCompose>) -> Json<Build> {
+async fn tag_compose(data: Form<BuildTag>) -> Json<Build> {
     let build = Build::get(data.id)
         .await
         .expect("Failed to tag build to compose")
@@ -134,18 +135,22 @@ async fn tag_compose(data: Form<BuildTagCompose>) -> Json<Build> {
     Json(build.unwrap())
 }
 
-#[derive(FromForm)]
-struct BuildTagTarget {
-    id: Uuid,
-    tag: Uuid,
-}
-
 #[post("/tag", data = "<data>")]
-async fn tag(data: Form<BuildTagTarget>) -> Json<Build> {
+async fn tag(data: Form<BuildTag>) -> Json<Build> {
     let build = Build::get(data.id)
         .await
         .expect("Failed to tag build")
         .tag(data.tag)
+        .await;
+    Json(build.unwrap())
+}
+
+#[post("/tag_project", data = "<data>")]
+async fn tag_project(data: Form<BuildTag>) -> Json<Build> {
+    let build = Build::get(data.id)
+        .await
+        .expect("Failed to tag build")
+        .tag_project(data.tag)
         .await;
     Json(build.unwrap())
 }
