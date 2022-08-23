@@ -1,5 +1,6 @@
 use crate::backend::{AndaBackend, Build, BuildCache, S3Object, Target};
 
+
 use rocket::{
     form::Form,
     fs::TempFile,
@@ -140,7 +141,7 @@ async fn tag(data: Form<BuildTag>) -> Json<Build> {
     let build = Build::get(data.id)
         .await
         .expect("Failed to tag build")
-        .tag(data.tag)
+        .tag_target(data.tag)
         .await;
     Json(build.unwrap())
 }

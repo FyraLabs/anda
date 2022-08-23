@@ -8,9 +8,13 @@ pub(crate) fn routes() -> Vec<Route> {
     routes![index, get,]
 }
 
-#[get("/?<limit>&<page>")]
-async fn index(page: Option<usize>, limit: Option<usize>) -> Json<Vec<Compose>> {
-    let composes = Compose::list(limit.unwrap_or(100), page.unwrap_or(0)).await;
+#[get("/?<limit>&<page>&<all>")]
+async fn index(page: Option<usize>, limit: Option<usize>, all: Option<bool>) -> Json<Vec<Compose>> {
+    let composes = if all.unwrap_or(false) {
+        Compose::list_all().await
+    } else {
+        Compose::list(limit.unwrap_or(100), page.unwrap_or(0)).await
+    };
     Json(composes.unwrap())
 }
 

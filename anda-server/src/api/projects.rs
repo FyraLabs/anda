@@ -1,10 +1,10 @@
-use crate::backend::{Project, Artifact};
+use crate::backend::{Artifact, Project};
 use rocket::form::Form;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::serde::uuid::Uuid;
 use rocket::Route;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 pub(crate) fn routes() -> Vec<Route> {
     routes![index, get, new, get_artifacts, set_summary]
@@ -27,7 +27,6 @@ struct ProjectNew {
     description: Option<String>,
 }
 
-
 #[get("/<id>/artifacts")]
 async fn get_artifacts(id: Uuid) -> Option<Json<Vec<Artifact>>> {
     let project = Project::get(id).await.ok()?;
@@ -36,24 +35,26 @@ async fn get_artifacts(id: Uuid) -> Option<Json<Vec<Artifact>>> {
 }
 
 #[post("/", data = "<data>")]
-async fn new(data: Form<ProjectNew>) -> Result<(), Status> {
+async fn new(data: Form<ProjectNew>) -> Result<Json<Project>, Status> {
     let project = Project::new(data.name.clone(), data.description.clone());
     project
         .add()
         .await
         .map_err(|_| Status::InternalServerError)?;
-    Ok(())
+    Ok(Json(project))
 }
 
 #[derive(Serialize, Deserialize)]
-struct ProjectSummary    {
+struct ProjectSummary {
     summary: Option<String>,
 }
-
 
 #[post("/<id>/summary", data = "<data>")]
 async fn set_summary(id: Uuid, data: Json<ProjectSummary>) -> Result<(), Status> {
     let project = Project::get(id).await.map_err(|_| Status::NotFound)?;
-    project.update_summary(data.summary.clone()).await.map_err(|_| Status::InternalServerError)?;
+    project
+        .update_summary(data.summary.clone())
+        .await
+        .map_err(|_| Status::InternalServerError)?;
     Ok(())
 }

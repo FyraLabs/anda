@@ -63,7 +63,7 @@ async fn update(id: Uuid, data: Json<TargetForm>) -> Result<Json<Target>, Status
 #[delete("/<id>")]
 async fn delete(id: Uuid) -> Result<(), Status> {
     let target = Target::get(id).await.map_err(|_| Status::BadRequest)?;
-    Target::delete(target)
+    Target::delete(&target)
         .await
         .map_err(|_| Status::InternalServerError)?;
     Ok(())

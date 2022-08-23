@@ -1,5 +1,5 @@
-use crate::backend::Artifact;
-use crate::{backend::S3Object, db_object::*};
+use crate::backend::{Artifact, S3Object};
+use crate::{backend::*};
 use log::debug;
 use rocket::{
     form::Form,

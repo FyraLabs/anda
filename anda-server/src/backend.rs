@@ -4,21 +4,23 @@
 //! The builder will then be responsible for building the project.
 //! The server will start a Kubernetes job and manage the build process (hopefully).
 
-// TODO: Actually send kubernetes job to the server.
-
-use std::{path::PathBuf, time::SystemTime};
-
-use anyhow::Result;
-use aws_sdk_s3::types::{ByteStream, DateTime};
-use chrono::Utc;
-//use aws_smithy_types::DateTime;
-use rocket::serde::uuid::Uuid;
+use std::path::PathBuf;
+use std::time::SystemTime;
+use crate::{
+    db,
+    entity::{artifact, build, project, target, compose},
+};
+use anyhow::{anyhow, Result};
+use chrono::{offset::Utc, DateTime};
+use aws_sdk_s3::types::{ByteStream, DateTime as AmazonDateTime};
 use sea_orm::FromJsonQueryResult;
 use tokio::{fs::File, io::{AsyncReadExt, AsyncWriteExt}, process::Command};
-
+use db::DbPool;
 use crate::s3_object::{S3Artifact, BUCKET, S3_ENDPOINT};
+use sea_orm::{prelude::Uuid, *};
 use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};
+//use crate::backend_old::S3Object;
 
 use crate::kubernetes::dispatch_build;
 
@@ -55,7 +57,7 @@ impl AndaBackend {
             "owo".to_string(),
             project_scope.map(|s| s.to_string()),
         )
-        .await?;
+            .await?;
         Ok(())
     }
 }
@@ -63,16 +65,16 @@ impl AndaBackend {
 pub trait S3Object {
     fn get_url(&self) -> String;
     async fn get(uuid: Uuid) -> Result<Self>
-    where
-        Self: Sized;
+        where
+            Self: Sized;
     /// Pull raw data from S3
     async fn pull_bytes(&self) -> Result<ByteStream>
-    where
-        Self: Sized;
+        where
+            Self: Sized;
     /// Upload file to S3
     async fn upload_file(self, path: PathBuf) -> Result<Self>
-    where
-        Self: Sized;
+        where
+            Self: Sized;
 }
 
 // Temporary files for file uploads.
@@ -133,8 +135,8 @@ impl S3Object for BuildCache {
     }
 
     async fn get(uuid: Uuid) -> Result<Self>
-    where
-        Self: Sized,
+        where
+            Self: Sized,
     {
         // List all files in S3
         let obj = S3Artifact::new()?.connection;
@@ -160,8 +162,8 @@ impl S3Object for BuildCache {
     }
 
     async fn pull_bytes(&self) -> Result<ByteStream>
-    where
-        Self: Sized,
+        where
+            Self: Sized,
     {
         // Get from S3
         todo!()
@@ -186,7 +188,7 @@ impl S3Object for BuildCache {
             .bucket(BUCKET.as_str())
             .key(dest_path.as_str())
             // 7 days
-            .expires(DateTime::from(sys_time))
+            .expires(AmazonDateTime::from(sys_time))
             .send()
             .await?;
         println!("Uploaded {}", dest_path);
@@ -194,15 +196,8 @@ impl S3Object for BuildCache {
     }
 }
 
-/// Artifacts API
-/// ------------------------------
-/// Artifacts are files that are outputted by the build process.
-/// They are collected from the build process and automatically uploaded to S3.
-/// Special non-file artifacts are also supported. These are:
-/// - Docker/OCI images
-/// - OSTree composes
-/// These will be uploaded in a different way, and will be stored in a different location.
-/// The artifacts will have a different kind of path for each type.
+
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Artifact {
     pub id: Uuid,
@@ -210,41 +205,37 @@ pub struct Artifact {
     pub path: String,
     pub url: String,
     pub build_id: Uuid,
-    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub timestamp: DateTime<Utc>,
+    pub metadata: Option<serde_json::Value>,
 }
 
+/*impl From<crate::backend_old::Artifact> for Artifact {
+    fn from(artifact: crate::backend_old::Artifact) -> Self {
+        Artifact {
+            id: artifact.id,
+            filename: artifact.filename,
+            url: artifact.get_url(),
+            build_id: artifact.build_id,
+            timestamp: artifact.timestamp,
+            metadata: None,
+            // TODO
+            path: "".to_string()
+        }
+    }
+}*/
 
-// The custom struct much derive `FromJsonQueryResult`, `Serialize` and `Deserialize`
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
-pub struct ArtifactMeta {
-    pub art_type: String,
-    pub file: Option<FileArtifact>,
-}
-
-
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
-pub struct FileArtifact {
-    pub e_tag: String,
-    pub filename: String,
-    pub last_modified: chrono::DateTime<chrono::Utc>,
-    pub size: usize,
-}
-
-
-impl From<crate::db_object::Artifact> for Artifact {
-    fn from(art: crate::db_object::Artifact) -> Self {
-        let filepath = art.name.clone();
+impl From<artifact::Model> for Artifact {
+    fn from(model: artifact::Model) -> Self {
+        let filepath = model.name.clone();
         let filename = filepath.split('/').last().unwrap().to_string();
-        //let id = art.id;
-
-        Self {
-            id: art.id,
-            filename,
+        Artifact {
+            build_id: model.build_id,
+            id: model.id,
             path: filepath,
-            url: art.url.clone(),
-            build_id: art.build_id,
-            timestamp: art.timestamp,
+            filename,
+            timestamp: model.timestamp,
+            url: model.url,
+            metadata: model.metadata,
         }
     }
 }
@@ -259,52 +250,85 @@ impl Artifact {
             build_id,
             timestamp: chrono::Utc::now(),
             url: String::new(),
+            metadata: None
         }
     }
 
-    pub async fn get_for_build(build_id: Uuid) -> Result<Vec<Self>> {
-        let arts = crate::db_object::Artifact::get_by_build_id(build_id).await?;
-
-        Ok(arts
-            .iter()
-            .map(|art| Self::from(art.clone()))
-            .collect())
+    pub async fn add(&self) -> Result<Artifact> {
+        let db = DbPool::get().await;
+        let model = artifact::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            build_id: ActiveValue::Set(self.build_id),
+            name: ActiveValue::Set(self.filename.clone()),
+            timestamp: ActiveValue::Set(self.timestamp),
+            url: ActiveValue::Set(self.url.clone()),
+            metadata: ActiveValue::Set(self.metadata.clone()),
+        };
+        let ret = artifact::ActiveModel::insert(model, db).await?;
+        Ok(Artifact::from(ret))
     }
 
-    pub async fn metadata(&self) -> Result<crate::db_object::Artifact> {
-        crate::db_object::Artifact::get(self.id).await
+    /// Gets an artifact by ID
+    pub async fn get(id: Uuid) -> Result<Artifact> {
+        let db = DbPool::get().await;
+        let artifact = artifact::Entity::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Artifact not found"))?;
+        // Marshall the types from our internal representation to the actual DB representation.
+        Ok(Artifact::from(artifact))
     }
 
-    pub async fn list(limit: usize, page: usize) -> Result<Vec<Self>>
-    where
-        Self: Sized,
-    {
-        // Query the database for the projects.
-        let artifacts = crate::db_object::Artifact::list(limit, page).await?;
-
-        Ok(artifacts
-            .iter()
-            .map(|art| Self::from(art.clone()))
-            .collect()
-        )
+    /// Lists all available artifact (Paginated)
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Artifact>> {
+        let db = DbPool::get().await;
+        let artifact = artifact::Entity::find()
+            .order_by_desc(artifact::Column::Timestamp)
+            .paginate(db, limit)
+            .fetch_page(page)
+            .await?;
+        // Marshall the types from our internal representation to the actual DB representation.
+        Ok(artifact.into_iter().map(Artifact::from).collect())
     }
 
-    pub async fn search(query: &str) -> Vec<Self> {
-        let artifacts = crate::db_object::Artifact::search(query).await;
-        artifacts
-            .iter()
-            .map(|art| Self::from(art.clone()))
-            .collect()
+    /// Lists all available artifacts
+    pub async fn list_all() -> Result<Vec<Artifact>> {
+        let db = DbPool::get().await;
+        let artifact = artifact::Entity::find()
+            .order_by_desc(artifact::Column::Timestamp)
+            .all(db)
+            .await?;
+        // Marshall the types from our internal representation to the actual DB representation.
+        Ok(artifact.into_iter().map(Artifact::from).collect())
     }
 
-    pub async fn add(&self) -> Result<Self> {
-        let a = crate::db_object::Artifact::add(&crate::db_object::Artifact::from(self.clone())).await;
-        Ok(Self::from(a?))
+    /// Gets an artifact by the build it was associated with (with Build ID)
+    pub async fn get_by_build_id(build_id: Uuid) -> Result<Vec<Artifact>> {
+        let db = DbPool::get().await;
+        let artifact = artifact::Entity::find()
+            .filter(artifact::Column::BuildId.eq(build_id))
+            .all(db)
+            .await?;
+        // Marshall the types from our internal representation to the actual DB representation.
+        Ok(artifact.into_iter().map(Artifact::from).collect())
+    }
+
+    /// Searches for an artifact
+    pub async fn search(query: &str) -> Vec<Artifact> {
+        let db = DbPool::get().await;
+        let artifact = artifact::Entity::find()
+            .filter(
+                artifact::Column::Url
+                    .like(&format!("%{}%", query))
+                    .or(artifact::Column::Name.like(&format!("%{}%", query))),
+            )
+            .all(db)
+            .await
+            .unwrap();
+        // Marshall the types from our internal representation to the actual DB representation.
+        artifact.into_iter().map(Artifact::from).collect()
     }
 }
-
-
-
 
 #[async_trait]
 impl S3Object for Artifact {
@@ -336,9 +360,9 @@ impl S3Object for Artifact {
         .await?; */
 
         self.path = dest_path
-        .strip_prefix(&format!("artifacts/{}/", self.id.simple()))
-        .unwrap()
-        .to_string();
+            .strip_prefix(&format!("artifacts/{}/", self.id.simple()))
+            .unwrap()
+            .to_string();
 
         self.url = self.get_url();
 
@@ -353,11 +377,11 @@ impl S3Object for Artifact {
     }
 
     async fn get(uuid: Uuid) -> Result<Self>
-    where
-        Self: Sized,
+        where
+            Self: Sized,
     {
         // Query the database for the artifact with the given uuid.
-        let artifact_meta = crate::db_object::Artifact::get(uuid).await?;
+        let artifact_meta = crate::backend::Artifact::get(uuid).await?;
 
         //let filepath = artifact_meta.name.clone();
         //let filename = filepath.strip_prefix("artifacts/").unwrap().to_string();
@@ -367,182 +391,27 @@ impl S3Object for Artifact {
 }
 
 
-/// Projects API
-/// ------------
-/// Projects are the top organizational unit in the system.
-/// They represent various projects that will be organized
-/// and then collected into a compose.
-///
-/// A project can have a description, a name, and an ID.
-/// You should be able to create a project, and then tag various targets
-/// for that project.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Project {
-    pub id: Uuid,
-    pub name: String,
-    pub description: Option<String>,
-    pub summary: Option<String>,
-}
-
-impl From<crate::db_object::Project> for Project {
-    fn from(project: crate::db_object::Project) -> Self {
-        Self {
-            id: project.id,
-            name: project.name,
-            description: Some(project.description),
-            summary: project.summary,
-        }
-    }
-}
-
-impl Project {
-    pub fn new(name: String, description: Option<String>) -> Self {
-        dotenv::dotenv().ok();
-        Self {
-            id: Uuid::new_v4(),
-            name,
-            description,
-            summary: None,
-        }
-    }
-
-    pub async fn get(uuid: Uuid) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Query the database for the project with the given uuid.
-        let project_meta = crate::db_object::Project::get(uuid).await?;
-        Ok(Self::from(project_meta))
-    }
-
-    pub async fn list(limit: usize, page: usize) -> Result<Vec<Self>>
-    where
-        Self: Sized,
-    {
-        // Query the database for the projects.
-        let projects = crate::db_object::Project::list(limit, page).await?;
-        Ok(projects
-            .iter()
-            .map(|project| Self::from(project.clone()))
-            .collect())
-    }
-
-    pub async fn list_artifacts(&self) -> Result<Vec<Artifact>>
-    where
-        Self: Sized,
-    {
-        // get all the builds tagged with this project
-        let builds = crate::db_object::Build::get_by_project_id(self.id).await?;
-        let mut artifacts = Vec::new();
-        for build in builds {
-            artifacts.extend(Artifact::get_for_build(build.id).await?);
-        }
-        // sort artifacts by timestamp descending
-        artifacts.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
-        Ok(artifacts)
-
-    }
-
-    pub async fn add(self) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Add the project to the database.
-        let project_meta =
-            crate::db_object::Project::new(self.id, &self.name, self.description.clone().as_ref())
-                .add()
-                .await?;
-        Ok(Self::from(project_meta))
-    }
-
-    pub async fn update_name(self, name: String) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Update the project name in the database.
-        let project_meta = crate::db_object::Project::get(self.id)
-            .await?
-            .update_name(name)
-            .await?;
-
-        Ok(Self::from(project_meta))
-    }
-
-    pub async fn update_description(self, description: Option<String>) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Update the project description in the database.
-        let project_meta = crate::db_object::Project::get(self.id)
-            .await?
-            .update_description(description.unwrap_or_else(|| "".to_string()))
-            .await?;
-        Ok(Self::from(project_meta))
-    }
-
-    pub async fn update_summary(self, summary: Option<String>) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Update the project summary in the database.
-        let project_meta = crate::db_object::Project::get(self.id)
-            .await?
-            .update_summary(summary)
-            .await?;
-        Ok(Self::from(project_meta))
-    }
-
-    pub async fn delete(self) -> Result<()>
-    where
-        Self: Sized,
-    {
-        // Delete the project from the database.
-        crate::db_object::Project::get(self.id)
-            .await?
-            .delete()
-            .await?;
-        Ok(())
-    }
-
-    pub async fn get_builds(&self) -> Result<Vec<Build>>
-    where
-        Self: Sized,
-    {
-        // Query the database for the builds for this project.
-        let builds = crate::db_object::Build::get_by_project_id(self.id).await?;
-        Ok(builds
-            .iter()
-            .map(|build| Build::from(build.clone()))
-            .collect())
-    }
-}
-
-/// Builds API
-/// ----------
-/// Builds are the main entry point for Andaman.
-/// They are tasks that are executed by the build system.
-/// Its outputs are artifacts that are stored in S3.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Build {
     pub id: Uuid,
+    pub status: BuildStatus,
     pub target_id: Option<Uuid>,
     pub project_id: Option<Uuid>,
+    pub timestamp: DateTime<Utc>,
     pub compose_id: Option<Uuid>,
-    pub status: BuildStatus,
-    pub timestamp: chrono::DateTime<Utc>,
     pub build_type: String,
 }
 
-impl From<crate::db_object::Build> for Build {
-    fn from(build: crate::db_object::Build) -> Self {
-        Self {
-            id: build.id,
-            target_id: build.target_id,
-            project_id: build.project_id,
-            compose_id: build.compose_id,
-            status: num::FromPrimitive::from_i32(build.status).unwrap(),
-            timestamp: build.timestamp,
-            build_type: build.build_type,
+impl From<build::Model> for Build {
+    fn from(model: build::Model) -> Self {
+        Build {
+            id: model.id,
+            status: num::FromPrimitive::from_i32(model.status).unwrap(),
+            target_id: model.target_id,
+            project_id: model.project_id,
+            timestamp:  model.timestamp,
+            compose_id: model.compose_id,
+            build_type: model.build_type,
         }
     }
 }
@@ -566,264 +435,305 @@ impl Build {
         }
     }
 
-    pub async fn get(uuid: Uuid) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Query the database for the build with the given uuid.
-        let build_meta = crate::db_object::Build::get(uuid).await?;
-        Ok(Self::from(build_meta))
+    pub async fn add(&self) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            status: ActiveValue::Set(self.status as i32),
+            target_id: ActiveValue::Set(self.target_id),
+            timestamp: ActiveValue::Set(self.timestamp),
+            build_type: ActiveValue::Set(self.build_type.clone()),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::insert(build, db).await?;
+        Ok(Build::from(res))
     }
 
-    pub async fn list(limit: usize, page: usize) -> Result<Vec<Self>>
-    where
-        Self: Sized,
-    {
-        // Query the database for the builds.
-        let builds = crate::db_object::Build::list(limit, page).await?;
-        Ok(builds
-            .iter()
-            .map(|build| Self::from(build.clone()))
-            .collect())
+    pub async fn update_status(&self, status: i32) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            status: ActiveValue::Set(status),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Ok(Build::from(res))
     }
 
-    pub async fn get_by_target_id(target_id: Uuid) -> Result<Vec<Self>>
-    where
-        Self: Sized,
-    {
-        // Query the database for the builds with the given target_id.
-        let builds = crate::db_object::Build::get_by_target_id(target_id).await?;
-        Ok(builds
-            .iter()
-            .map(|build| Self::from(build.clone()))
-            .collect())
+    pub async fn update_type(&self, build_type: &str) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            build_type: ActiveValue::Set(build_type.to_string()),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Ok(Build::from(res))
     }
 
-    pub async fn get_by_project_id(project_id: Uuid) -> Result<Vec<Self>>
-    where
-        Self: Sized,
-    {
-        // Query the database for the builds with the given project_id.
-        let builds = crate::db_object::Build::get_by_project_id(project_id).await?;
-        Ok(builds
-            .iter()
-            .map(|build| Self::from(build.clone()))
-            .collect())
+    pub async fn tag_compose(&self, compose_id: Uuid) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            compose_id: ActiveValue::Set(Some(compose_id)),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Ok(Build::from(res))
     }
 
-    pub async fn get_by_compose_id(compose_id: Uuid) -> Result<Vec<Self>>
-    where
-        Self: Sized,
-    {
-        // Query the database for the builds with the given compose_id.
-        let builds = crate::db_object::Build::get_by_compose_id(compose_id).await?;
-        Ok(builds
-            .iter()
-            .map(|build| Self::from(build.clone()))
-            .collect())
+    pub async fn tag_target(&self, target_id: Uuid) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            target_id: ActiveValue::Set(Some(target_id)),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Ok(Build::from(res))
     }
 
-    pub async fn add(self) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Add the build to the database.
-        let build_meta = crate::db_object::Build::from(self).add().await?;
-
-        Ok(Self::from(build_meta))
+    pub async fn untag_target(&self) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            target_id: ActiveValue::Set(None),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Ok(Build::from(res))
     }
 
-    pub async fn update_status(self, status: BuildStatus) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Update the build status in the database.
-        let build_meta = crate::db_object::Build::from(self)
-            .update_status(status as i32)
+    pub async fn tag_project(&self, project_id: Uuid) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            project_id: ActiveValue::Set(Some(project_id)),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Ok(Build::from(res))
+    }
+
+    /// Gets a build by ID
+    pub async fn get(id: Uuid) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::Entity::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Build not found"))?;
+        Ok(Build::from(build))
+    }
+
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Build>> {
+        let db = DbPool::get().await;
+        let build = build::Entity::find()
+            .order_by(build::Column::Timestamp, Order::Desc)
+            .paginate(db, limit)
+            .fetch_page(page)
             .await?;
-        Ok(Self::from(build_meta))
+
+        Ok(build.into_iter().map(Build::from).collect())
     }
 
-    pub async fn tag_compose(self, compose_id: Uuid) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Tag the build with the given compose id.
-        let build_meta = crate::db_object::Build::from(self)
-            .tag_compose(compose_id)
+    pub async fn list_all() -> Result<Vec<Build>> {
+        let db = DbPool::get().await;
+        let build = build::Entity::find()
+            .order_by(build::Column::Timestamp, Order::Desc)
+            .all(db)
             .await?;
-        Ok(Self::from(build_meta))
+        Ok(build.into_iter().map(Build::from).collect())
     }
 
-    pub async fn tag_project(self, project_id: Uuid) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Tag the build with the given project id.
-        let build_meta = crate::db_object::Build::from(self)
-            .tag_project(project_id)
+    pub async fn get_by_target_id(target_id: Uuid) -> Result<Vec<Build>> {
+        let db = DbPool::get().await;
+        let build = build::Entity::find()
+            .order_by(build::Column::Timestamp, Order::Desc)
+            .filter(build::Column::TargetId.eq(target_id))
+            .all(db)
             .await?;
-        Ok(Self::from(build_meta))
+        Ok(build.into_iter().map(Build::from).collect())
     }
 
-    pub async fn tag(self, target_id: Uuid) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Tags a build with the given target id.
-        // if there's already a build with the project id tagged to the target id, the old build will be untagged.
-        // this ensures that when building a compose, the process will not try to pull all old builds from the target, but only the latest one.
-        if self.project_id.is_some() {
-            // find a build for the project with the given target_id
-            let build = Self::get_by_target_id(target_id)
-                .await?
-                .iter()
-                .cloned()
-                .find(|b| b.project_id == self.project_id);
-            if let Some(build) = build {
-                // untag the build
-                build.untag().await?;
-            }
-        }
-
-        // Tag the build with the given target id.
-        let build_meta = crate::db_object::Build::from(self)
-            .tag_target(target_id)
+    pub async fn get_by_project_id(project_id: Uuid) -> Result<Vec<Build>> {
+        let db = DbPool::get().await;
+        let build = build::Entity::find()
+            .order_by(build::Column::Timestamp, Order::Desc)
+            .filter(build::Column::ProjectId.eq(project_id))
+            .all(db)
             .await?;
-        Ok(Self::from(build_meta))
+        Ok(build.into_iter().map(Build::from).collect())
     }
 
-    pub async fn untag(self) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Untag the build.
-        let build_meta = crate::db_object::Build::from(self).untag_target().await?;
-        Ok(Self::from(build_meta))
+    pub async fn get_by_compose_id(compose_id: Uuid) -> Result<Vec<Build>> {
+        let db = DbPool::get().await;
+        let build = build::Entity::find()
+            .order_by(build::Column::Timestamp, Order::Desc)
+            .filter(build::Column::ComposeId.eq(compose_id))
+            .all(db)
+            .await?;
+        Ok(build.into_iter().map(Build::from).collect())
     }
 }
 
-/// Target API
-/// ----------
-/// Targets are where the builds are targeted for.
-/// A target can be a specific distribution version, or platorm
-/// with a specific architecture.
-/// There can also be a special docker image option for the target,
-/// where native packages can be built from.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Target {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Project {
     pub id: Uuid,
     pub name: String,
-    pub image: Option<String>,
-    pub arch: String,
+    pub description: Option<String>,
+    pub summary: Option<String>
 }
 
-impl From<crate::db_object::Target> for Target {
-    fn from(target: crate::db_object::Target) -> Self {
-        Self {
-            id: target.id,
-            name: target.name,
-            image: target.image,
-            arch: target.arch,
+impl From<project::Model> for Project {
+    fn from(model: project::Model) -> Self {
+        Project {
+            id: model.id,
+            name: model.name,
+            description: model.description,
+            summary: model.summary
         }
     }
 }
 
-impl Target {
-    pub fn new(name: String, image: Option<String>, arch: String) -> Self {
+impl Project {
+    pub fn new(name: String, description: Option<String>) -> Self {
         dotenv::dotenv().ok();
         Self {
             id: Uuid::new_v4(),
             name,
-            image,
-            arch,
+            description,
+            summary: None,
         }
     }
 
-    pub async fn get(uuid: Uuid) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        //debug!("Getting target with uuid: {}", uuid);
-        //let uuid_string = uuid.to_string();
-        // Query the database for the target with the given uuid.
-        let target = crate::db_object::Target::get(uuid).await?;
-        Ok(Self::from(target))
+    pub async fn add(&self) -> Result<Project> {
+        let db = DbPool::get().await;
+        let project = project::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            name: ActiveValue::Set(self.name.clone()),
+            description: ActiveValue::Set(self.description.clone()),
+            summary: ActiveValue::Set(self.summary.clone()),
+        };
+        let res = project::ActiveModel::insert(project, db).await?;
+        Ok(Project::from(res))
     }
 
-    pub async fn list(limit: usize, page: usize) -> Result<Vec<Self>>
-    where
-        Self: Sized,
-    {
-        // Query the database for the targets.
-        let targets = crate::db_object::Target::list(limit, page).await?;
-        Ok(targets
-            .iter()
-            .map(|target| Self::from(target.clone()))
-            .collect())
+    /// Gets a project by ID
+    pub async fn get(id: Uuid) -> Result<Project> {
+        let db = DbPool::get().await;
+        let project = project::Entity::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Project not found"))?;
+        Ok(Project::from(project))
     }
 
-    pub async fn add(self) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Add the target to the database.
-        let target = crate::db_object::Target::from(self).add().await?;
-        Ok(Self::from(target))
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Project>> {
+        let db = DbPool::get().await;
+        let project = project::Entity::find()
+            .paginate(db, limit)
+            .fetch_page(page)
+            .await?;
+        Ok(project.into_iter().map(Project::from).collect())
     }
 
-    pub async fn get_by_name(name: String) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Query the database for the target with the given name.
-        let target = crate::db_object::Target::get_by_name(name).await?;
-        Ok(Self::from(target))
+    pub async fn list_all() -> Result<Vec<Project>> {
+        let db = DbPool::get().await;
+        let project = project::Entity::find()
+            .all(db)
+            .await?;
+        Ok(project.into_iter().map(Project::from).collect())
     }
 
-    pub async fn update(self, id: Uuid) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Update the target in the database.
-        let target = crate::db_object::Target::from(self).update(id).await?;
-        Ok(Self::from(target))
+    pub async fn list_artifacts(&self) -> Result<Vec<Artifact>> {
+        let db = DbPool::get().await;
+        let builds = Build::get_by_project_id(self.id).await?;
+
+        let mut artifacts = Vec::new();
+
+        for build in builds {
+            let art = Artifact::get_by_build_id(build.id).await?;
+            artifacts.extend(art)
+        }
+
+        artifacts.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        Ok(artifacts)
     }
 
-    pub async fn delete(self) -> Result<()>
-    where
-        Self: Sized,
-    {
-        // Delete the target from the database.
-        crate::db_object::Target::from(self).delete().await
+    pub async fn update_name(&self, name: String) -> Result<Project> {
+        let db = DbPool::get().await;
+        let project = project::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            name: ActiveValue::Set(name),
+            ..Default::default()
+        };
+        let res = project::ActiveModel::update(project, db).await?;
+        Ok(Project::from(res))
+    }
+
+    pub async fn update_description(&self, description: String) -> Result<Project> {
+        let db = DbPool::get().await;
+        let project = project::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            description: ActiveValue::Set(Some(description)),
+            ..Default::default()
+        };
+        let res = project::ActiveModel::update(project, db).await?;
+        Ok(Project::from(res))
+    }
+
+    pub async fn update_summary(&self, summary: Option<String>) -> Result<Project> {
+        let db = DbPool::get().await;
+        let project = project::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            summary: ActiveValue::Set(summary),
+            ..Default::default()
+        };
+        let res = project::ActiveModel::update(project, db).await?;
+        Ok(Project::from(res))
+    }
+
+    pub async fn delete(&self) -> Result<()> {
+        let db = DbPool::get().await;
+        // check if project exists
+        let _ = project::Entity::find_by_id(self.id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Project not found"))?;
+        project::Entity::delete_by_id(self.id).exec(db).await?;
+        Ok(())
     }
 }
 
-/// Compose API
-/// ------------
-/// Composes are a way to group build artifacts together.
-/// A compose is a collection of builds made for a specific target.
-/// Its output is a folder containing all the artifacts from all the tagged builds
-/// compiled into a repository.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Compose {
     pub id: Uuid,
     pub compose_ref: Option<String>,
     pub target_id: Uuid,
-    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub timestamp: DateTime<Utc>,
 }
 
-impl From<crate::db_object::Compose> for Compose {
-    fn from(compose: crate::db_object::Compose) -> Self {
-        Self {
-            id: compose.id,
-            compose_ref: compose.compose_ref,
-            target_id: compose.target_id,
-            timestamp: compose.timestamp,
+impl From<compose::Model> for Compose {
+    fn from(model: compose::Model) -> Self {
+        Compose {
+            id: model.id,
+            compose_ref: model.compose_ref,
+            target_id: model.project_id,
+            timestamp: model.timestamp,
         }
     }
 }
 
+/*impl From<crate::backend_old::Compose> for Compose {
+    fn from(model: crate::backend_old::Compose) -> Self {
+        Compose {
+            id: model.id,
+            compose_ref: model.compose_ref,
+            target_id: model.target_id,
+            timestamp: model.timestamp,
+        }
+    }
+}*/
 
 impl Compose {
     pub fn new(target_id: Uuid) -> Self {
@@ -835,67 +745,62 @@ impl Compose {
             timestamp: chrono::Utc::now(),
         }
     }
-    pub async fn get(uuid: Uuid) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Query the database for the compose with the given uuid.
-        let compose = crate::db_object::Compose::get(uuid).await?;
-        Ok(Self::from(compose))
-    }
-    pub async fn list(limit: usize, page: usize) -> Result<Vec<Self>>
-    where
-        Self: Sized,
-    {
-        // Query the database for the composes.
-        let composes = crate::db_object::Compose::list(limit, page).await?;
-        Ok(composes
-            .iter()
-            .map(|compose| Self::from(compose.clone()))
-            .collect())
-    }
-    pub async fn add(self) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Add the compose to the database.
-        let compose = crate::db_object::Compose::from(self).add().await?;
-        Ok(Self::from(compose))
-    }
-    pub async fn update(self, id: Uuid) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        // Update the compose in the database.
-        let compose = crate::db_object::Compose::from(self).update().await?;
-        Ok(Self::from(compose))
+
+
+    pub async fn add(&self) -> Result<Compose> {
+        let db = DbPool::get().await;
+        let compose = compose::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            compose_ref: ActiveValue::Set(self.compose_ref.clone()),
+            project_id: ActiveValue::Set(self.target_id),
+            timestamp: ActiveValue::Set(self.timestamp),
+            ..Default::default()
+        };
+        let res = compose::ActiveModel::insert(compose, db).await?;
+        Ok(Compose::from(res))
     }
 
-    pub async fn get_builds(self) -> Result<Vec<Build>>
-    where
-        Self: Sized,
-    {
-        // Query the database for the builds tagged with the compose.
-        let builds = Build::get_by_compose_id(self.id).await?;
-        Ok(builds)
+    /// Get compose by ID
+    pub async fn get(id: Uuid) -> Result<Compose> {
+        let db = DbPool::get().await;
+        let compose = compose::Entity::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Compose not found"))?;
+        Ok(Compose::from(compose))
     }
 
-    pub async fn tag_builds(self) -> Result<()>
-    where
-        Self: Sized,
-    {
-        // Tag the builds with the compose.
-        let builds = Build::get_by_target_id(self.target_id).await?;
-
-        for build in builds {
-            build.tag_compose(self.id).await?;
-        }
-        Ok(())
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Compose>> {
+        let db = DbPool::get().await;
+        let compose = compose::Entity::find()
+            .paginate(db, limit)
+            .fetch_page(page)
+            .await?;
+        Ok(compose.into_iter().map(Compose::from).collect())
     }
 
+    pub async fn list_all() -> Result<Vec<Compose>> {
+        let db = DbPool::get().await;
+        let compose = compose::Entity::find()
+            .all(db)
+            .await?;
+        Ok(compose.into_iter().map(Compose::from).collect())
+    }
+
+    pub async fn update(&self) -> Result<Compose> {
+        let db = DbPool::get().await;
+        let compose = compose::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            compose_ref: ActiveValue::Set(self.compose_ref.clone()),
+            project_id: ActiveValue::Set(self.target_id),
+            timestamp: ActiveValue::Set(self.timestamp),
+        };
+        let res = compose::ActiveModel::update(compose, db).await?;
+        Ok(Compose::from(res))
+    }
     pub async fn compose(self) -> Result<()>
-    where
-        Self: Sized,
+        where
+            Self: Sized,
     {
         // TODO: probably move this to a dedicated compose function/executable.
 
@@ -905,7 +810,7 @@ impl Compose {
 
         let builds = Build::get_by_compose_id(self.id).await?;
         for build in builds {
-            let artifacts = Artifact::get_for_build(build.id).await?;
+            let artifacts = Artifact::get_by_build_id(build.id).await?;
             for artifact in artifacts {
                 let filename = &artifact.filename;
 
@@ -947,14 +852,110 @@ impl Compose {
         Ok(())
     }
 }
-#[cfg(test)]
-mod test_super {
-    use super::*;
 
-    #[tokio::test]
-    async fn get_obj() {
-        let uuid = Uuid::parse_str("3e17f157e9cf4871896bc908265ec41b").unwrap();
-        let obj = BuildCache::get(uuid).await.unwrap();
-        println!("{:?}", obj);
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Target {
+    pub id: Uuid,
+    pub name: String,
+    pub image: Option<String>,
+    pub arch: String,
+}
+
+/*impl From<crate::backend_old::Target> for Target {
+    fn from(model: crate::backend_old::Target) -> Self {
+        Target {
+            id: model.id,
+            name: model.name,
+            image: model.image,
+            arch: model.arch,
+        }
+    }
+}*/
+
+impl Target {
+    pub fn new(name: String, image: Option<String>, arch: String) -> Self {
+        dotenv::dotenv().ok();
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            image,
+            arch,
+        }
+    }
+
+    pub fn from_model(model: target::Model) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            image: model.image,
+            arch: model.arch,
+        }
+    }
+
+    pub async fn add(&self) -> Result<Target> {
+        let db = DbPool::get().await;
+        let target = target::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            name: ActiveValue::Set(self.name.clone()),
+            image: ActiveValue::Set(self.image.clone()),
+            arch: ActiveValue::Set(self.arch.clone()),
+        };
+        let res = target::ActiveModel::insert(target, db).await?;
+        Ok(Target::from_model(res))
+    }
+
+    pub async fn get(id: Uuid) -> Result<Target> {
+        let db = DbPool::get().await;
+        let target = target::Entity::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| {
+                error!("Target not found");
+                anyhow!("Target not found")
+            })?;
+        Ok(Target::from_model(target))
+    }
+
+    pub async fn list(limit: usize, page: usize) -> Result<Vec<Target>> {
+        let db = DbPool::get().await;
+        let target = target::Entity::find()
+            .paginate(db, limit)
+            .fetch_page(page)
+            .await?;
+        Ok(target.into_iter().map(Target::from_model).collect())
+    }
+
+    pub async fn update(&self, _id: Uuid) -> Result<Target> {
+        let db = DbPool::get().await;
+        // get target by id, then update it
+        let target = target::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            name: ActiveValue::Set(self.name.clone()),
+            image: ActiveValue::Set(self.image.clone()),
+            arch: ActiveValue::Set(self.arch.clone()),
+        };
+        let res = target::ActiveModel::update(target, db).await?;
+        Ok(Target::from_model(res))
+    }
+
+    pub async fn delete(&self) -> Result<()> {
+        let db = DbPool::get().await;
+        // check if target exists
+        let _ = target::Entity::find_by_id(self.id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Target not found"))?;
+        target::Entity::delete_by_id(self.id).exec(db).await?;
+        Ok(())
+    }
+
+    pub async fn get_by_name(name: String) -> Result<Target> {
+        let db = DbPool::get().await;
+        let target = target::Entity::find()
+            .filter(target::Column::Name.eq(name))
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Target not found"))?;
+        Ok(Target::from_model(target))
     }
 }

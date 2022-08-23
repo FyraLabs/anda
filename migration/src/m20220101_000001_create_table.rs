@@ -31,7 +31,7 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(ColumnDef::new(Project::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(Project::Name).string().not_null())
-                    .col(ColumnDef::new(Project::Description).string().not_null())
+                    .col(ColumnDef::new(Project::Description).string())
                     .to_owned(),
             )
             .await?;
