@@ -13,6 +13,7 @@ use aws_sdk_s3::types::{ByteStream, DateTime};
 use chrono::Utc;
 //use aws_smithy_types::DateTime;
 use rocket::serde::uuid::Uuid;
+use sea_orm::FromJsonQueryResult;
 use tokio::{fs::File, io::{AsyncReadExt, AsyncWriteExt}, process::Command};
 
 use crate::s3_object::{S3Artifact, BUCKET, S3_ENDPOINT};
@@ -213,7 +214,8 @@ pub struct Artifact {
 }
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// The custom struct much derive `FromJsonQueryResult`, `Serialize` and `Deserialize`
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
 pub struct ArtifactMeta {
     pub art_type: String,
     pub file: Option<FileArtifact>,
@@ -221,7 +223,7 @@ pub struct ArtifactMeta {
 
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
 pub struct FileArtifact {
     pub e_tag: String,
     pub filename: String,

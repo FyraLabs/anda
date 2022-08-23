@@ -11,7 +11,7 @@ pub struct Model {
     pub status: i32,
     pub target_id: Option<Uuid>,
     pub project_id: Option<Uuid>,
-    pub timestamp: DateTime,
+    pub timestamp: DateTimeUtc,
     pub compose_id: Option<Uuid>,
     pub build_type: String,
 }

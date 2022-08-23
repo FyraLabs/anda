@@ -11,7 +11,8 @@ pub struct Model {
     pub name: String,
     pub url: String,
     pub build_id: Uuid,
-    pub timestamp: DateTime,
+    pub timestamp: DateTimeUtc,
+    pub metadata: Option<serde_json::Value>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

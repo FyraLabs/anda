@@ -11,7 +11,7 @@ pub struct Model {
     #[sea_orm(column_name = "ref")]
     pub compose_ref: Option<String>,
     pub project_id: Uuid,
-    pub timestamp: DateTime,
+    pub timestamp: DateTimeUtc,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

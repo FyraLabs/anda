@@ -24,6 +24,7 @@ pub struct Artifact {
     pub url: String,
     pub build_id: Uuid,
     pub timestamp: DateTime<Utc>,
+    pub metadata: Option<serde_json::Value>,
 }
 
 impl From<crate::backend::Artifact> for Artifact {
@@ -34,6 +35,8 @@ impl From<crate::backend::Artifact> for Artifact {
             url: artifact.get_url(),
             build_id: artifact.build_id,
             timestamp: artifact.timestamp,
+            metadata: None,
+            // TODO
         }
     }
 }
@@ -44,8 +47,9 @@ impl From<artifact::Model> for Artifact {
             build_id: model.build_id,
             id: model.id,
             name: model.name,
-            timestamp: DateTime::from_utc(model.timestamp, Utc),
+            timestamp: model.timestamp,
             url: model.url,
+            metadata: model.metadata,
         }
     }
 }
@@ -58,6 +62,7 @@ impl Artifact {
             name,
             timestamp: Utc::now(),
             url,
+            metadata: None,
         }
     }
 
@@ -67,8 +72,9 @@ impl Artifact {
             id: ActiveValue::Set(self.id),
             build_id: ActiveValue::Set(self.build_id),
             name: ActiveValue::Set(self.name.clone()),
-            timestamp: ActiveValue::Set(self.timestamp.naive_utc()),
+            timestamp: ActiveValue::Set(self.timestamp),
             url: ActiveValue::Set(self.url.clone()),
+            metadata: ActiveValue::Set(self.metadata.clone()),
         };
         let ret = artifact::ActiveModel::insert(model, db).await?;
         Ok(Artifact::from(ret))
@@ -175,7 +181,7 @@ impl From<build::Model> for Build {
             status: model.status,
             target_id: model.target_id,
             project_id: model.project_id,
-            timestamp: DateTime::from_utc(model.timestamp, Utc),
+            timestamp:  model.timestamp,
             compose_id: model.compose_id,
             build_type: model.build_type,
         }
@@ -201,7 +207,7 @@ impl Build {
             id: ActiveValue::Set(self.id),
             status: ActiveValue::Set(self.status),
             target_id: ActiveValue::Set(self.target_id),
-            timestamp: ActiveValue::Set(self.timestamp.naive_utc()),
+            timestamp: ActiveValue::Set(self.timestamp),
             build_type: ActiveValue::Set(self.build_type.clone()),
             ..Default::default()
         };
@@ -446,7 +452,7 @@ impl From<compose::Model> for Compose {
             id: model.id,
             compose_ref: model.compose_ref,
             target_id: model.project_id,
-            timestamp: DateTime::from_utc(model.timestamp, Utc),
+            timestamp: model.timestamp,
         }
     }
 }
@@ -479,7 +485,7 @@ impl Compose {
             id: ActiveValue::Set(self.id),
             compose_ref: ActiveValue::Set(self.compose_ref.clone()),
             project_id: ActiveValue::Set(self.target_id),
-            timestamp: ActiveValue::Set(self.timestamp.naive_utc()),
+            timestamp: ActiveValue::Set(self.timestamp),
             ..Default::default()
         };
         let res = compose::ActiveModel::insert(compose, db).await?;
@@ -511,8 +517,7 @@ impl Compose {
             id: ActiveValue::Set(self.id),
             compose_ref: ActiveValue::Set(self.compose_ref.clone()),
             project_id: ActiveValue::Set(self.target_id),
-            timestamp: ActiveValue::Set(self.timestamp.naive_utc()),
-            ..Default::default()
+            timestamp: ActiveValue::Set(self.timestamp),
         };
         let res = compose::ActiveModel::update(compose, db).await?;
         Ok(Compose::from(res))

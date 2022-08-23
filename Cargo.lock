@@ -160,6 +160,7 @@ dependencies = [
  "rust-embed",
  "sea-orm",
  "sea-orm-rocket",
+ "sea-query",
  "serde",
  "serde_derive",
  "serde_json",
@@ -3921,9 +3922,9 @@ dependencies = [
 
 [[package]]
 name = "sea-query"
-version = "0.26.2"
+version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2997a3e57614c0ff2212890e143deadb4a31f8057cbe7fc163daa3f297a33527"
+checksum = "a6a1de9d0334895f7eb51bd1603c3c9f6737413f905a134001f1e198f43bfd70"
 dependencies = [
  "chrono",
  "postgres-types",

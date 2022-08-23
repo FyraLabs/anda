@@ -75,7 +75,7 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(Compose::Ref).string(),
                     )
                     .col(ColumnDef::new(Compose::ProjectId).uuid().not_null())
-                    .col(ColumnDef::new(Compose::Timestamp).timestamp().not_null())
+                    .col(ColumnDef::new(Compose::Timestamp).timestamp_with_time_zone().not_null())
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-compose-projectid-to-project-id")
@@ -151,7 +151,7 @@ impl MigrationTrait for Migration {
                             .from(Build::Table, Build::ProjectId)
                             .to(Project::Table, Project::Id),
                     )
-                    .col(ColumnDef::new(Build::Timestamp).timestamp().not_null())
+                    .col(ColumnDef::new(Build::Timestamp).timestamp_with_time_zone().not_null())
                     // I'm adding this back, but this time this will be nullable.
                     .col(ColumnDef::new(Build::ComposeId).uuid())
                     .foreign_key(
@@ -177,7 +177,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Artifact::Name).string().not_null())
                     .col(ColumnDef::new(Artifact::Url).string().not_null())
                     .col(ColumnDef::new(Artifact::BuildId).uuid().not_null())
-                    .col(ColumnDef::new(Artifact::Timestamp).timestamp().not_null())
+                    .col(ColumnDef::new(Artifact::Timestamp).timestamp_with_time_zone().not_null())
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-artifact-buildid-to-build-id")
