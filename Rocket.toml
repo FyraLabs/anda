@@ -1,2 +1,0 @@
-[default]
-limits = { form = "64 kB", json = "1 MiB", file = "10 GiB" }

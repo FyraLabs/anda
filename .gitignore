@@ -3,3 +3,6 @@ vendor
 .env
 anda-build/
 node_modules/
+.env*
+!.env.project
+!.env.vault

@@ -55,5 +55,6 @@
 	// Comment out to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
 	"remoteUser": "vscode",
 
-	"postCreateCommand": "bash /usr/share/scripts/postinstall.sh"
+	"postCreateCommand": "bash /usr/share/scripts/postinstall.sh",
+	"postStartCommand": "/usr/local/share/docker-init.sh"
 }

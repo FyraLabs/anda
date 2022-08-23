@@ -29,19 +29,27 @@
 #[macro_use]
 extern crate rocket;
 use log::info;
-use rocket::{http::ContentType, response::content::RawHtml, Build, Rocket};
+use rocket::Config;
+use rocket::{
+    config::Ident,
+    data::{Limits, ToByteUnit},
+    figment::providers::{Format, Toml},
+    http::ContentType,
+    response::content::RawHtml,
+    Build, Rocket,
+};
 use sea_orm_rocket::Database;
 use std::{borrow::Cow, ffi::OsStr, path::PathBuf};
 
 mod api;
 mod auth;
 mod backend;
+mod cors;
 mod db;
 mod db_object;
 mod entity;
 mod kubernetes;
 mod s3_object;
-mod cors;
 
 use rust_embed::RustEmbed;
 
@@ -97,6 +105,19 @@ async fn rocket() -> Rocket<Build> {
         );
     }
 
+    // Override default Rocket config
+    let config = Config {
+        limits: Limits::default().limit("file", 10.gigabytes()),
+        cli_colors: false,
+        ident: Ident::try_new("anda-server").unwrap(),
+        ..Config::default()
+    };
+
+    let figment = Config::figment()
+        .merge(config)
+        .merge(Toml::file("anda-server.toml").nested())
+        .merge(rocket::figment::providers::Env::prefixed("ANDA_"));
+
     pretty_env_logger::init();
     info!(
         "Andaman Project Server, version {}",
@@ -104,6 +125,7 @@ async fn rocket() -> Rocket<Build> {
     );
     info!("Starting up server...");
     rocket::build()
+        .configure(figment)
         .attach(cors::Cors)
         .attach(db::Db::init())
         .mount("/builds", api::builds_routes())

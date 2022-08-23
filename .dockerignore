@@ -5,3 +5,6 @@
 **/anda-build
 *.dockerfile
 Dockerfile
+.env*
+!.env.project
+!.env.vault
