@@ -7,6 +7,7 @@ use dotenv::dotenv;
 use sea_orm::*;
 use sea_orm_rocket::{rocket::figment::Figment, Database};
 use std::env;
+use migration::{Migrator, MigratorTrait};
 
 pub struct DbPool {
     pub conn: sea_orm::DatabaseConnection,
@@ -49,6 +50,8 @@ impl sea_orm_rocket::Pool for DbPool {
 
     async fn init(_figment: &Figment) -> Result<Self, Self::Error> {
         let conn = DbPool::get().await.to_owned();
+
+        Migrator::up(&conn, None).await?;
 
         Ok(DbPool { conn })
     }

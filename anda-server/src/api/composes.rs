@@ -1,10 +1,8 @@
 use crate::backend::Compose;
 
-use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::serde::uuid::Uuid;
 use rocket::Route;
-use serde::{Deserialize, Serialize};
 
 pub(crate) fn routes() -> Vec<Route> {
     routes![index, get,]

@@ -104,7 +104,7 @@ async fn rocket() -> Rocket<Build> {
     );
     info!("Starting up server...");
     rocket::build()
-        .attach(cors::CORS)
+        .attach(cors::Cors)
         .attach(db::Db::init())
         .mount("/builds", api::builds_routes())
         .mount("/artifacts", api::artifacts_routes())
