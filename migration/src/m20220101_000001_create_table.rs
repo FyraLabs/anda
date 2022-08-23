@@ -253,7 +253,6 @@ pub(crate) enum Target {
     Name,
     Image,
     Arch,
-    ProjectId,
 }
 
 #[derive(Iden)]

@@ -212,10 +212,28 @@ pub struct Artifact {
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArtifactMeta {
+    pub art_type: String,
+    pub file: Option<FileArtifact>,
+}
+
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileArtifact {
+    pub e_tag: String,
+    pub filename: String,
+    pub last_modified: chrono::DateTime<chrono::Utc>,
+    pub size: usize,
+}
+
+
 impl From<crate::db_object::Artifact> for Artifact {
     fn from(art: crate::db_object::Artifact) -> Self {
         let filepath = art.name.clone();
-        let filename = filepath.split("/").last().unwrap().to_string();
+        let filename = filepath.split('/').last().unwrap().to_string();
         //let id = art.id;
 
         Self {

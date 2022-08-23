@@ -1,14 +1,15 @@
-use crate::{backend::S3Object, db_object::*};
 use crate::backend::Artifact;
+use crate::{backend::S3Object, db_object::*};
 use log::debug;
 use rocket::{
     form::Form,
     fs::TempFile,
+    http::ContentType,
     serde::{json::Json, uuid::Uuid},
-    Route, http::ContentType,
+    Route,
 };
-use tokio::io::AsyncReadExt;
 use std::{collections::HashMap, path::PathBuf};
+use tokio::io::AsyncReadExt;
 
 pub(crate) fn routes() -> Vec<Route> {
     routes![index, get, upload, search, get_file]
@@ -37,7 +38,6 @@ async fn get(id: Uuid) -> Option<Json<Artifact>> {
     Artifact::get(id).await.ok().map(Json)
 }
 
-
 /// WIP: Directory Listing
 #[get("/files/<path..>")]
 async fn get_file(path: PathBuf) -> Option<(ContentType, Vec<u8>)> {
@@ -50,7 +50,12 @@ async fn get_file(path: PathBuf) -> Option<(ContentType, Vec<u8>)> {
     if file.is_none() {
         // This code is in fact, reachable
         //#[allow(unreachable_code)]
-        return Some((ContentType::Text,format!("{:#?}",s.list_files(path.to_str().unwrap()).await.unwrap()).as_bytes().to_vec()))
+        return Some((
+            ContentType::Text,
+            format!("{:#?}", s.list_files(path.to_str().unwrap()).await.unwrap().contents())
+                .as_bytes()
+                .to_vec(),
+        ));
     } else {
         let file = file.unwrap();
         let mut buf = Vec::new();
@@ -79,9 +84,9 @@ async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
                 name.to_string(),
                 data.build_id,
             )
-            .upload_file(file.path().unwrap().to_path_buf())
-            .await
-            .expect("Failed to upload build file to S3")
+                .upload_file(file.path().unwrap().to_path_buf())
+                .await
+                .expect("Failed to upload build file to S3"),
         );
     }
 
@@ -92,5 +97,3 @@ async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
 async fn search(query: String) -> Json<Vec<Artifact>> {
     Json(Artifact::search(&query).await)
 }
-
-

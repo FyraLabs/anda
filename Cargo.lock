@@ -137,7 +137,6 @@ version = "0.1.0"
 dependencies = [
  "anda-db-migration",
  "anyhow",
- "async-compression",
  "async-once-cell",
  "async-trait",
  "aws-sdk-s3",
@@ -220,7 +219,6 @@ dependencies = [
  "bzip2",
  "flate2",
  "futures-core",
- "futures-io",
  "memchr",
  "pin-project-lite 0.2.9",
  "tokio 1.20.1",

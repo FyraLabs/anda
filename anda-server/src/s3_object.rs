@@ -69,7 +69,7 @@ impl S3Artifact {
 
     pub async fn upload_folder(&self, dest: &str, src: PathBuf) -> Result<()> {
         // convert to relative path
-        Ok(for entry in WalkDir::new(&src) {
+        for entry in WalkDir::new(&src) {
             let entry = entry?;
             if entry.file_type().is_file() {
                 let file_path = entry.into_path();
@@ -82,7 +82,8 @@ impl S3Artifact {
                 );
                 self.upload_file(&real_path, file_path).await?;
             }
-        })
+        };
+        Ok(())
     }
 
     pub async fn get_file(&self, dest: &str) -> Result<ByteStream> {
@@ -101,7 +102,7 @@ impl S3Artifact {
             .connection
             .list_objects()
             .bucket(BUCKET.as_str())
-            .prefix(dest)
+            .prefix(format!("{}/", dest).as_str())
             .send()
             .await?)
     }
