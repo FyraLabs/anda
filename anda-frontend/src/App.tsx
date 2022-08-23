@@ -22,6 +22,7 @@ import Explore from "./pages/Explore";
 import { getAllProjects, getProject } from "./api/projects";
 import { getAllBuilds } from "./api/builds";
 import Builds from "./pages/Builds";
+import { useState } from "react";
 
 const config: LogtoConfig = {
   endpoint: "https://accounts.fyralabs.com",
@@ -127,7 +128,16 @@ const routes: Route<DefaultGenerics>[] = [
 const queryClient = new QueryClient();
 
 const App = () => {
-  const darkMode = useDarkMode(true);
+  const mode = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+  // get dark mode state from localStorage or use `mode` as default
+  const [darkMode, setDarkMode] = useState(localStorage.getItem("color-theme") === "true" || mode);
+
+  if (darkMode) {
+    document.documentElement.classList.add("dark");
+  } else {
+    document.documentElement.classList.remove("dark");
+  }
 
   return (
     <QueryClientProvider client={queryClient}>

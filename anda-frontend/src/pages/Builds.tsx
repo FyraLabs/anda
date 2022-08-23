@@ -7,9 +7,6 @@ import { getAllBuilds } from "../api/builds";
 import { BuildsTable } from "../components/BuildsTable";
 
 const Builds = () => {
-  const query = useQuery(["builds"], getAllBuilds);
-  if (!query.data) return <></>;
-  console.log(query.data);
   return (
     <div className="p-5 dark:text-gray-300">
       <h1 className="text-3xl font-bold mb-2">Builds</h1>

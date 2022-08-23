@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  h1 {
+    @apply text-2xl;
+  }
+  h2 {
+    @apply text-xl;
+  }
+
+  ul {
+    @apply list-disc list-inside;
+  }
+
+  @font-face {
+    font-family: "InterVariable";
+  }
+}
+
 body {
   @apply bg-white dark:bg-zinc-900;
   color-scheme: light dark;

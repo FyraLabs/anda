@@ -2,6 +2,7 @@ import { faMoon, faSun } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useLogto } from "@logto/react";
 import { Link } from "@tanstack/react-location";
+import { DarkThemeToggle } from "flowbite-react";
 import { useState } from "react";
 const Navbar = () => {
   const logto = useLogto();

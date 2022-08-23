@@ -1,5 +1,7 @@
 import { Link } from "@tanstack/react-location";
 import { useQuery } from "@tanstack/react-query";
+import { Tooltip } from "flowbite-react";
+import { Skeleton } from "./Skeleton";
 // import moment.js
 import moment from "moment";
 
@@ -8,10 +10,10 @@ import { getProject } from "../api/projects";
 
 export const BuildsTable = () => {
   const query = useQuery(["builds"], getAllBuilds);
-  if (!query.data) return <></>;
+  if (!query.data) return <Skeleton />;
   //console.debug(query.data);
   return (
-    <div className="relative shadow-md sm:rounded-xl overflow-y-hidden">
+    <div className="relative shadow-md sm:rounded-xl overflow-y-hidden overflow-x-hidden">
       <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
         <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-zinc-700 dark:text-gray-400">
           <tr>
@@ -57,14 +59,15 @@ export const BuildsTable = () => {
               </td>
               <td className="py-3 px-6">{StatusBanner(build.status)}</td>
               <td className="py-3 px-6">
-                <div
-                  id="tooltip-no"
-                  role="tooltip"
-                  className="inline-block absolute invisible z-10 py-2 px-3 text-sm font-medium text-white bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700"
+                {/* <Tooltip
+                content={moment(build.timestamp).format()}
+                arrow={false}
                 >
-                  Tooltip content
-                </div>
-                <p data-tooltip-target="tooltip-no" role="text">
+                <p>
+                  {moment(build.timestamp).fromNow()}
+                </p>
+                </Tooltip> */}
+                <p>
                   {moment(build.timestamp).fromNow()}
                 </p>
               </td>
@@ -85,7 +88,9 @@ function ProjectName(id: string) {
 }
 
 const StatusBanner = (status: string) => {
+  const stat = status.toUpperCase();
   switch (status.toLowerCase()) {
+    // TODO: use the react components for the status banners once its actually usable
     case "pending":
       return (
         <span className="uppercase bg-yellow-100 text-yellow-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded dark:bg-yellow-200 dark:text-yellow-900">

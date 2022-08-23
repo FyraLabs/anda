@@ -12,6 +12,7 @@ import {
 import { faDocker } from "@fortawesome/free-brands-svg-icons";
 import { useQuery } from "@tanstack/react-query";
 import { getProject } from "../api/projects";
+import { Skeleton } from "../components/Skeleton";
 
 const Project = () => {
   const {
@@ -21,7 +22,7 @@ const Project = () => {
     getProject(queryKey[1])
   );
 
-  if (!query.data) return <></>;
+  if (!query.data) return <Skeleton/>;
 
   return (
     <div className="flex flex-col dark:text-gray-300 flex-1">

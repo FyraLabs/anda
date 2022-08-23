@@ -5,6 +5,7 @@ module.exports = {
     extend: {},
   },
   plugins: [
+    require('@tailwindcss/typography'),
     require('flowbite/plugin'),
   ],
   darkMode: 'class',
