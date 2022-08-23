@@ -361,6 +361,7 @@ pub struct Project {
     pub id: Uuid,
     pub name: String,
     pub description: Option<String>,
+    pub summary: Option<String>,
 }
 
 impl From<crate::db_object::Project> for Project {
@@ -369,6 +370,7 @@ impl From<crate::db_object::Project> for Project {
             id: project.id,
             name: project.name,
             description: Some(project.description),
+            summary: project.summary,
         }
     }
 }
@@ -380,6 +382,7 @@ impl Project {
             id: Uuid::new_v4(),
             name,
             description,
+            summary: None,
         }
     }
 
@@ -414,6 +417,8 @@ impl Project {
         for build in builds {
             artifacts.extend(Artifact::get_for_build(build.id).await?);
         }
+        // sort artifacts by timestamp descending
+        artifacts.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
         Ok(artifacts)
 
     }
@@ -451,6 +456,18 @@ impl Project {
         let project_meta = crate::db_object::Project::get(self.id)
             .await?
             .update_description(description.unwrap_or_else(|| "".to_string()))
+            .await?;
+        Ok(Self::from(project_meta))
+    }
+
+    pub async fn update_summary(self, summary: Option<String>) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        // Update the project summary in the database.
+        let project_meta = crate::db_object::Project::get(self.id)
+            .await?
+            .update_summary(summary)
             .await?;
         Ok(Self::from(project_meta))
     }

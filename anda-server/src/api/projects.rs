@@ -4,9 +4,10 @@ use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::serde::uuid::Uuid;
 use rocket::Route;
+use serde::{Serialize, Deserialize};
 
 pub(crate) fn routes() -> Vec<Route> {
-    routes![index, get, new, get_artifacts]
+    routes![index, get, new, get_artifacts, set_summary]
 }
 
 #[get("/?<limit>&<page>")]
@@ -41,5 +42,18 @@ async fn new(data: Form<ProjectNew>) -> Result<(), Status> {
         .add()
         .await
         .map_err(|_| Status::InternalServerError)?;
+    Ok(())
+}
+
+#[derive(Serialize, Deserialize)]
+struct ProjectSummary    {
+    summary: Option<String>,
+}
+
+
+#[post("/<id>/summary", data = "<data>")]
+async fn set_summary(id: Uuid, data: Json<ProjectSummary>) -> Result<(), Status> {
+    let project = Project::get(id).await.map_err(|_| Status::NotFound)?;
+    project.update_summary(data.summary.clone()).await.map_err(|_| Status::InternalServerError)?;
     Ok(())
 }

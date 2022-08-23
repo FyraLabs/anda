@@ -24,8 +24,8 @@ const Explore = () => {
             <div className="flex gap-5 items-center py-2 h-14" key={project.id}>
               <div className="flex flex-col">
                 <p>{project.name}</p>
-                {project.description && (
-                  <p className="text-xs font-light">{project.description}</p>
+                {project.summary && (
+                  <p className="text-xs font-light">{project.summary}</p>
                 )}
               </div>
               {/* <div className="flex items-center gap-2 ml-auto">

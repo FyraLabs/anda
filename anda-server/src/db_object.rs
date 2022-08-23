@@ -331,6 +331,7 @@ pub struct Project {
     pub id: Uuid,
     pub name: String,
     pub description: String,
+    pub summary: Option<String>
 }
 
 impl From<project::Model> for Project {
@@ -339,6 +340,7 @@ impl From<project::Model> for Project {
             id: model.id,
             name: model.name,
             description: model.description,
+            summary: model.summary
         }
     }
 }
@@ -350,6 +352,7 @@ impl Project {
             id,
             name: name.into(),
             description: description.map(|s| s.into()).unwrap_or_default(),
+            summary: None
         }
     }
 
@@ -359,6 +362,7 @@ impl Project {
             id: ActiveValue::Set(self.id),
             name: ActiveValue::Set(self.name.clone()),
             description: ActiveValue::Set(self.description.clone()),
+            summary: ActiveValue::Set(self.summary.clone()),
         };
         let res = project::ActiveModel::insert(project, db).await?;
         Ok(Project::from(res))
@@ -399,6 +403,17 @@ impl Project {
         let project = project::ActiveModel {
             id: ActiveValue::Set(self.id),
             description: ActiveValue::Set(description),
+            ..Default::default()
+        };
+        let res = project::ActiveModel::update(project, db).await?;
+        Ok(Project::from(res))
+    }
+
+    pub async fn update_summary(&self, summary: Option<String>) -> Result<Project> {
+        let db = DbPool::get().await;
+        let project = project::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            summary: ActiveValue::Set(summary),
             ..Default::default()
         };
         let res = project::ActiveModel::update(project, db).await?;

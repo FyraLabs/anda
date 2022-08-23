@@ -1,42 +1,31 @@
 use sea_orm_migration::prelude::*;
+use crate::m20220101_000001_create_table::{Project};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
-#[allow(dead_code)]
-#[derive(Iden)]
-pub(crate) enum Build {
-    Table,
-    Id,
-    ProjectId,
-    ComposeId,
-    TargetId,
-    Status,
-    Worker,
-    Timestamp,
-    BuildType,
-}
 
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // Summary column
+
         manager
             .alter_table(
                 sea_query::Table::alter()
-                    .table(Build::Table)
-                    .drop_column(Alias::new("worker"))
+                    .table(Project::Table)
+                    .add_column(ColumnDef::new(Project::Summary).text())
                     .to_owned(),
-            )
-            .await
+            ).await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+
         manager
             .alter_table(
                 sea_query::Table::alter()
-                    .table(Build::Table)
-                    .add_column(ColumnDef::new(Build::Worker).uuid().not_null())
+                    .table(Project::Table)
+                    .drop_column(Alias::new("summary"))
                     .to_owned(),
-            )
-            .await
+            ).await
     }
 }

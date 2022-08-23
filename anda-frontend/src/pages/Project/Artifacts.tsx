@@ -10,6 +10,7 @@ import { getArtifactsOfProject } from "../../api/projects";
 import { Artifact } from "../../api/artifacts";
 import { Link, useMatch } from "@tanstack/react-location";
 import { ArtifactEntry } from "../../components/ArtifactEntry";
+import { Skeleton } from "../../components/Skeleton";
 
 const Artifacts = () => {
   const {
@@ -18,12 +19,12 @@ const Artifacts = () => {
   const query = useQuery(["artifacts", projectID], ({ queryKey }) =>
     getArtifactsOfProject(queryKey[1])
   );
-  if (!query.data) return <></>;
+  if (!query.data) return <Skeleton/>;
   const artifacts = query.data as Artifact[];
   console.log;
   return (
     <>
-      <p className="text-3xl font-bold mb-3 text-gray-200">Artifacts</p>
+      <p className="text-3xl font-bold mb-3 dark:text-zinc-200">Artifacts</p>
 
       <div className="flex divide-y-[1px] divide-neutral-700 flex-col">
        {/*  <div className="flex gap-5 items-center py-2">
