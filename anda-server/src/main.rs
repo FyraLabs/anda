@@ -44,9 +44,9 @@ use std::{borrow::Cow, ffi::OsStr, path::PathBuf};
 mod api;
 mod auth;
 //mod backend_old;
+mod backend;
 mod cors;
 mod db;
-mod backend;
 mod entity;
 mod kubernetes;
 mod s3_object;
@@ -108,8 +108,8 @@ async fn rocket() -> Rocket<Build> {
     // Override default Rocket config
     let config = Config {
         limits: Limits::default().limit("file", 10.gigabytes()),
-        cli_colors: false,
-        ident: Ident::try_new("anda-server").unwrap(),
+        cli_colors: true,
+        ident: Ident::try_new("Andaman Build System").unwrap(),
         ..Config::default()
     };
 

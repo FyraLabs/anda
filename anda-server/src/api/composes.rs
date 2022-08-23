@@ -1,5 +1,6 @@
 use crate::backend::Compose;
 
+use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::serde::uuid::Uuid;
 use rocket::Route;
@@ -9,13 +10,23 @@ pub(crate) fn routes() -> Vec<Route> {
 }
 
 #[get("/?<limit>&<page>&<all>")]
-async fn index(page: Option<usize>, limit: Option<usize>, all: Option<bool>) -> Json<Vec<Compose>> {
+async fn index(
+    page: Option<usize>,
+    limit: Option<usize>,
+    all: Option<bool>,
+) -> Result<Json<Vec<Compose>>, Status> {
     let composes = if all.unwrap_or(false) {
-        Compose::list_all().await
+        Compose::list_all()
+            .await
+            .map_err(|_| Status::InternalServerError)
+            .unwrap()
     } else {
-        Compose::list(limit.unwrap_or(100), page.unwrap_or(0)).await
+        Compose::list(limit.unwrap_or(100), page.unwrap_or(0))
+            .await
+            .map_err(|_| Status::InternalServerError)
+            .unwrap()
     };
-    Json(composes.unwrap())
+    Ok(Json(composes))
 }
 
 #[get("/<id>")]

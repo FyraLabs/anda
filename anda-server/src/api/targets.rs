@@ -10,10 +10,24 @@ pub(crate) fn routes() -> Vec<Route> {
     routes![index, get, get_by_name, new, update, delete]
 }
 
-#[get("/?<limit>&<page>")]
-async fn index(page: Option<usize>, limit: Option<usize>) -> Json<Vec<Target>> {
-    let targets = Target::list(limit.unwrap_or(100), page.unwrap_or(0)).await;
-    Json(targets.unwrap())
+#[get("/?<limit>&<page>&<all>")]
+async fn index(
+    page: Option<usize>,
+    limit: Option<usize>,
+    all: Option<bool>,
+) -> Result<Json<Vec<Target>>, Status> {
+    let targets = if all.unwrap_or(false) {
+        Target::list_all()
+            .await
+            .map_err(|_| Status::InternalServerError)
+            .unwrap()
+    } else {
+        Target::list(limit.unwrap_or(100), page.unwrap_or(0))
+            .await
+            .map_err(|_| Status::InternalServerError)
+            .unwrap()
+    };
+    Ok(Json(targets))
 }
 
 #[get("/<id>")]

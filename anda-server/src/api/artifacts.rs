@@ -1,6 +1,7 @@
 use crate::backend::{Artifact, S3Object};
 use crate::{backend::*};
 use log::debug;
+use rocket::http::Status;
 use rocket::{
     form::Form,
     fs::TempFile,
@@ -22,14 +23,24 @@ pub struct ArtifactUpload<'r> {
     // Can be multiple forms, starts with file/<path>
     files: HashMap<String, TempFile<'r>>,
 }
-
-#[get("/?<limit>&<page>")]
-async fn index(page: Option<usize>, limit: Option<usize>) -> Json<Vec<Artifact>> {
-    Json(
+#[get("/?<limit>&<page>&<all>")]
+async fn index(
+    page: Option<usize>,
+    limit: Option<usize>,
+    all: Option<bool>,
+) -> Result<Json<Vec<Artifact>>, Status> {
+    let artifacts = if all.unwrap_or(false) {
+        Artifact::list_all()
+            .await
+            .map_err(|_| Status::InternalServerError)
+            .unwrap()
+    } else {
         Artifact::list(limit.unwrap_or(100), page.unwrap_or(0))
             .await
-            .expect("Failed to list artifacts"),
-    )
+            .map_err(|_| Status::InternalServerError)
+            .unwrap()
+    };
+    Ok(Json(artifacts))
 }
 
 #[get("/<id>", rank = 5)]

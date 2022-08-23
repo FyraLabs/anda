@@ -7,13 +7,27 @@ use rocket::Route;
 use serde::{Deserialize, Serialize};
 
 pub(crate) fn routes() -> Vec<Route> {
-    routes![index, get, new, get_artifacts, set_summary]
+    routes![index, get, new, get_artifacts, set_summary, delete]
 }
 
-#[get("/?<limit>&<page>")]
-async fn index(page: Option<usize>, limit: Option<usize>) -> Json<Vec<Project>> {
-    let projects = Project::list(limit.unwrap_or(100), page.unwrap_or(0)).await;
-    Json(projects.unwrap())
+#[get("/?<limit>&<page>&<all>")]
+async fn index(
+    page: Option<usize>,
+    limit: Option<usize>,
+    all: Option<bool>,
+) -> Result<Json<Vec<Project>>, Status> {
+    let projects = if all.unwrap_or(false) {
+        Project::list_all()
+            .await
+            .map_err(|_| Status::InternalServerError)
+            .unwrap()
+    } else {
+        Project::list(limit.unwrap_or(100), page.unwrap_or(0))
+            .await
+            .map_err(|_| Status::InternalServerError)
+            .unwrap()
+    };
+    Ok(Json(projects))
 }
 
 #[get("/<id>")]
@@ -42,6 +56,14 @@ async fn new(data: Form<ProjectNew>) -> Result<Json<Project>, Status> {
         .await
         .map_err(|_| Status::InternalServerError)?;
     Ok(Json(project))
+}
+
+
+#[delete("/<id>")]
+async fn delete(id: Uuid) -> Result<(), Status> {
+    let project = Project::get(id).await.map_err(|_| Status::NotFound)?;
+    project.delete().await.map_err(|_| Status::InternalServerError)?;
+    Ok(())
 }
 
 #[derive(Serialize, Deserialize)]

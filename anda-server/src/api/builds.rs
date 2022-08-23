@@ -1,6 +1,5 @@
 use crate::backend::{AndaBackend, Build, BuildCache, S3Object, Target};
 
-
 use rocket::{
     form::Form,
     fs::TempFile,
@@ -22,10 +21,24 @@ pub(crate) fn routes() -> Vec<Route> {
     ]
 }
 
-#[get("/?<limit>&<page>")]
-async fn index(page: Option<usize>, limit: Option<usize>) -> Json<Vec<Build>> {
-    let builds = Build::list(limit.unwrap_or(100), page.unwrap_or(0)).await;
-    Json(builds.unwrap())
+#[get("/?<limit>&<page>&<all>")]
+async fn index(
+    page: Option<usize>,
+    limit: Option<usize>,
+    all: Option<bool>,
+) -> Result<Json<Vec<Build>>, Status> {
+    let builds = if all.unwrap_or(false) {
+        Build::list_all()
+            .await
+            .map_err(|_| Status::InternalServerError)
+            .unwrap()
+    } else {
+        Build::list(limit.unwrap_or(100), page.unwrap_or(0))
+            .await
+            .map_err(|_| Status::InternalServerError)
+            .unwrap()
+    };
+    Ok(Json(builds))
 }
 
 #[get("/<id>")]
@@ -82,7 +95,10 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
         data.project_id,
         None,
         "BuildSubmission".to_string(),
-    ).add().await.map_err(|_| Status::InternalServerError)?;
+    )
+    .add()
+    .await
+    .map_err(|_| Status::InternalServerError)?;
 
     let build = AndaBackend::new(
         int_build.id,

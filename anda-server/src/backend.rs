@@ -925,6 +925,14 @@ impl Target {
         Ok(target.into_iter().map(Target::from_model).collect())
     }
 
+    pub async fn list_all() -> Result<Vec<Target>> {
+        let db = DbPool::get().await;
+        let target = target::Entity::find()
+            .all(db)
+            .await?;
+        Ok(target.into_iter().map(Target::from_model).collect())
+    }
+
     pub async fn update(&self, _id: Uuid) -> Result<Target> {
         let db = DbPool::get().await;
         // get target by id, then update it
