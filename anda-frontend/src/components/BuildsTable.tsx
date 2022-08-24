@@ -40,7 +40,11 @@ export const BuildsTable = () => {
         <tbody>
           {query.data.map((build) => (
             <tr className="bg-white border-b dark:bg-zinc-800 dark:border-gray-700">
-              <th className="py-3 px-6">{build.build_type}</th>
+              <th className="py-3 px-6">
+                <Link to={`/app/build_info/${build.id}`}>
+                  {build.build_type}
+                </Link>
+              </th>
               <td className="py-3 px-6">{build.id}</td>
               <td className="py-3 px-6">{build.target_id}</td>
               <td className="py-3 px-6">
@@ -67,9 +71,7 @@ export const BuildsTable = () => {
                   {moment(build.timestamp).fromNow()}
                 </p>
                 </Tooltip> */}
-                <p>
-                  {moment(build.timestamp).fromNow()}
-                </p>
+                <p>{moment(build.timestamp).fromNow()}</p>
               </td>
             </tr>
           ))}

@@ -1,11 +1,11 @@
 use anyhow::Result;
 use aws_sdk_s3::{
-    output::{PutObjectOutput, ListObjectsOutput},
+    output::{PutObjectOutput, ListObjectsOutput, GetObjectOutput},
     types::ByteStream,
     {Client, Config, Credentials, Endpoint, Region},
 };
 use lazy_static::lazy_static;
-use std::{env, path::PathBuf};
+use std::{env, path::PathBuf, collections::HashMap};
 use tokio::{fs::File, io::AsyncReadExt};
 use walkdir::WalkDir;
 
@@ -41,26 +41,31 @@ impl S3Artifact {
         })
     }
 
-    pub async fn upload_file(&self, dest: &str, src: PathBuf) -> Result<PutObjectOutput> {
+    pub async fn upload_file(&self, dest: &str, src: PathBuf, metadata: HashMap<String, String>) -> Result<PutObjectOutput> {
         // convert path to absoluate path
         let file_path = src.canonicalize()?;
         println!("Uploading {} to {}", file_path.display(), dest);
         // Read file from `file` path
         let mut file = File::open(file_path).await?;
 
-        let metadata = file.metadata().await?;
+        //let metadata = file.metadata().await?;
 
         // convert to &[u8]
         let mut bytes = Vec::with_capacity(metadata.len() as usize);
         // Read entire file into `bytes`
         file.read_to_end(&mut bytes).await?;
         // upload to S3
-        let ret = self
+        let mut ret = self
             .connection
             .put_object()
             .key(dest)
             .body(bytes.into())
-            .bucket(BUCKET.as_str())
+            .bucket(BUCKET.as_str());
+
+        for (key, value) in metadata.iter() {
+            ret = ret.metadata(key, value);
+        }
+        let ret = ret
             .send()
             .await?;
         // self.connection.put_object(path, &bytes).await?;
@@ -80,13 +85,13 @@ impl S3Artifact {
                     dest,
                     file_path.strip_prefix(&src).unwrap().display()
                 );
-                self.upload_file(&real_path, file_path).await?;
+                self.upload_file(&real_path, file_path, HashMap::new()).await?;
             }
         };
         Ok(())
     }
 
-    pub async fn get_file(&self, dest: &str) -> Result<ByteStream> {
+    pub async fn get_file(&self, dest: &str) -> Result<GetObjectOutput> {
         let ret = self
             .connection
             .get_object()
@@ -94,7 +99,19 @@ impl S3Artifact {
             .bucket(BUCKET.as_str())
             .send()
             .await?;
-        Ok(ret.body)
+        Ok(ret)
+    }
+
+    pub async fn get_by_e_tag(&self, e_tag: &str, dest: &str) -> Result<GetObjectOutput> {
+        let ret = self
+            .connection
+            .get_object()
+            .key(dest)
+            .bucket(BUCKET.as_str())
+            .if_match(e_tag)
+            .send()
+            .await?;
+        Ok(ret)
     }
 
     pub async fn list_files(&self, dest: &str) -> Result<ListObjectsOutput> {
@@ -150,7 +167,7 @@ mod test_s3 {
     async fn test_s3_upload() {
         let artifact = S3Artifact::new().unwrap();
         artifact
-            .upload_file("/test/cargo.toml", PathBuf::from("./Cargo.toml"))
+            .upload_file("/test/cargo.toml", PathBuf::from("./Cargo.toml"), HashMap::new())
             .await
             .unwrap();
     }

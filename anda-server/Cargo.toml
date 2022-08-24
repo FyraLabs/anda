@@ -50,6 +50,11 @@ path = "../migration"
 version = "0.9.0"
 features = ["runtime-tokio-rustls", "sqlx-postgres", "with-json"]
 
+[dependencies.rpm-rs]
+git = "https://github.com/rpm-rs/rpm-rs.git"
+version = "0.8.1"
+branch = "master"
+
 [build-dependencies]
 bindgen = "0.60.1"
 npm_rs = "0.2.1"

@@ -10,7 +10,8 @@
 		"--security-opt",
 		"seccomp=unconfined",
 		"--init",
-		"--privileged"
+		"--privileged",
+		"--memory=4gb"
 	],
 	"overrideCommand": false,
 	"mounts": ["source=dind-var-lib-docker,target=/var/lib/docker,type=volume"],
@@ -29,7 +30,7 @@
 				},
 				"rust-analyzer.checkOnSave.command": "clippy"
 			},
-			
+
 			// Add the IDs of extensions you want installed when the container is created.
 			"extensions": [
 				"vadimcn.vscode-lldb",

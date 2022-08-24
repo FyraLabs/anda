@@ -4,7 +4,7 @@
 //! The builder will then be responsible for building the project.
 //! The server will start a Kubernetes job and manage the build process (hopefully).
 
-use std::path::PathBuf;
+use std::{path::PathBuf, collections::HashMap};
 use std::time::SystemTime;
 use crate::{
     db,
@@ -13,13 +13,15 @@ use crate::{
 use anyhow::{anyhow, Result};
 use chrono::{offset::Utc, DateTime};
 use aws_sdk_s3::types::{ByteStream, DateTime as AmazonDateTime};
+use log::debug;
 use sea_orm::FromJsonQueryResult;
-use tokio::{fs::File, io::{AsyncReadExt, AsyncWriteExt}, process::Command};
+use tokio::{fs::File, io::{AsyncReadExt, AsyncWriteExt, BufReader}, process::Command};
 use db::DbPool;
 use crate::s3_object::{S3Artifact, BUCKET, S3_ENDPOINT};
 use sea_orm::{prelude::Uuid, *};
 use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};
+use rpm;
 //use crate::backend_old::S3Object;
 
 use crate::kubernetes::dispatch_build;
@@ -96,7 +98,7 @@ impl UploadCache {
 
         let dest_path = format!("build_cache/{}/{}", Uuid::new_v4().simple(), self.filename);
 
-        let _ = obj.upload_file(&dest_path, self.path.to_owned()).await?;
+        let _ = obj.upload_file(&dest_path, self.path.to_owned(), HashMap::new()).await?;
         println!("Uploaded {}", dest_path);
         Ok(())
     }
@@ -104,7 +106,7 @@ impl UploadCache {
 
 /// Build caches
 /// ----------------
-/// Build caches are temporary files that are uploaded to S3.
+/// Build caches a&re temporary files that are uploaded to S3.
 /// They are used when one uploads a build to the server.
 #[derive(Debug, Clone)]
 pub struct BuildCache {
@@ -199,6 +201,31 @@ impl S3Object for BuildCache {
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileArtifact {
+    pub e_tag: Option<String>,
+    pub filename: Option<String>,
+    pub size: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RpmArtifact {
+    pub name: String,
+    pub arch: String,
+    pub epoch: Option<String>,
+    pub version: String,
+    pub release: Option<String>,
+
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArtifactMeta {
+    pub art_type: String,
+    pub file: Option<FileArtifact>,
+    pub rpm: Option<RpmArtifact>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Artifact {
     pub id: Uuid,
     pub filename: String,
@@ -206,7 +233,7 @@ pub struct Artifact {
     pub url: String,
     pub build_id: Uuid,
     pub timestamp: DateTime<Utc>,
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: Option<ArtifactMeta>,
 }
 
 /*impl From<crate::backend_old::Artifact> for Artifact {
@@ -235,7 +262,9 @@ impl From<artifact::Model> for Artifact {
             filename,
             timestamp: model.timestamp,
             url: model.url,
-            metadata: model.metadata,
+            metadata: model.metadata.map(|m| {
+                serde_json::from_value(m).unwrap()
+            }),
         }
     }
 }
@@ -259,10 +288,12 @@ impl Artifact {
         let model = artifact::ActiveModel {
             id: ActiveValue::Set(self.id),
             build_id: ActiveValue::Set(self.build_id),
-            name: ActiveValue::Set(self.filename.clone()),
+            name: ActiveValue::Set(self.path.clone()),
             timestamp: ActiveValue::Set(self.timestamp),
             url: ActiveValue::Set(self.url.clone()),
-            metadata: ActiveValue::Set(self.metadata.clone()),
+            metadata: ActiveValue::Set(self.metadata.clone().map(|m| {
+                serde_json::to_value(m).unwrap()
+            })),
         };
         let ret = artifact::ActiveModel::insert(model, db).await?;
         Ok(Artifact::from(ret))
@@ -344,49 +375,82 @@ impl S3Object for Artifact {
     }
     async fn upload_file(mut self, path: PathBuf) -> Result<Self> {
         let obj = crate::s3_object::S3Artifact::new()?;
-        let dest_path = format!("artifacts/{}/{}", self.id.simple(), self.path);
-        let _ = obj.upload_file(&dest_path, path.to_owned()).await?;
-        // now update the database
-        /* crate::db_object::Artifact::new(
-            self.id,
-            self.build_id,
-            dest_path
-                .strip_prefix(&format!("artifacts/{}/", self.id.simple()))
-                .unwrap()
-                .to_string(),
-            self.get_url(),
-        )
-        .add()
-        .await?; */
+        let dest_path = format!("artifacts/{}/{}", self.build_id.simple(), self.path);
+        let file = File::open(path.as_path()).await?;
 
-        self.path = dest_path
-            .strip_prefix(&format!("artifacts/{}/", self.id.simple()))
-            .unwrap()
-            .to_string();
+        //self.add().await?;
+        let mut metadata = HashMap::new();
+        metadata.insert("build_id".to_string(), self.build_id.to_string());
+        let o = obj.upload_file(&dest_path, path.to_owned(), metadata).await?;
+
+        // process metadata for artifact
 
         self.url = self.get_url();
 
+        let file_meta = FileArtifact {
+            e_tag: o.e_tag().map(|e| e.to_string()),
+            size: Some(file.metadata().await.expect("Failed to get file metadata").len()),
+            filename: Some(self.filename.clone()),
+        };
+
+        debug!("filename: {}", self.filename);
+
+        let rpm_meta = if self.filename.ends_with(".rpm") {
+            // Read RPM metadata
+            let mut buf_reader = BufReader::new(file);
+            let rpm = rpm::RPMPackage::parse_async(&mut buf_reader).await.map_err(|e| {
+                anyhow!("Failed to parse RPM: {}", e)
+            })?;
+            let meta = rpm.metadata;
+            //meta.header.
+            Some(RpmArtifact {
+                name: meta.header.get_name().unwrap().to_string(),
+                version: meta.header.get_version().unwrap().to_string(),
+                release: meta.header.get_release().ok().map(|r| r.to_string()),
+                arch: meta.header.get_arch().unwrap().to_string(),
+                epoch: meta.header.get_epoch().ok().map(|e| e.to_string()),
+            })
+        } else {
+            None
+        };
+
+        self.metadata = Some(ArtifactMeta {
+            art_type: "file".to_string(),
+            file: Some(file_meta),
+            rpm: rpm_meta,
+        });
+
+        self.add().await?;
+
         println!("Uploaded {}", dest_path);
-        Ok(self.add().await?)
+        Ok(self)
     }
     async fn pull_bytes(&self) -> Result<ByteStream> {
         // Get from S3
 
         let s3 = crate::s3_object::S3Artifact::new()?;
-        s3.get_file(&self.path).await
+        if self.metadata.is_none() {
+            return Err(anyhow!("No metadata found for artifact"));
+        }
+        let meta = self.metadata.as_ref().unwrap();
+        if meta.art_type != "file" {
+            return Err(anyhow!("Artifact is not a file"));
+        }
+        let file_meta = meta.file.as_ref().unwrap();
+        let e_tag = file_meta.e_tag.as_ref().unwrap();
+        println!("e_tag: {}", e_tag);
+
+        let path = format!("artifacts/{}/{}", self.build_id.simple(),self.path);
+        println!("path: {}", path);
+        s3.get_by_e_tag(e_tag, &path).await.map(|b| b.body)
     }
 
     async fn get(uuid: Uuid) -> Result<Self>
         where
             Self: Sized,
     {
-        // Query the database for the artifact with the given uuid.
-        let artifact_meta = crate::backend::Artifact::get(uuid).await?;
-
-        //let filepath = artifact_meta.name.clone();
-        //let filename = filepath.strip_prefix("artifacts/").unwrap().to_string();
-        //let id = artifact_meta.id;
-        Ok(Self::from(artifact_meta))
+        let artifact_meta = Artifact::get(uuid).await?;
+        Ok(artifact_meta)
     }
 }
 

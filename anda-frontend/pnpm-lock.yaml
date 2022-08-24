@@ -12,10 +12,12 @@ specifiers:
   '@tanstack/react-location': ^3.7.4
   '@tanstack/react-query': ^4.2.1
   '@tanstack/react-query-devtools': ^4.2.1
+  '@types/bytes': ^3.1.1
   '@types/react': ^18.0.17
   '@types/react-dom': ^18.0.6
   '@vitejs/plugin-react': ^2.0.1
   autoprefixer: ^10.4.8
+  bytes: ^3.1.2
   flowbite: ^1.5.2
   flowbite-react: ^0.1.10
   moment: ^2.29.4
@@ -41,6 +43,8 @@ dependencies:
   '@tailwindcss/typography': 0.5.4_tailwindcss@3.1.8
   '@tanstack/react-location': 3.7.4_biqbaboplfbrettd7655fr4n2y
   '@tanstack/react-query': 4.2.1_biqbaboplfbrettd7655fr4n2y
+  '@types/bytes': 3.1.1
+  bytes: 3.1.2
   flowbite: 1.5.2
   flowbite-react: 0.1.10_5gpsvf2cjw4zlguc4umrhekegq
   moment: 2.29.4
@@ -699,6 +703,10 @@ packages:
     dev: false
     optional: true
 
+  /@types/bytes/3.1.1:
+    resolution: {integrity: sha512-lOGyCnw+2JVPKU3wIV0srU0NyALwTBJlVSx5DfMQOFuuohA8y9S8orImpuIQikZ0uIQ8gehrRjxgQC1rLRi11w==}
+    dev: false
+
   /@types/debug/4.1.7:
     resolution: {integrity: sha512-9AonUzyTjXXhEOa0DnqpzZi6VHlqKMswga9EXjpXnnqxwLtdvPPtlO8evrI5D9S6asFRCQ6v+wpiUKbw+vKqyg==}
     dependencies:
@@ -947,6 +955,11 @@ packages:
     dependencies:
       base64-js: 1.5.1
       ieee754: 1.2.1
+    dev: false
+
+  /bytes/3.1.2:
+    resolution: {integrity: sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg==}
+    engines: {node: '>= 0.8'}
     dev: false
 
   /cachedir/2.3.0:

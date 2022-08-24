@@ -20,6 +20,8 @@
     "@tailwindcss/typography": "^0.5.4",
     "@tanstack/react-location": "^3.7.4",
     "@tanstack/react-query": "^4.2.1",
+    "@types/bytes": "^3.1.1",
+    "bytes": "^3.1.2",
     "flowbite": "^1.5.2",
     "flowbite-react": "^0.1.10",
     "moment": "^2.29.4",

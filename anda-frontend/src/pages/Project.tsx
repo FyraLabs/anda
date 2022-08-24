@@ -25,7 +25,7 @@ const Project = () => {
   if (!query.data) return <Skeleton/>;
 
   return (
-    <div className="flex flex-col dark:text-gray-300 flex-1">
+    <div className="flex flex-col dark:text-zinc-300 flex-1">
       <div className="flex h-full flex-1 items-stretch">
         <div className="p-5 flex flex-col light:bg-neutral-100 dark:bg-neutral-900 w-72 gap-2">
           <p className="text-xl text-gray-400 font-medium">

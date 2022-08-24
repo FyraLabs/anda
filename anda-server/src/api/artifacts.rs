@@ -1,7 +1,9 @@
 use crate::backend::{Artifact, S3Object};
 use crate::{backend::*};
 use log::debug;
+use rocket::fs::NamedFile;
 use rocket::http::Status;
+use rocket::response::Redirect;
 use rocket::{
     form::Form,
     fs::TempFile,
@@ -13,7 +15,7 @@ use std::{collections::HashMap, path::PathBuf};
 use tokio::io::AsyncReadExt;
 
 pub(crate) fn routes() -> Vec<Route> {
-    routes![index, get, upload, search, get_file]
+    routes![index, get, upload, search, get_raw_file, get_file]
 }
 
 #[derive(FromForm)]
@@ -49,31 +51,27 @@ async fn get(id: Uuid) -> Option<Json<Artifact>> {
     Artifact::get(id).await.ok().map(Json)
 }
 
+#[get("/<id>/file", rank = 5)]
+async fn get_raw_file(id: Uuid) -> Result<Redirect, Status> {
+    // Gets file name, then redirects to the file
+    let artifact = Artifact::get(id).await.map_err(|_| Status::NotFound)?;
+    // redirect to the file
+    let redirect = Redirect::to(format!("/artifacts/{}/file/{}", artifact.id, artifact.path));
+    Ok(redirect)
+}
+
 /// WIP: Directory Listing
-#[get("/files/<path..>")]
-async fn get_file(path: PathBuf) -> Option<(ContentType, Vec<u8>)> {
-    // check if path is a file
-    let s = crate::s3_object::S3Artifact::new().unwrap();
-    // check if path is folder and get list of files
+#[get("/<id>/file/<path..>", rank = 6)]
+async fn get_file(id: Uuid, path: PathBuf) -> Result<(ContentType, Vec<u8>), Status> {
 
-    let file = s.get_file(path.to_str().unwrap()).await.ok();
+    let artifact = Artifact::get(id).await.unwrap();
 
-    if file.is_none() {
-        // This code is in fact, reachable
-        //#[allow(unreachable_code)]
-        return Some((
-            ContentType::Text,
-            format!("{:#?}", s.list_files(path.to_str().unwrap()).await.unwrap().contents())
-                .as_bytes()
-                .to_vec(),
-        ));
-    } else {
-        let file = file.unwrap();
-        let mut buf = Vec::new();
-        file.into_async_read().read_to_end(&mut buf).await.ok();
-        Some((ContentType::Binary, buf))
-    }
-
+    let data = artifact.pull_bytes().await.unwrap();
+    // turn bytestream into vec of bytes
+    let data = data.collect().await.ok().unwrap().into_bytes();
+    // bytes to vec of bytes
+    let buf = data.to_vec();
+    Ok((ContentType::Binary, buf))
     //todo!()
 }
 
@@ -88,10 +86,7 @@ async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
         debug!("{}: {}", name, file.path().expect("No file path").display());
         results.push(
             crate::backend::Artifact::new(
-                file.raw_name()
-                    .expect("No filename")
-                    .dangerous_unsafe_unsanitized_raw()
-                    .to_string(),
+                name.split('/').last().unwrap().to_string(),
                 name.to_string(),
                 data.build_id,
             )

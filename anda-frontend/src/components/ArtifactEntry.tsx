@@ -8,29 +8,32 @@ import {
   faFileLines,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Artifact } from "../api/artifacts";
+import { Artifact, getArtifactUrl } from "../api/artifacts";
 import moment from "moment";
+import bytes from "bytes";
 
 // artifactentry takes an artifact[] as a parameter and returns a div with the artifact information
 export const ArtifactEntry = (artifacts: Artifact[]) => {
   return artifacts.map((artifact: Artifact) => (
     <div className="flex gap-5 items-center py-2" key={artifact.id}>
-        {iconFromArtifact(artifact)}
+      {iconFromArtifact(artifact)}
       <div className="flex flex-col h-14">
         <p>{artifact.filename}</p>
         <p className="text-xs font-light">
-          12MB • <code>v1.2.0</code> • {moment(artifact.timestamp).fromNow()}
+          {artifact.metadata.file ? bytes(artifact.metadata.file?.size) : ""} •{" "}
+          <code>
+            {artifact.metadata.rpm ? artifact.metadata.rpm.version : ""}
+          </code>{" "}
+          • {moment(artifact.timestamp).fromNow()}
         </p>
 
         {artifact.path !== artifact.filename ? (
-          <p className="text-xs font-extralight">
-            {artifact.path}
-          </p>
+          <p className="text-xs font-extralight">{artifact.path}</p>
         ) : (
-          <br/>
+          <br />
         )}
       </div>
-      <a href={artifact.url} className="ml-auto text-lg">
+      <a href={getArtifactUrl(artifact.id)} className="ml-auto text-lg">
         <FontAwesomeIcon icon={faArrowDown} className="ml-auto text-lg" />
       </a>
     </div>
@@ -40,14 +43,14 @@ export const ArtifactEntry = (artifacts: Artifact[]) => {
 function iconFromArtifact(artifact: Artifact) {
   let icon = faFile;
 
-  console.debug(artifact)
+  console.debug(artifact);
   // check from file name
   // variable so stuff can be shorter
   // TODO: Probably a better way to do this,
   // Might require the server to output the mime type
   // which needs some S3 magic
   // also additional metadata embedded with the database
-  let name = artifact.filename
+  let name = artifact.filename;
   //console.log(name);
 
   if (
