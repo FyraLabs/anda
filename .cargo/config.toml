@@ -1,3 +1,7 @@
 [profile.release]
 incremental = true
 opt-level = "s"
+
+[alias]
+anda = "run --bin anda"
+anda-server = "run --bin anda-server"

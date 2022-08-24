@@ -14,14 +14,13 @@ use anyhow::{anyhow, Result};
 use chrono::{offset::Utc, DateTime};
 use aws_sdk_s3::types::{ByteStream, DateTime as AmazonDateTime};
 use log::debug;
-use sea_orm::FromJsonQueryResult;
+//use sea_orm::FromJsonQueryResult;
 use tokio::{fs::File, io::{AsyncReadExt, AsyncWriteExt, BufReader}, process::Command};
 use db::DbPool;
 use crate::s3_object::{S3Artifact, BUCKET, S3_ENDPOINT};
 use sea_orm::{prelude::Uuid, *};
 use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};
-use rpm;
 //use crate::backend_old::S3Object;
 
 use crate::kubernetes::dispatch_build;
