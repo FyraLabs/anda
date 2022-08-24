@@ -3,16 +3,18 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 use async_once_cell::OnceCell;
 use bytes::Bytes;
-use futures::{stream, Stream, StreamExt};
+use futures::{stream, Stream, StreamExt, TryStreamExt};
 use k8s_openapi::api::{
     batch::v1::{Job, JobSpec},
     core::v1::{Container, EnvVar, Pod, PodSpec, PodTemplateSpec},
 };
 use kube::{
     api::{ListParams, LogParams, ObjectMeta, PostParams},
+    core::WatchEvent,
     runtime::watcher,
-    Api, Client,
+    Api, Client, ResourceExt,
 };
+use log::debug;
 
 /// Kubernetes client object
 pub struct K8S;
@@ -46,7 +48,7 @@ pub async fn dispatch_build(
     image: String,
     pack_url: String,
     token: String,
-    scope: Option<String>
+    scope: Option<String>,
 ) -> Result<()> {
     let jobs = K8S::jobs().await;
 
@@ -55,16 +57,10 @@ pub async fn dispatch_build(
     let mut labels = BTreeMap::new();
     labels.insert("anda-build-id".to_string(), id.clone());
 
-    let mut cmd = vec![
-        "anda".to_string(),
-        "build".to_string(),
-    ];
+    let mut cmd = vec!["anda".to_string(), "build".to_string()];
 
     if let Some(scope) = scope {
-        cmd.extend(vec![
-            "-p".to_string(),
-            scope,
-        ])
+        cmd.extend(vec!["-p".to_string(), scope])
     }
 
     cmd.push(pack_url.clone());
@@ -109,25 +105,82 @@ pub async fn dispatch_build(
                                 name: "ANDA_ENDPOINT".to_string(),
                                 value: std::env::var("ANDA_ENDPOINT").ok(),
                                 ..EnvVar::default()
-                            }
+                            },
                         ]),
                         command: Some(cmd),
-
                         ..Default::default()
                     }],
                     ..Default::default()
                 }),
+
                 metadata: Some(ObjectMeta {
                     name: Some(format!("build-pod-{}", id)),
                     ..ObjectMeta::default()
                 }),
             },
+            backoff_limit: Some(0),
             ..Default::default()
         }),
         ..Default::default()
     };
 
-    jobs.create(&PostParams::default(), &spec).await?;
+    let job = jobs.create(&PostParams::default(), &spec).await?;
+
+    //debug!("Created job: {:#?}", job);
+
+    //let logs = watch_jobs().await;
+    // stream logs
+    let pods = K8S::pods().await;
+    let mut stream = pods.watch(&ListParams::default(), "0").await?.boxed();
+
+    let mut watching_pod: Option<Pod> = None;
+
+    /*     while let Some(status) = stream.try_next().await? {
+        match status {
+            WatchEvent::Added(s) => println!("Added {}", s.name_any()),
+            WatchEvent::Modified(s) => println!("Modified: {}", s.name_any()),
+            WatchEvent::Deleted(s) => println!("Deleted {}", s.name_any()),
+            WatchEvent::Bookmark(s) => {},
+            WatchEvent::Error(s) => println!("{}", s),
+        }
+    } */
+
+    while watching_pod.is_none() {
+        if let Some(WatchEvent::Added(pod)) = stream.try_next().await? {
+            // check if watchevent is WatchEvent::Added
+            watching_pod = Some(pod);
+        }
+    }
+
+    // wait for pod to be ready
+    //let p_stat = watching_pod.clone().unwrap().status.unwrap().container_statuses;
+    while let Some(bool) = watching_pod
+        .clone()
+        .unwrap()
+        .status
+        .unwrap()
+        .container_statuses
+    {
+        println!("{:?}", bool);
+
+        if bool[0].ready {
+            break;
+        }
+        if let Some(WatchEvent::Modified(pod)) = stream.try_next().await? {
+            // check if watchevent is WatchEvent::Added
+            watching_pod = Some(pod);
+        }
+    }
+
+    let pod_name = watching_pod.unwrap().name_any();
+
+    let mut logstream = get_logs(pod_name.clone()).await?.boxed();
+
+    while let Some(log) = logstream.try_next().await? {
+        // stream bytes
+        let log = String::from_utf8((&log).to_vec())?.to_string();
+        debug!("{}", log);
+    }
 
     Ok(())
 }
@@ -183,10 +236,19 @@ pub async fn get_logs(
 
     // }
 
+    let filter = format!("job-name=build-{}", id);
+    println!("filter: {}", filter);
+
+    //let pod = p.items.first().unwrap();
+    //debug!("{:#?}", pod);
+
+    //let pod_name = pod.metadata.name.clone().unwrap();
+    //todo!();
     pods.log_stream(
-        format!("build-pod-{}", id).as_str(),
+        &id,
         &LogParams {
             follow: true,
+            pretty: true,
             ..Default::default()
         },
     )
