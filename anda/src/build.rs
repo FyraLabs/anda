@@ -91,14 +91,20 @@ impl ArtifactUploader {
 
         //debug!("form: {:?}", form);
 
-        let _res = ClientBuilder::new()
+        let res = ClientBuilder::new()
             .build()?
             .post(&endpoint)
             .multipart(form)
             .send()
             .await?;
+
+        if res.status().is_success() {
+            Ok(())
+        } else {
+            Err(anyhow!("upload failed"))
+        }
         // debug!("res: {:#?}", res.text().await?);
-        Ok(())
+        //Ok(())
     }
 }
 
@@ -564,6 +570,7 @@ impl ProjectBuilder {
         query: &str,
         opts: &BuilderOptions,
     ) -> Result<(), BuilderError> {
+        let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
         let re = regex::Regex::new(r"(.+)::([^:]+)(:(.+))?")
             .map_err(|e| BuilderError::Other(format!("Can't make regex: {}", e)))?;
         let config = crate::config::load_config(&opts.config_location)?;
@@ -611,6 +618,10 @@ impl ProjectBuilder {
             }
             // return Err(BuilderError::Command("Invalid argument passed".to_string()));
         }
+        if env::var("ANDA_BUILD_ID").is_ok() {
+            eprintln!("uploading artifacts...");
+            self.push_folder(PathBuf::from(output_path.clone())).await?;
+        };
         Ok(())
     }
 
@@ -632,7 +643,7 @@ impl ProjectBuilder {
                 self.run_whole_project(proj, project, opts).await?;
             }
             if env::var("ANDA_BUILD_ID").is_ok() {
-                info!("uploading artifacts...");
+                eprintln!("uploading artifacts...");
                 self.push_folder(PathBuf::from(output_path.clone())).await?;
             };
             return Ok(());
@@ -643,7 +654,7 @@ impl ProjectBuilder {
         }
         // if env var `ANDA_BUILD_ID` is set, we upload the artifacts
         if env::var("ANDA_BUILD_ID").is_ok() {
-            info!("uploading artifacts...");
+            eprintln!("uploading artifacts...");
             self.push_folder(PathBuf::from(output_path)).await?;
         };
         Ok(())

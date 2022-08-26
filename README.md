@@ -59,9 +59,9 @@ Andaman is a build system written in Rust, and is powered by the following compo
 
 * [x] Building RPM packages
 * [x] Build artifact management
-* [ ] Task scheduling for builds
+* [x] Task scheduling for builds
 * [ ] Full repository composition
 * [ ] Build artifact signing
 * [ ] OCI containers
 * [ ] OSTree composes (Flatpak and RPM-OSTree)
-* [ ] Building RPMs using an alternative package spec format
+* [x] Building RPMs using an alternative package spec format (see `cargo-generate-rpm`)

@@ -25,19 +25,19 @@ static PODS: OnceCell<Api<Pod>> = OnceCell::new();
 
 impl K8S {
     /// Create a new Kubernetes client, or return the existing one
-    async fn client() -> Client {
+    pub async fn client() -> Client {
         CLIENT
             .get_or_init(async { Client::try_default().await.unwrap() })
             .await
             .clone()
     }
     /// Create a new Kubernetes job API, or return the existing one
-    async fn jobs() -> &'static Api<Job> {
+    pub async fn jobs() -> &'static Api<Job> {
         JOBS.get_or_init(async { Api::default_namespaced(K8S::client().await) })
             .await
     }
     /// Create a new Kubernetes pod API, or return the existing one
-    async fn pods() -> &'static Api<Pod> {
+    pub async fn pods() -> &'static Api<Pod> {
         PODS.get_or_init(async { Api::default_namespaced(K8S::client().await) })
             .await
     }
@@ -130,10 +130,7 @@ pub async fn dispatch_build(
 
     //let logs = watch_jobs().await;
     // stream logs
-    let pods = K8S::pods().await;
-    let mut stream = pods.watch(&ListParams::default(), "0").await?.boxed();
 
-    let mut watching_pod: Option<Pod> = None;
 
     /*     while let Some(status) = stream.try_next().await? {
         match status {
@@ -145,42 +142,16 @@ pub async fn dispatch_build(
         }
     } */
 
-    while watching_pod.is_none() {
-        if let Some(WatchEvent::Added(pod)) = stream.try_next().await? {
-            // check if watchevent is WatchEvent::Added
-            watching_pod = Some(pod);
-        }
-    }
 
-    // wait for pod to be ready
-    //let p_stat = watching_pod.clone().unwrap().status.unwrap().container_statuses;
-    while let Some(bool) = watching_pod
-        .clone()
-        .unwrap()
-        .status
-        .unwrap()
-        .container_statuses
-    {
-        println!("{:?}", bool);
 
-        if bool[0].ready {
-            break;
-        }
-        if let Some(WatchEvent::Modified(pod)) = stream.try_next().await? {
-            // check if watchevent is WatchEvent::Added
-            watching_pod = Some(pod);
-        }
-    }
 
-    let pod_name = watching_pod.unwrap().name_any();
-
-    let mut logstream = get_logs(pod_name.clone()).await?.boxed();
+    /* let mut logstream = get_logs(pod_name.clone()).await?.boxed();
 
     while let Some(log) = logstream.try_next().await? {
         // stream bytes
         let log = String::from_utf8((&log).to_vec())?.to_string();
         debug!("log: {}", log);
-    }
+    } */
 
     Ok(())
 }
@@ -191,7 +162,7 @@ pub enum BuildStatusEvent {
     Failed(String),
 }
 
-async fn watch_jobs() -> impl Stream<Item = BuildStatusEvent> {
+pub async fn watch_jobs() -> impl Stream<Item = BuildStatusEvent> {
     let jobs = K8S::jobs().await;
     let stream = watcher(jobs.clone(), ListParams::default());
 
@@ -236,8 +207,8 @@ pub async fn get_logs(
 
     // }
 
-    let filter = format!("job-name=build-{}", id);
-    println!("filter: {}", filter);
+    //let filter = format!("job-name=build-{}", id);
+    //println!("filter: {}", filter);
 
     //let pod = p.items.first().unwrap();
     //debug!("{:#?}", pod);
@@ -246,13 +217,30 @@ pub async fn get_logs(
     //todo!();
 
     // wait 2 seconds for pod to be ready
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    //tokio::time::sleep(Duration::from_secs(2)).await;
+    // check if pod is ready
+    
     pods.log_stream(
         &id,
         &LogParams {
             follow: true,
+            //previous: true,
+            //tail_lines: Some(100),
+            since_seconds: Some(1),
+            
             ..Default::default()
         },
     )
     .await
+}
+
+pub async fn get_full_logs(id: String) -> Result<String, kube::Error> {
+    let pods = K8S::pods().await;
+
+    pods.logs(&id, &LogParams {
+        follow: false,
+        //since_seconds: Some(0),
+        //previous: true,
+        ..Default::default()
+    }).await
 }

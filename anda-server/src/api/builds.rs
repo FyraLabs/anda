@@ -1,9 +1,16 @@
-use crate::backend::{AndaBackend, Build, BuildCache, S3Object, Target};
+use crate::{
+    backend::{AndaBackend, Build, BuildCache, BuildStatus, S3Object, Target},
+    tasks::{full_logs, format_stream, format_actual_stream},
+};
 
+use futures::FutureExt;
+use futures::{stream, Stream, StreamExt, TryStreamExt};
 use rocket::{
     form::Form,
     fs::TempFile,
     http::Status,
+    response::stream::Event,
+    response::stream::EventStream,
     serde::{json::Json, uuid::Uuid},
     Route,
 };
@@ -18,6 +25,7 @@ pub(crate) fn routes() -> Vec<Route> {
         tag_compose,
         tag,
         tag_project,
+        get_log,
     ]
 }
 
@@ -170,4 +178,46 @@ async fn tag_project(data: Form<BuildTag>) -> Json<Build> {
         .tag_project(data.tag)
         .await;
     Json(build.unwrap())
+}
+
+// Log streaming using server sent events
+#[get("/<id>/log", rank = 5)]
+async fn get_log(id: Uuid) -> Result<EventStream![], Status> {
+    let build = Build::get(id).await.map_err(|_| Status::NotFound)?;
+    /* if build.status != BuildStatus::Running || build.status != BuildStatus::Pending {
+        // get full logs
+        let logs = full_logs(build.id.to_string()).await.unwrap();
+
+        let logstream = stream::iter(logs.lines().map(|l| l.to_string().as_bytes().to_vec()));
+        // turn into stream so we can parse using eventstream
+    } else {
+        let mut logstream = crate::tasks::stream_logs(id.to_string()).await.unwrap();
+    } */
+
+    let mut logstream = if build.status != BuildStatus::Running && build.status != BuildStatus::Pending {
+        // get full logs
+        let logs = full_logs(build.id.to_string()).await.unwrap();
+
+        //println!("{:?}", logs);
+        format_stream(logs).await.unwrap().boxed()
+    } else {
+        let logstream = crate::tasks::stream_logs(id.to_string()).await;
+        format_actual_stream(logstream.unwrap())
+            .await.unwrap().boxed()
+    };
+    
+    Ok(EventStream! {
+        //let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
+
+        // let mut logstream = crate::tasks::stream_logs(id.to_string()).await.unwrap();
+        // TODO: catch errors
+        while let Some(log) = logstream.next().await {
+            yield Event::data(log);
+        }
+
+        /* loop {
+            yield Event::data("ping");
+            //interval.tick().await;
+        } */
+    })
 }

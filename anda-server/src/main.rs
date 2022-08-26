@@ -50,6 +50,7 @@ mod db;
 mod entity;
 mod kubernetes;
 mod s3_object;
+mod tasks;
 
 use rust_embed::RustEmbed;
 
@@ -107,7 +108,10 @@ async fn rocket() -> Rocket<Build> {
 
     // Override default Rocket config
     let config = Config {
-        limits: Limits::default().limit("file", 10.gigabytes()),
+        limits: Limits::default()
+            //.limit("file", 10.gigabytes())
+            //.limit("forms", 10.gigabytes())
+            .limit("data-form", 10.gigabytes()),
         cli_colors: true,
         ident: Ident::try_new("Andaman Build System").unwrap(),
         ..Config::default()
@@ -127,6 +131,7 @@ async fn rocket() -> Rocket<Build> {
     rocket::build()
         .configure(figment)
         .attach(cors::Cors)
+        .attach(tasks::TaskManager)
         .attach(db::Db::init())
         .mount("/builds", api::builds_routes())
         .mount("/artifacts", api::artifacts_routes())
