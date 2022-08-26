@@ -42,6 +42,7 @@ format:
 
 docker-client:
     DOCKER_BUILDKIT=1 docker build -f client.dockerfile -t localhost:5050/anda/anda-client:latest .
+    docker push localhost:5050/anda/anda-client:latest
 
 test-cluster:
     k3d cluster create --registry-create local-registry:5050

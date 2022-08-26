@@ -4,7 +4,7 @@ use std::fs;
 // use std::path::PathBuf;
 
 fn main() {
-    println!("cargo:rerun-if-changed=anda-frontend/package.json");
+    println!("cargo:rerun-if-changed=anda-frontend/src");
 
     let old_pwd = std::env::current_dir().unwrap();
     // change current directory to anda-frontend

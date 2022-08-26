@@ -41,7 +41,9 @@
 		"rangav.vscode-thunder-client",
 		"eamodio.gitlens",
 		"1dot75cm.RPMSpec",
-		"ms-kubernetes-tools.vscode-kubernetes-tools"
+		"ms-kubernetes-tools.vscode-kubernetes-tools",
+		"esbenp.prettier-vscode",
+		"skellock.just"
 	]
     }
   },

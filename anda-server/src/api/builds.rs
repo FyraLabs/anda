@@ -105,7 +105,7 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
         cache,
         target
             .image
-            .unwrap_or_else(|| "local-registry:38675/anda/anda-client".to_string()),
+            .unwrap_or_else(|| "local-registry:5050/anda/anda-client".to_string()),
     );
 
     debug!("{:?}", int_build);

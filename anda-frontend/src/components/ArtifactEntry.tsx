@@ -16,8 +16,8 @@ import bytes from "bytes";
 export const ArtifactEntry = (artifacts: Artifact[]) => {
   return artifacts.map((artifact: Artifact) => (
     <div className="flex gap-5 items-center py-2" key={artifact.id}>
-      {iconFromArtifact(artifact)}
-      <div className="flex flex-col h-14">
+      <div>{iconFromArtifact(artifact)}</div>
+      <div className="flex flex-col h-12">
         <p>{artifact.filename}</p>
         <p className="text-xs font-light">
           {artifact.metadata.file ? bytes(artifact.metadata.file?.size) : ""} •{" "}
@@ -27,11 +27,11 @@ export const ArtifactEntry = (artifacts: Artifact[]) => {
           • {moment(artifact.timestamp).fromNow()}
         </p>
 
-        {artifact.path !== artifact.filename ? (
+        {/* {artifact.path !== artifact.filename ? (
           <p className="text-xs font-extralight">{artifact.path}</p>
         ) : (
           <br />
-        )}
+        )} */}
       </div>
       <a href={getArtifactUrl(artifact.id)} className="ml-auto text-lg">
         <FontAwesomeIcon icon={faArrowDown} className="ml-auto text-lg" />
@@ -89,5 +89,5 @@ function iconFromArtifact(artifact: Artifact) {
     icon = faDocker;
   }
 
-  return <FontAwesomeIcon icon={icon} fixedWidth className="text-lg" />;
+  return <FontAwesomeIcon icon={icon} fixedWidth className="text-2xl" />;
 }

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Duration};
 
 use anyhow::Result;
 use async_once_cell::OnceCell;
@@ -179,7 +179,7 @@ pub async fn dispatch_build(
     while let Some(log) = logstream.try_next().await? {
         // stream bytes
         let log = String::from_utf8((&log).to_vec())?.to_string();
-        debug!("{}", log);
+        debug!("log: {}", log);
     }
 
     Ok(())
@@ -244,11 +244,13 @@ pub async fn get_logs(
 
     //let pod_name = pod.metadata.name.clone().unwrap();
     //todo!();
+
+    // wait 2 seconds for pod to be ready
+    tokio::time::sleep(Duration::from_secs(2)).await;
     pods.log_stream(
         &id,
         &LogParams {
             follow: true,
-            pretty: true,
             ..Default::default()
         },
     )
