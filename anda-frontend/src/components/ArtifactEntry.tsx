@@ -33,7 +33,7 @@ export const ArtifactEntry = (artifacts: Artifact[]) => {
           <br />
         )} */}
       </div>
-      <a href={getArtifactUrl(artifact.id)} className="ml-auto text-lg">
+      <a href={`${getArtifactUrl(artifact.id)}/${artifact.path}`} className="ml-auto text-lg">
         <FontAwesomeIcon icon={faArrowDown} className="ml-auto text-lg" />
       </a>
     </div>

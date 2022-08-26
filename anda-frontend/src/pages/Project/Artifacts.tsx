@@ -21,7 +21,7 @@ const ProjectArtifacts = () => {
   );
   if (!query.data) return <Skeleton />;
   const artifacts = query.data as Artifact[];
-  console.log;
+  //console.log;
   return (
     <>
       <p className="text-3xl font-bold mb-3 dark:text-zinc-200">Artifacts</p>

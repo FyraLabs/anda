@@ -24,7 +24,7 @@ const BuildArtifacts = () => {
   
     if (!query.data) return <Skeleton/>;
     const artifacts = query.data as Artifact[];
-    console.log(artifacts);
+    //console.log(artifacts);
     return (
         <>
         <p className="text-3xl font-bold mb-3 dark:text-zinc-200">Artifacts</p>
