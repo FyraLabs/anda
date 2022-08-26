@@ -1,4 +1,4 @@
-const Composes = () => {
+const ProjectComposes = () => {
   return (
     <>
       <p className="text-3xl font-bold mb-3 text-gray-200">Composes</p>
@@ -51,4 +51,4 @@ const Composes = () => {
   );
 };
 
-export default Composes;
+export default ProjectComposes;

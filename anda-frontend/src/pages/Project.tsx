@@ -1,5 +1,5 @@
 import { Link, Outlet, useMatch } from "@tanstack/react-location";
-import Navbar from "../components/Navbar";
+//import Navbar from "../components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowDown,
@@ -22,14 +22,63 @@ const Project = () => {
     getProject(queryKey[1])
   );
 
-  if (!query.data) return <Skeleton/>;
+  if (!query.data) return <Skeleton />;
 
   return (
     <div className="flex flex-col dark:text-zinc-300 flex-1">
       <div className="flex h-full flex-1 items-stretch">
+        <aside className="p-5 flex flex-col light:bg-neutral-100 dark:bg-zinc-800 w-72 gap-2">
+          <p className="text-xl text-gray-400 font-medium">
+            <span className="dark:text-white text-black">
+              {query.data.name}
+            </span>
+          </p>
+          <ul className="space-y-2 list-none">
+            <li>
+              <Link className="flex gap-2 items-center rounded h-8" to="about">
+                <FontAwesomeIcon icon={faInfoCircle} fixedWidth />
+                <p>About</p>
+              </Link>
+            </li>
+
+            <li>
+              <Link
+                className="flex gap-2 items-center rounded h-8"
+                to="composes"
+              >
+                <FontAwesomeIcon icon={faCodeMerge} fixedWidth />
+                <p>Composes</p>
+              </Link>
+            </li>
+
+            <li>
+              <Link
+                className="flex gap-2 items-center rounded h-8"
+                to="artifacts"
+              >
+                <FontAwesomeIcon icon={faBoxesPacking} fixedWidth />
+                <p>Artifacts</p>
+              </Link>
+            </li>
+          </ul>
+        </aside>
+        <div className="p-5 dark:text-gray-300 flex-1">
+          <Outlet />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Project;
+{
+  /* <div className="flex flex-col dark:text-zinc-300 flex-1">
+      <div className="flex h-full flex-1 items-stretch">
         <div className="p-5 flex flex-col light:bg-neutral-100 dark:bg-neutral-900 w-72 gap-2">
           <p className="text-xl text-gray-400 font-medium">
-            <span className="dark:text-white text-black">{query.data.name}</span>
+            <span className="dark:text-white text-black">
+              {query.data.name}
+            </span>
           </p>
           <Link className="flex gap-2 items-center rounded h-8" to="about">
             <FontAwesomeIcon icon={faInfoCircle} fixedWidth />
@@ -45,12 +94,8 @@ const Project = () => {
           </Link>
         </div>
         <div className="p-5 dark:text-gray-300 flex-1">
-          {/* default outlet: about */}
           <Outlet />
         </div>
       </div>
-    </div>
-  );
-};
-
-export default Project;
+    </div> */
+}

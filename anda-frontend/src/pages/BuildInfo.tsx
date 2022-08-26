@@ -3,12 +3,15 @@ import {
   faBox,
   faArrowDown,
   faFileZipper,
+  faInfoCircle,
+  faFileText,
+  faBoxesPacking,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useQuery } from "@tanstack/react-query";
 import { getArtifactsOfProject, getProject } from "../api/projects";
 import { Artifact } from "../api/artifacts";
-import { Link, useMatch } from "@tanstack/react-location";
+import { Link, Outlet, useMatch } from "@tanstack/react-location";
 import { ArtifactEntry } from "../components/ArtifactEntry";
 import { Skeleton } from "../components/Skeleton";
 import { getBuild } from "../api/builds";
@@ -33,34 +36,38 @@ const BuildInfo = () => {
   );
 
   return (
-    <div className="flex flex-col dark:text-zinc-300">
-      <div className="p-14">
-        <div className="flex items-center py-6">
-          <h1 className="text-2xl font-bold">
-            {query.data.build_type} <code>{query.data.id}</code>
-          </h1>
-        </div>
-        <div id="build-id" className="flex items-center py-3">
-          <span className="text-zinc-200">
-            Build ID: <code>{query.data.id}</code>
-          </span>
-        </div>
-
-        <div id="build-scratch" className="flex items-center py-3">
-          <span className="text-zinc-200">
-            Is scratch build: {query.data.project_id ? "yes" : "no"}
-          </span>
-        </div>
-        {project.data ? (
-          <div id="build-scratch" className="flex items-center py-3">
-            <span className="text-zinc-200">
-              For project:{" "}
-              <Link to={`/app/projects/${query.data.project_id}`}>
-                {project.data.name}
-              </Link>
+    <div className="flex flex-col dark:text-zinc-300 flex-1">
+      <div className="flex h-full flex-1 items-stretch">
+        <aside className="p-5 flex flex-col light:bg-neutral-100 dark:bg-zinc-800 w-72 gap-2">
+          <p className="text-xl text-gray-400 font-medium">
+            <span className="dark:text-white text-black">
+              {query.data.build_type}
             </span>
-          </div>
-        ) : null}
+          </p>
+          <ul className="space-y-2 list-none">
+            <li>
+              <Link className="flex gap-2 items-center rounded h-8" to="about">
+                <FontAwesomeIcon icon={faInfoCircle} fixedWidth />
+                <p>About</p>
+              </Link>
+            </li>
+            <li>
+              <Link className="flex gap-2 items-center rounded h-8" to="logs">
+                <FontAwesomeIcon icon={faFileText} fixedWidth />
+                <p>Logs</p>
+              </Link>
+            </li>
+            <li>
+              <Link className="flex gap-2 items-center rounded h-8" to="artifacts">
+                <FontAwesomeIcon icon={faBoxesPacking} fixedWidth />
+                <p>Artifacts</p>
+              </Link>
+            </li>
+          </ul>
+        </aside> 
+        <div className="p-5 dark:text-gray-300 flex-1">
+          <Outlet />
+        </div>
       </div>
     </div>
   );

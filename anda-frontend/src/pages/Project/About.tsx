@@ -4,7 +4,7 @@ import { getProject } from "../../api/projects";
 import ReactMarkdown from 'react-markdown'
 import { Skeleton } from "../../components/Skeleton";
 
-const About = () => {
+const AboutProject = () => {
   const {
     params: { projectID },
   } = useMatch();
@@ -29,4 +29,4 @@ const About = () => {
   );
 };
 
-export default About;
+export default AboutProject;

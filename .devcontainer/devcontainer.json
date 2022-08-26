@@ -43,7 +43,8 @@
 		"1dot75cm.RPMSpec",
 		"ms-kubernetes-tools.vscode-kubernetes-tools",
 		"esbenp.prettier-vscode",
-		"skellock.just"
+		"skellock.just",
+		"bradlc.vscode-tailwindcss"
 	]
     }
   },

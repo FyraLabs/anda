@@ -12,9 +12,9 @@ import AuthCallback from "./pages/AuthCallback";
 import Home from "./pages/Home";
 import Project from "./pages/Project";
 import Navbar from "./components/Navbar";
-import About from "./pages/Project/About";
-import Composes from "./pages/Project/Composes";
-import Artifacts from "./pages/Project/Artifacts";
+import AboutProject from "./pages/Project/About";
+import ProjectComposes from "./pages/Project/Composes";
+import ProjectArtifacts from "./pages/Project/Artifacts";
 import User from "./pages/User";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
@@ -24,6 +24,8 @@ import { getAllBuilds, getBuild } from "./api/builds";
 import Builds from "./pages/Builds";
 import { useState } from "react";
 import BuildInfo from "./pages/BuildInfo";
+import AboutBuild from "./pages/BuildInfo/About";
+import BuildArtifacts from "./pages/BuildInfo/Artifacts";
 
 const config: LogtoConfig = {
   endpoint: "https://accounts.fyralabs.com",
@@ -76,6 +78,20 @@ const routes: Route<DefaultGenerics>[] = [
           queryClient.fetchQuery(["builds", buildID], ({ queryKey }) =>
             getBuild(queryKey[1])
           ),
+        children: [
+          {
+            path: "/",
+            element: <AboutBuild />,
+          },
+          {
+            path: "/about",
+            element: <AboutBuild />,
+          },
+          {
+            path: "/artifacts",
+            element: <BuildArtifacts />,
+          }
+        ],
       },
       {
         path: "/projects/:projectID",
@@ -85,22 +101,22 @@ const routes: Route<DefaultGenerics>[] = [
           queryClient.fetchQuery(["projects", projectID], ({ queryKey }) =>
             getProject(queryKey[1])
           ),
-          children: [
+        children: [
           {
             path: "/",
-            element: <About />,
+            element: <AboutProject />,
           },
           {
             path: "/about",
-            element: <About />,
+            element: <AboutProject />,
           },
           {
             path: "/composes",
-            element: <Composes />,
+            element: <ProjectComposes />,
           },
           {
             path: "/artifacts",
-            element: <Artifacts />,
+            element: <ProjectArtifacts />,
           },
         ],
       },
@@ -141,7 +157,9 @@ const App = () => {
   const mode = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
   // get dark mode state from localStorage or use `mode` as default
-  const [darkMode, setDarkMode] = useState(localStorage.getItem("color-theme") === "true" || mode);
+  const [darkMode, setDarkMode] = useState(
+    localStorage.getItem("color-theme") === "true" || mode
+  );
 
   if (darkMode) {
     document.documentElement.classList.add("dark");

@@ -1,5 +1,5 @@
 import { andaAPI } from "./client";
-
+import { Artifact } from "./artifacts";
 
 export interface Build {
     id:         string;
@@ -13,3 +13,4 @@ export interface Build {
 
 export const getAllBuilds = () => andaAPI<Build[]>("/builds");
 export const getBuild = (id: string) => andaAPI<Build>(`/builds/${id}`);
+export const getArtifactsOfBuild = (id: string) => andaAPI<Artifact[]>(`/builds/${id}/artifacts`);
