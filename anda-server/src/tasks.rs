@@ -120,12 +120,10 @@ pub async fn full_logs(
 }
 
 async fn print_logs(id: String) -> Result<()> {
-    let mut logstream = stream_logs(id).await?.boxed();
-
-    while let Some(log) = logstream.try_next().await? {
+    let mut logstream = stream_logs(id).await?;
+    let mut real_logstream = format_actual_stream(&mut logstream).await?.boxed();
+    while let Some(log) = real_logstream.next().await {
         // stream bytes
-        let log = String::from_utf8((&log).to_vec())?.to_string();
-        
         debug!("log: {}", log);
     }
     Ok(())
@@ -135,7 +133,7 @@ async fn print_logs(id: String) -> Result<()> {
 pub async fn format_actual_stream(logstream: impl Stream<Item = Result<Bytes, kube::Error>>) -> Result<impl Stream<Item = String>> {
     // map this logstream into a trystream of strings
     Ok(logstream.map(|bytes| 
-        String::from_utf8(bytes.unwrap().to_vec()).expect("Could not convert bytes to string")
+        String::from_utf8(bytes.unwrap().to_vec()).expect("Could not convert bytes to string").strip_suffix('\n').unwrap().to_string()
     ))
 }
 

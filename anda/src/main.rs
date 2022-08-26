@@ -4,8 +4,11 @@ use anyhow::{anyhow, Result};
 
 use clap::{AppSettings, ArgEnum, Parser, Subcommand};
 use log::{debug, error, info};
+use reqwest_eventsource::Event;
+use reqwest_eventsource::EventSource;
 use std::fs;
 use std::{path::PathBuf, str::FromStr};
+use tokio_stream::StreamExt;
 
 mod api;
 mod backend;
@@ -131,6 +134,17 @@ enum Command {
         /// Optional project scope to push with
         #[clap(short, long, value_name = "SCOPE")]
         scope: Option<String>,
+
+        /// Option to watch logs
+        #[clap(short, long, action)]
+        watch: bool,
+    },
+
+    /// Watches logs from a build
+    WatchLogs {
+        /// Build ID to watch
+        #[clap(value_name = "BUILD_ID")]
+        build_id: String,
     },
 
     /// Shows build info
@@ -174,12 +188,17 @@ async fn main() -> Result<()> {
 
             if let Ok(url) = reqwest::Url::parse(&path) {
                 info!("path is a URL, calling downloader");
-                ProjectPacker::download_and_call_unpack_build(url.as_str(), workdir, &opts, projects)
-                    .await
-                    .map_err(|e| {
-                        error!("{}", e);
-                        anyhow!("{}", e)
-                    })?;
+                ProjectPacker::download_and_call_unpack_build(
+                    url.as_str(),
+                    workdir,
+                    &opts,
+                    projects,
+                )
+                .await
+                .map_err(|e| {
+                    error!("{}", e);
+                    anyhow!("{}", e)
+                })?;
                 return Ok(());
             }
 
@@ -267,7 +286,12 @@ async fn main() -> Result<()> {
                 println!("Packed to {}", p.display());
             }
         }
-        Command::Push { path, target, scope } => {
+        Command::Push {
+            path,
+            target,
+            scope,
+            watch,
+        } => {
             // pack the project, then push to backend
 
             let p = ProjectPacker::pack(&path, None).await.map_err(|e| {
@@ -286,11 +310,36 @@ async fn main() -> Result<()> {
             //let target_id_test = uuid::Uuid::parse_str("ad84b005-a147-4235-a339-eea78157ec0c").unwrap();
 
             // push da p
-            let b = backend.upload_build(target.id, &p, scope).await.map_err(|e| {
-                error!("{}", e);
-                anyhow!("{}", e)
-            })?;
+            let b = backend
+                .upload_build(target.id, &p, scope)
+                .await
+                .map_err(|e| {
+                    error!("{}", e);
+                    anyhow!("{}", e)
+                })?;
             println!("{:?}", b);
+
+            if watch {
+                let api = api::AndaBackend::new(None);
+                let mut es = api.stream_logs(b.id);
+                while let Some(e) = es.next().await {
+                    match e {
+                        Ok(Event::Open) => println!("Opened connection"),
+                        Ok(Event::Message(msg)) => println!("{}", msg.data),
+                        Err(err) => {
+                            match err {
+                                reqwest_eventsource::Error::StreamEnded => {
+                                    es.close()
+                                }
+                                _ => {
+                                    println!("Error: {}", err);
+                                    es.close();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
         Command::BuildInfo { id } => {
             // try and parse the build id as uuid
@@ -316,14 +365,37 @@ async fn main() -> Result<()> {
             if !c.success() {
                 anyhow::bail!("failed to start buildkitd docker service");
             }
+        }
+        Command::WatchLogs { build_id } => {
 
+            // try and parse the uuid
+            if let Err(e) = uuid::Uuid::parse_str(&build_id) {
+                anyhow::bail!("invalid build id: {}", e);
+            }
+
+            let build_id = uuid::Uuid::parse_str(&build_id).unwrap();
+
+            let api = api::AndaBackend::new(None);
+                let mut es = api.stream_logs(build_id);
+                while let Some(e) = es.next().await {
+                    match e {
+                        Ok(Event::Open) => println!("Opened connection"),
+                        Ok(Event::Message(msg)) => println!("{}", msg.data),
+                        Err(err) => {
+                            match err {
+                                reqwest_eventsource::Error::StreamEnded => {
+                                    es.close()
+                                }
+                                _ => {
+                                    println!("Error: {}", err);
+                                    es.close();
+                                }
+                            }
+                        }
+                    }
+            }
         }
     };
 
     Ok(())
-}
-
-mod tests {
-    #[test]
-    fn test_() {}
 }

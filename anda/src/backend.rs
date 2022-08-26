@@ -4,9 +4,18 @@ use clap::Subcommand;
 use uuid::Uuid;
 //use log::{debug, error, info, trace};
 
-use std::io::Write;
+use std::io::{Write, stdout};
 
 use tabwriter::TabWriter;
+
+use crossterm::{
+    execute,
+    style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
+    ExecutableCommand,
+    event,
+};
+
+
 
 #[derive(Subcommand)]
 pub enum BackendCommand {
@@ -77,6 +86,19 @@ pub(crate) async fn match_subcmd(cmd: &BackendCommand) -> Result<()> {
 
 pub async fn buildinfo(build_id: Uuid) -> Result<()> {
     let build = api::AndaBackend::new(None).get_build(build_id).await?;
-    println!("{}", serde_json::to_string_pretty(&build)?);
+    
+    println!("Build ID: {}", build.id.simple());
+    println!("Status: {}", build.status);
+    println!("Build Type: {}", build.build_type);
+    // check if project_id is set
+    if let Some(id) = build.project_id {
+        println!("Project ID: {}", id.simple());
+    }
+    if let Some(id) = build.compose_id {
+        println!("Compose ID: {}", id.simple());
+    }
+
+    
+    //println!("{}", serde_json::to_string_pretty(&build)?);
     Ok(())
 }

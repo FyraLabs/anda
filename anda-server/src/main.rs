@@ -109,8 +109,8 @@ async fn rocket() -> Rocket<Build> {
     // Override default Rocket config
     let config = Config {
         limits: Limits::default()
-            //.limit("file", 10.gigabytes())
-            //.limit("forms", 10.gigabytes())
+            .limit("file", 10.gigabytes())
+            .limit("forms", 10.gigabytes())
             .limit("data-form", 10.gigabytes()),
         cli_colors: true,
         ident: Ident::try_new("Andaman Build System").unwrap(),

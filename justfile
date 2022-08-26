@@ -48,7 +48,7 @@ test-cluster:
     k3d cluster create --registry-create local-registry:5050
 
 test-buildkit:
-    docker run -d --name test-buildkitd --publish 1234:1234 --privileged moby/buildkit:latest -addr "tcp://0.0.0.0:1234"
+    docker run -d --name test-buildkitd --publish 1234:1234 --restart=always --privileged moby/buildkit:latest -addr "tcp://0.0.0.0:1234"
 
 docker-server:
     docker build -t localhost:5050/anda/anda:latest .

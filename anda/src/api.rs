@@ -11,6 +11,7 @@ use reqwest::{
     multipart::{self, Form},
     Client,
 };
+use reqwest_eventsource::EventSource;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncReadExt;
 
@@ -33,6 +34,7 @@ pub struct Build {
     pub project_id: Option<Uuid>,
     pub timestamp: DateTime<Utc>,
     pub compose_id: Option<Uuid>,
+    pub build_type: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -178,6 +180,11 @@ impl AndaBackend {
         //println!("{:?}", &resp.json().await?);
         let target: Target = resp.json().await?;
         Ok(target)
+    }
+
+    pub fn stream_logs(&self, id: Uuid) -> EventSource {
+        let url = format!("{}/builds/{}/log", self.url, id);
+        EventSource::get(&url)
     }
 }
 
