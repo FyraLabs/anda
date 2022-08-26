@@ -15,6 +15,7 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 use uuid::Uuid;
+use indicatif::{ProgressBar, ProgressStyle};
 
 /// Returns the current commit hash of the given repository located at the given path.
 pub fn current_commit(path: &Path) -> Option<String> {
@@ -89,7 +90,7 @@ impl ProjectPacker {
         let mut writer = ZipFileWriter::new(&mut packfile);
         let mut file_list: HashSet<PathBuf> = HashSet::new();
 
-        debug!("walking {}", path.display());
+        //debug!("walking {}", path.display());
         let walker = ignore::Walk::new(&path);
 
         for result in walker {
@@ -109,11 +110,17 @@ impl ProjectPacker {
 
         std::env::set_current_dir(path).unwrap();
 
-        //let mut tasks = Vec::new();
+        let pb = ProgressBar::new(file_list.len() as u64);
+        pb.set_style(ProgressStyle::with_template(
+            "{pos}/{len} Packing [{bar:30}] {msg}"
+        ).unwrap()
+        .progress_chars("=> ")
+        );
 
         //tar.append_dir_all(".", path)?;
         for file in file_list {
-            debug!("adding {}", file.display());
+            //pb.println(format!("adding {}", file.display()));
+            pb.set_message(format!("{}", file.display()));
 
             // set current directory to path
 
@@ -128,8 +135,11 @@ impl ProjectPacker {
                 file.read_to_end(&mut buf).await?;
                 // add file to zip pack
                 writer.write_entry_whole(opts, &buf).await.unwrap();
+                //tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                pb.inc(1);
             }
         }
+        pb.finish_with_message("done");
 
         debug!("Finishing pack");
         //tar.finish().await.unwrap();

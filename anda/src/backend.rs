@@ -4,16 +4,9 @@ use clap::Subcommand;
 use uuid::Uuid;
 //use log::{debug, error, info, trace};
 
-use std::io::{Write, stdout};
+use std::io::Write;
 
 use tabwriter::TabWriter;
-
-use crossterm::{
-    execute,
-    style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
-    ExecutableCommand,
-    event,
-};
 
 
 
