@@ -58,14 +58,17 @@ const BuildInfo = () => {
               </Link>
             </li>
             <li>
-              <Link className="flex gap-2 items-center rounded h-8" to="artifacts">
+              <Link
+                className="flex gap-2 items-center rounded h-8"
+                to="artifacts"
+              >
                 <FontAwesomeIcon icon={faBoxesPacking} fixedWidth />
                 <p>Artifacts</p>
               </Link>
             </li>
           </ul>
-        </aside> 
-        <div className="p-5 dark:text-gray-300 flex-1">
+        </aside>
+        <div className="p-5 dark:text-gray-300 flex-1 flex flex-col">
           <Outlet />
         </div>
       </div>

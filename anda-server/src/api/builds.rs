@@ -196,12 +196,12 @@ async fn get_log(id: Uuid) -> Result<EventStream![], Status> {
         format_actual_stream(logstream.unwrap())
             .await.unwrap().boxed()
     };
-    
     Ok(EventStream! {
         // TODO: catch errors
         while let Some(log) = logstream.next().await {
             yield Event::data(log);
         }
+        yield Event::data("Log stream ended".to_string()).event("end");
     })
 }
 

@@ -26,6 +26,7 @@ import { useState } from "react";
 import BuildInfo from "./pages/BuildInfo";
 import AboutBuild from "./pages/BuildInfo/About";
 import BuildArtifacts from "./pages/BuildInfo/Artifacts";
+import Logs from "./pages/BuildInfo/Logs";
 
 const config: LogtoConfig = {
   endpoint: "https://accounts.fyralabs.com",
@@ -90,7 +91,11 @@ const routes: Route<DefaultGenerics>[] = [
           {
             path: "/artifacts",
             element: <BuildArtifacts />,
-          }
+          },
+          {
+            path: "/logs",
+            element: <Logs />,
+          },
         ],
       },
       {
