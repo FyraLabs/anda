@@ -24,8 +24,9 @@ impl Fairing for TaskManager {
 
     async fn on_liftoff(&self, _rocket: &Rocket<Orbit>) {
         // Initialize the kubernetes task manager
-        let _status = watch_status().await;
+        watch_status().await.unwrap();
         //let _logs = watch_pods().await;
+        watch_logs().await.unwrap();
     }
 }
 
@@ -38,7 +39,7 @@ async fn watch_status() -> Result<()> {
             match job {
                 BuildStatusEvent::Running(id) => {
                     println!("Running: {}", id);
-                    // Update build status
+                    // Update build statusd
                     let build = crate::backend::Build::get(Uuid::parse_str(&id).unwrap()).await.unwrap();
                     build.update_status(crate::backend::BuildStatus::Running as i32).await.unwrap();
                     //print_logs(id).await.unwrap();
@@ -47,11 +48,18 @@ async fn watch_status() -> Result<()> {
                     println!("Succeeded: {}", id);
                     let build = crate::backend::Build::get(Uuid::parse_str(&id).unwrap()).await.unwrap();
                     build.update_status(crate::backend::BuildStatus::Success as i32).await.unwrap();
+                    // update logs
+                    // let logs = full_logs(id).await.unwrap();
+                    // build.update_logs(logs).await.unwrap();
+
                 }
                 BuildStatusEvent::Failed(id) => {
                     println!("Failed: {}", id);
                     let build = crate::backend::Build::get(Uuid::parse_str(&id).unwrap()).await.unwrap();
                     build.update_status(crate::backend::BuildStatus::Failure as i32).await.unwrap();
+                    // update logs
+                    // let logs = full_logs(id).await.unwrap();
+                    // build.update_logs(logs).await.unwrap();
                 }
             }
         }
@@ -59,10 +67,44 @@ async fn watch_status() -> Result<()> {
     Ok(())
 }
 
+async fn watch_logs() -> Result<()> {
+    // Initialize the kubernetes task manager
+    let mut jobstream = watch_jobs().await.boxed();
+    tokio::spawn(async move {
+        while let Some(job) = jobstream.next().await {
+            match job {
+                BuildStatusEvent::Running(_) => {
+                    // do nothing
+                }
+                BuildStatusEvent::Succeeded(id) => {
+                    println!("Succeeded: {}", id);
+                    let build = crate::backend::Build::get(Uuid::parse_str(&id).unwrap()).await.unwrap();
+                    //build.update_status(crate::backend::BuildStatus::Success as i32).await.unwrap();
+                    // update logs
+                    let logs = full_logs(id).await.unwrap();
+                    build.update_logs(logs).await.unwrap();
+
+                }
+                BuildStatusEvent::Failed(id) => {
+                    println!("Failed: {}", id);
+                    let build = crate::backend::Build::get(Uuid::parse_str(&id).unwrap()).await.unwrap();
+                    build.update_status(crate::backend::BuildStatus::Failure as i32).await.unwrap();
+                    // update logs
+                    let logs = full_logs(id).await.unwrap();
+                    build.update_logs(logs).await.unwrap();
+                }
+            }
+        }
+    });
+    Ok(())
+}
 
 pub async fn get_pod_name_existing(id: String) -> Result<String> {
-    let pods = K8S::pods().await;
+    //let pods = K8S::pods().await.clone();
+    let client = kube::Client::try_default().await.unwrap();
+    let pods: kube::Api<Pod> = kube::Api::default_namespaced(client);
     let filter = format!("job-name=build-{}", id);
+
 
     let list = pods.list(&ListParams::default().labels(&filter)).await?;
     
@@ -118,6 +160,15 @@ pub async fn full_logs(
     let pod_name = get_pod_name_existing(id).await?;
     Ok(get_full_logs(pod_name.clone()).await?)
 }
+
+pub async fn full_logs_db(
+    id: String,
+) -> Result<String> {
+    // get build by id
+    let build = crate::backend::Build::get(Uuid::parse_str(&id).unwrap()).await.unwrap();
+    Ok(build.logs.unwrap_or_else(|| "".to_string()))
+}
+
 
 async fn print_logs(id: String) -> Result<()> {
     let mut logstream = stream_logs(id).await?;

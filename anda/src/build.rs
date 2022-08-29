@@ -574,7 +574,14 @@ impl ProjectBuilder {
         let re = regex::Regex::new(r"(.+)::([^:]+)(:(.+))?")
             .map_err(|e| BuilderError::Other(format!("Can't make regex: {}", e)))?;
         let config = crate::config::load_config(&opts.config_location)?;
+
+        if re.captures(query).is_none() {
+            eprintln!("Assuming query is just the project name. Passing to standard builder");
+            return self.build(vec![query.to_string()], opts).await;
+        }
+        
         for cap in re.captures_iter(query) {
+            debug!("capture: {:?}", cap);
             let project = &cap[1];
             let scope = &cap[2];
             let project = config.project.get(project).ok_or_else(|| {

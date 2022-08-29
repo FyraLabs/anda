@@ -160,6 +160,8 @@ impl MigrationTrait for Migration {
                             .from(Build::Table, Build::TargetId)
                             .to(Target::Table, Target::Id),
                     )
+                    .col(ColumnDef::new(Build::Logs).string())
+                    .col(ColumnDef::new(Build::Metadata).json())
                     .to_owned(),
             )
             .await?;
@@ -266,6 +268,8 @@ pub(crate) enum Build {
     Worker,
     Timestamp,
     BuildType,
+    Logs,
+    Metadata,
 }
 
 #[derive(Iden)]

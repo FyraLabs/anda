@@ -14,6 +14,8 @@ pub struct Model {
     pub timestamp: DateTimeUtc,
     pub compose_id: Option<Uuid>,
     pub build_type: String,
+    pub logs: Option<String>,
+    pub metadata: Option<serde_json::Value>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

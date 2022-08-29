@@ -154,7 +154,8 @@ impl ProjectPacker {
         url: &str,
         workdir: Option<PathBuf>,
         opts: &build::BuilderOptions,
-        projects: Vec<String>
+        projects: Vec<String>,
+        scope: Option<String>,
     ) -> Result<(), PackerError> {
         let tmp_dir = tempfile::tempdir().unwrap();
         // download file using reqwest
@@ -184,14 +185,15 @@ impl ProjectPacker {
         let mut file = File::create(&dest).await?;
         tokio::io::copy(&mut data, &mut file).await?;
 
-        Self::unpack_and_build(&dest, workdir, opts, projects).await
+        Self::unpack_and_build(&dest, workdir, opts, projects, scope).await
     }
 
     pub async fn unpack_and_build(
         path: &PathBuf,
         workdir: Option<PathBuf>,
         opts: &build::BuilderOptions,
-        projects: Vec<String>
+        projects: Vec<String>,
+        scope: Option<String>,
     ) -> Result<(), PackerError> {
         //let tar = GzipDecoder::new(buf.as_slice());
 
@@ -257,9 +259,14 @@ impl ProjectPacker {
         // print current dir
         debug!("{}", std::env::current_dir().unwrap().display());
         // execute anda build internally
-        crate::build::ProjectBuilder::new(workdir)
-            .build(projects, opts)
-            .await?;
+
+
+        let builder = crate::build::ProjectBuilder::new(workdir);
+        if let Some(scope) = scope {
+            builder.build_in_scope(&scope, opts).await?;
+        } else {
+            builder.build(projects, opts).await?;
+        }
 
         Ok(())
     }

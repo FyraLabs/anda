@@ -27,6 +27,14 @@ pub struct Artifact {
     pub timestamp: DateTime<Utc>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Project {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub summary: Option<String>
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Build {
     pub id: Uuid,
@@ -37,17 +45,18 @@ pub struct Build {
     pub build_type: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Target {
     pub id: Uuid,
-    pub image: Option<String>,
     pub name: String,
+    pub image: Option<String>,
+    pub arch: String,
 }
 
 #[derive(Clone)]
 pub(crate) struct AndaBackend {
     client: Client,
-    url: String,
+    pub url: String,
 }
 
 impl AndaBackend {
@@ -85,6 +94,19 @@ impl AndaBackend {
         Ok(builds)
     }
 
+    pub async fn list_projects(&self) -> Result<Vec<Project>> {
+        let url = format!("{}/projects", self.url);
+        let resp = self
+            .client
+            .get(&url)
+            .query(&[("limit", "10")])
+            .send()
+            .await?;
+        //println!("{:?}", &resp.json().await?);
+        let projects: Vec<Project> = resp.json().await?;
+        Ok(projects)
+    }
+
     pub async fn get_build(&self, id: Uuid) -> Result<Build> {
         let url = format!("{}/builds/{}", self.url, id);
         let resp = self.client.get(&url).send().await?;
@@ -120,6 +142,22 @@ impl AndaBackend {
 
         let build: Build = resp.json().await?;
         Ok(build)
+    }
+
+    pub async fn get_project(&self, id: Uuid) -> Result<Project> {
+        let url = format!("{}/projects/{}", self.url, id);
+        let resp = self.client.get(&url).send().await?;
+        //println!("{:?}", &resp.json().await?);
+        let project: Project = resp.json().await?;
+        Ok(project)
+    }
+
+    pub async fn get_project_by_name(&self, name: String) -> Result<Project> {
+        let url = format!("{}/projects/by_name/{}", self.url, name);
+        let resp = self.client.get(&url).send().await?;
+        //println!("{:?}", &resp.json().await?);
+        let project: Project = resp.json().await?;
+        Ok(project)
     }
 
     pub async fn upload_build(&self, target_id: Uuid, packfile_path: &PathBuf, scope: Option<String>) -> Result<Build> {
@@ -166,6 +204,21 @@ impl AndaBackend {
         Ok(build)
     }
 
+
+    pub async fn tag_build_project(&self, build_id: Uuid, project_id: Uuid) -> Result<Build> {
+        let url = format!("{}/builds/tag_project", self.url);
+        let form = Form::new()
+            .percent_encode_noop()
+            .text("id", build_id.to_string())
+            .text("tag", project_id.to_string());
+
+        let resp = self.client.post(&url).multipart(form).send().await?;
+        //println!("{:?}", &resp.json().await?);
+        let build: Build = resp.json().await?;
+        //todo!();
+        Ok(build)
+    }
+
     pub async fn get_target_by_id(&self, id: Uuid) -> Result<Target> {
         let url = format!("{}/targets/{}", self.url, id);
         let resp = self.client.get(&url).send().await?;
@@ -178,6 +231,21 @@ impl AndaBackend {
         let url = format!("{}/targets/by_name/{}", self.url, name);
         let resp = self.client.get(&url).send().await?;
         //println!("{:?}", &resp.json().await?);
+        let target: Target = resp.json().await?;
+        Ok(target)
+    }
+
+    pub async fn new_target(&self, name: &str, arch: &str, image: Option<String>) -> Result<Target> {
+        let url = format!("{}/targets/", self.url);
+        let target = Target {
+            id: Uuid::nil(),
+            name: name.to_string(),
+            arch: arch.to_string(),
+            image: image.clone(),
+        };
+
+        let resp = self.client.post(&url).json(&target).send().await?;
+        
         let target: Target = resp.json().await?;
         Ok(target)
     }

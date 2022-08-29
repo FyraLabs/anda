@@ -31,6 +31,9 @@ const AboutLogs = () => {
     const term = new Terminal();
     const fit = new FitAddon();
     term.loadAddon(fit);
+    term.options = {
+      scrollback: Infinity,
+    }
     setXterm(term);
     term.open(parentRef.current);
     fit.fit();
@@ -50,9 +53,12 @@ const AboutLogs = () => {
     };
     //eventSource.close();
 
+    eventSource.addEventListener("end", () => {
+      eventSource.close();
+    })
+    // now it actually stops looping logs
     return () => {
       eventSource.close();
-      // sleep for 10 seconds
     };
   }, [buildID, xterm]);
 

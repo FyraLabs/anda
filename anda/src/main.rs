@@ -138,6 +138,10 @@ enum Command {
         /// Option to watch logs
         #[clap(short, long, action)]
         watch: bool,
+
+        /// Project name to tag with
+        #[clap(short, long, value_name = "NAME")]
+        project: Option<String>,
     },
 
     /// Watches logs from a build
@@ -151,6 +155,20 @@ enum Command {
     BuildInfo {
         /// The build ID to show info for
         id: String,
+    },
+
+    /// Adds a new target to use in the project
+    NewTarget {
+        /// Target name
+        name: String,
+
+        /// Target architecture
+        #[clap(short, long, value_name = "ARCH")]
+        arch: String,
+
+        /// Image to build with
+        #[clap(short, long, value_name = "IMAGE")]
+        image: Option<String>
     },
 
     /// Sets up buildkit using docker
@@ -193,6 +211,7 @@ async fn main() -> Result<()> {
                     workdir,
                     &opts,
                     projects,
+                    scope,
                 )
                 .await
                 .map_err(|e| {
@@ -216,7 +235,7 @@ async fn main() -> Result<()> {
                     .ends_with(".andasrc.zip")
                 {
                     debug!("path is an andasrc tarball package, calling unpacker");
-                    ProjectPacker::unpack_and_build(&path, workdir, &opts, projects)
+                    ProjectPacker::unpack_and_build(&path, workdir, &opts, projects, scope)
                         .await
                         .map_err(|e| {
                             error!("{}", e);
@@ -291,6 +310,7 @@ async fn main() -> Result<()> {
             target,
             scope,
             watch,
+            project,
         } => {
             // pack the project, then push to backend
 
@@ -317,15 +337,58 @@ async fn main() -> Result<()> {
                     error!("{}", e);
                     anyhow!("{}", e)
                 })?;
-            println!("{:?}", b);
+            //println!("{:?}", b);
+
+            if let Some(project) = project {
+                eprintln!("Tagging to project {}", project);
+
+                // try to parse UUID
+                if let Ok(uuid) = uuid::Uuid::parse_str(&project) {
+                    backend
+                        .tag_build_project(b.id, uuid)
+                        .await
+                        .map_err(|e| {
+                            error!("{}", e);
+                            anyhow!("{}", e)
+                        })?;
+                } else {
+                    // try and get project by name
+                    let project = backend
+                        .get_project_by_name(project)
+                        .await
+                        .map_err(|e| {
+                            error!("{}", e);
+                            anyhow!("{}", e)
+                        })?;
+
+                    // tag the build with the project
+                    backend
+                        .tag_build_project(b.id, project.id)
+                        .await
+                        .map_err(|e| {
+                            error!("{}", e);
+                            anyhow!("{}", e)
+                        })?;
+                }
+            }
+            
+            // print out endpoint and link to build
+            println!("View build status: {}/app/build_info/{}", backend.url, b.id);
 
             if watch {
                 let api = api::AndaBackend::new(None);
                 let mut es = api.stream_logs(b.id);
                 while let Some(e) = es.next().await {
                     match e {
-                        Ok(Event::Open) => println!("Opened connection"),
-                        Ok(Event::Message(msg)) => println!("{}", msg.data),
+                        Ok(Event::Open) => eprintln!("=== Starting log stream ==="),
+                        Ok(Event::Message(msg)) => {
+                            // check for event type
+                            if msg.event == *"end" {
+                                eprintln!("=== Log stream ended ===");
+                            } else {
+                                println!("{}", msg.data);
+                            }
+                        },
                         Err(err) => {
                             match err {
                                 reqwest_eventsource::Error::StreamEnded => {
@@ -379,8 +442,15 @@ async fn main() -> Result<()> {
                 let mut es = api.stream_logs(build_id);
                 while let Some(e) = es.next().await {
                     match e {
-                        Ok(Event::Open) => println!("Opened connection"),
-                        Ok(Event::Message(msg)) => println!("{}", msg.data),
+                        Ok(Event::Open) => eprintln!("=== Starting log stream ==="),
+                        Ok(Event::Message(msg)) => {
+                            // check for event type
+                            if msg.event == *"end" {
+                                eprintln!("=== Log stream ended ===");
+                            } else {
+                                println!("{}", msg.data);
+                            }
+                        },
                         Err(err) => {
                             match err {
                                 reqwest_eventsource::Error::StreamEnded => {
@@ -394,6 +464,14 @@ async fn main() -> Result<()> {
                         }
                     }
             }
+        }
+        Command::NewTarget { name, arch, image } => {
+            let backend = api::AndaBackend::new(None);
+            let target = backend.new_target(&name, &arch, image).await.map_err(|e| {
+                error!("{}", e);
+                anyhow!("{}", e)
+            })?;
+            println!("{:?}", target);
         }
     };
 

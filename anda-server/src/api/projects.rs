@@ -7,7 +7,7 @@ use rocket::Route;
 use serde::{Deserialize, Serialize};
 
 pub(crate) fn routes() -> Vec<Route> {
-    routes![index, get, new, get_artifacts, set_summary, delete]
+    routes![index, get, get_by_name, new, get_artifacts, set_summary, delete]
 }
 
 #[get("/?<limit>&<page>&<all>")]
@@ -33,6 +33,11 @@ async fn index(
 #[get("/<id>")]
 async fn get(id: Uuid) -> Option<Json<Project>> {
     Project::get(id).await.map(Json).ok()
+}
+
+#[get("/by_name/<name>", rank = 5)]
+async fn get_by_name(name: String) -> Option<Json<Project>> {
+    Project::get_by_name(name).await.map(Json).ok()
 }
 
 #[derive(FromForm)]

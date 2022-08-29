@@ -1,6 +1,6 @@
 use crate::{
     backend::{AndaBackend, Build, BuildCache, BuildStatus, S3Object, Target, Artifact},
-    tasks::{full_logs, format_stream, format_actual_stream},
+    tasks::{full_logs, format_stream, format_actual_stream, full_logs_db},
 };
 
 use futures::StreamExt;
@@ -187,7 +187,7 @@ async fn get_log(id: Uuid) -> Result<EventStream![], Status> {
 
     let mut logstream = if build.status != BuildStatus::Running && build.status != BuildStatus::Pending {
         // get full logs
-        let logs = full_logs(build.id.to_string()).await.unwrap();
+        let logs = full_logs_db(build.id.to_string()).await.unwrap();
 
         //println!("{:?}", logs);
         format_stream(logs).await.unwrap().boxed()

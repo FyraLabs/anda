@@ -463,6 +463,9 @@ pub struct Build {
     pub timestamp: DateTime<Utc>,
     pub compose_id: Option<Uuid>,
     pub build_type: String,
+    #[serde(skip_serializing)]
+    pub logs: Option<String>,
+    pub metadata: Option<serde_json::Value>
 }
 
 impl From<build::Model> for Build {
@@ -475,6 +478,8 @@ impl From<build::Model> for Build {
             timestamp:  model.timestamp,
             compose_id: model.compose_id,
             build_type: model.build_type,
+            logs: model.logs,
+            metadata: model.metadata,
         }
     }
 }
@@ -495,6 +500,8 @@ impl Build {
             status: BuildStatus::Pending,
             timestamp: Utc::now(),
             build_type,
+            logs: None,
+            metadata: None,
         }
     }
 
@@ -509,6 +516,17 @@ impl Build {
             ..Default::default()
         };
         let res = build::ActiveModel::insert(build, db).await?;
+        Ok(Build::from(res))
+    }
+
+    pub async fn update_logs(&self, logs: String) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            logs: ActiveValue::Set(Some(logs)),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
         Ok(Build::from(res))
     }
 
@@ -698,6 +716,16 @@ impl Project {
             .fetch_page(page)
             .await?;
         Ok(project.into_iter().map(Project::from).collect())
+    }
+
+    pub async fn get_by_name(name: String) -> Result<Project> {
+        let db = DbPool::get().await;
+        let project = project::Entity::find()
+            .filter(project::Column::Name.eq(name))
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Project not found"))?;
+        Ok(Project::from(project))
     }
 
     pub async fn list_all() -> Result<Vec<Project>> {

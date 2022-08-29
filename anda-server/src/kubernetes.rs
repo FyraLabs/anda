@@ -59,12 +59,12 @@ pub async fn dispatch_build(
 
     let mut cmd = vec!["anda".to_string(), "build".to_string()];
 
-    if let Some(scope) = scope {
-        cmd.extend(vec!["-p".to_string(), scope])
-    }
-
+    
     cmd.push(pack_url.clone());
     // TODO: add buildkit host here
+    if let Some(scope) = scope {
+        cmd.extend(vec!["-s".to_string(), scope])
+    }
 
     let spec = Job {
         metadata: ObjectMeta {
@@ -226,7 +226,7 @@ pub async fn get_logs(
             follow: true,
             //previous: true,
             //tail_lines: Some(100),
-            since_seconds: Some(1),
+            //since_seconds: Some(-1),
             
             ..Default::default()
         },
