@@ -1,13 +1,13 @@
 use anyhow::{Context, Result};
 use log::warn;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::PathBuf;
 
 use crate::error::ProjectError;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AndaConfig {
     pub project: BTreeMap<String, Project>,
 }
@@ -24,7 +24,7 @@ impl AndaConfig {
     }
 }
 
-#[derive(Deserialize, PartialEq, Eq)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
 pub struct Project {
     pub image: Option<String>,
     pub rpmbuild: Option<RpmBuild>,
@@ -35,7 +35,7 @@ pub struct Project {
     pub rollback: Option<Script>,
     pub env: Option<BTreeMap<String, String>>,
 }
-#[derive(Deserialize, PartialEq, Eq)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
 pub struct Script {
     pub stage: BTreeMap<String, Stage>,
 }
@@ -55,24 +55,24 @@ impl Script {
     }
 }
 
-#[derive(Deserialize, Eq, PartialEq, Hash, PartialOrd, Ord)]
+#[derive(Deserialize, Eq, PartialEq, Hash, PartialOrd, Ord, Serialize, Debug, Clone)]
 pub struct Stage {
     pub image: Option<String>,
     pub depends: Option<Vec<String>>,
     pub commands: Vec<String>,
 }
 
-#[derive(Deserialize, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Eq, PartialEq, Hash, PartialOrd, Ord, Serialize, Debug, Clone)]
 pub struct PreScript {
     pub commands: Vec<String>,
 }
 
-#[derive(Deserialize, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Eq, PartialEq, Hash, Serialize, Debug, Clone)]
 pub struct PostScript {
     pub commands: Vec<String>,
 }
 
-#[derive(Deserialize, PartialEq, Eq)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
 pub struct RpmBuild {
     /// Image to build RPMs with
     /// If not specified, the image of the project is used
@@ -93,19 +93,19 @@ pub struct RpmBuild {
 fn default_rpm_mode() -> RpmBuildMode {
     RpmBuildMode::Standard
 }
-#[derive(Deserialize, PartialEq, Eq)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum RpmBuildMode {
     Standard,
     Cargo,
 }
 
-#[derive(Deserialize, PartialEq, Eq)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
 pub struct Docker {
-    pub image: HashMap<String, DockerImage>, // tag, file
+    pub image: BTreeMap<String, DockerImage>, // tag, file
 }
 
-#[derive(Deserialize, PartialEq, Eq)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
 pub struct DockerImage {
     pub dockerfile: Option<PathBuf>,
     pub import: Option<PathBuf>,

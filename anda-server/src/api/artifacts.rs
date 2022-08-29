@@ -1,5 +1,5 @@
+use crate::backend::*;
 use crate::backend::{Artifact, S3Object};
-use crate::{backend::*};
 use log::debug;
 use rocket::fs::NamedFile;
 use rocket::http::Status;
@@ -15,7 +15,15 @@ use std::{collections::HashMap, path::PathBuf};
 use tokio::io::AsyncReadExt;
 
 pub(crate) fn routes() -> Vec<Route> {
-    routes![index, get, upload, search, get_raw_file, get_file]
+    routes![
+        index,
+        get,
+        upload,
+        search,
+        get_raw_file,
+        get_file,
+        new_with_metadata
+    ]
 }
 
 #[derive(FromForm)]
@@ -56,14 +64,13 @@ async fn get_raw_file(id: Uuid) -> Result<Redirect, Status> {
     // Gets file name, then redirects to the file
     let artifact = Artifact::get(id).await.map_err(|_| Status::NotFound)?;
     // redirect to the file
-    let redirect = Redirect::to(format!("/artifacts/{}/file/{}", artifact.id, artifact.path));
+    let redirect = Redirect::found(format!("/artifacts/{}/file/{}", artifact.id, artifact.path));
     Ok(redirect)
 }
 
 /// WIP: Directory Listing
 #[get("/<id>/file/<path..>", rank = 6)]
 async fn get_file(id: Uuid, path: PathBuf) -> Result<(ContentType, Vec<u8>), Status> {
-
     let artifact = Artifact::get(id).await.unwrap();
 
     let data = artifact.pull_bytes().await.unwrap();
@@ -90,13 +97,22 @@ async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
                 name.to_string(),
                 data.build_id,
             )
-                .upload_file(file.path().unwrap().to_path_buf())
-                .await
-                .expect("Failed to upload build file to S3"),
+            .upload_file(file.path().unwrap().to_path_buf())
+            .await
+            .expect("Failed to upload build file to S3"),
         );
     }
 
     Json(results)
+}
+
+#[post("/metadata", data = "<data>")]
+async fn new_with_metadata(data: Json<Artifact>) -> Json<Artifact> {
+    let mut artifact = data.into_inner();
+    artifact.id = Uuid::new_v4();
+
+    artifact.add().await.unwrap();
+    Json(artifact)
 }
 
 #[get("/search?<query>")]

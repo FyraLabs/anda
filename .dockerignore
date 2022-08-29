@@ -8,3 +8,4 @@ Dockerfile
 .env*
 !.env.project
 !.env.vault
+anda.hcl

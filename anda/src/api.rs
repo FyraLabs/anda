@@ -18,13 +18,48 @@ use tokio::io::AsyncReadExt;
 use std::{env, path::PathBuf};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+use crate::config::AndaConfig;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileArtifact {
+    pub e_tag: Option<String>,
+    pub filename: Option<String>,
+    pub size: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RpmArtifact {
+    pub name: String,
+    pub arch: String,
+    pub epoch: Option<String>,
+    pub version: String,
+    pub release: Option<String>,
+
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DockerArtifact {
+    pub name: String,
+    pub tag: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArtifactMeta {
+    pub art_type: String,
+    pub file: Option<FileArtifact>,
+    pub rpm: Option<RpmArtifact>,
+    pub docker: Option<DockerArtifact>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Artifact {
     pub id: Uuid,
     pub filename: String,
+    pub path: String,
     pub url: String,
     pub build_id: Uuid,
     pub timestamp: DateTime<Utc>,
+    pub metadata: Option<ArtifactMeta>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -51,6 +86,13 @@ pub struct Target {
     pub name: String,
     pub image: Option<String>,
     pub arch: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct BuildMeta {
+    pub scope: Option<String>,
+    pub source: Option<String>,
+    pub config_meta: Option<AndaConfig>,
 }
 
 #[derive(Clone)]
@@ -105,6 +147,24 @@ impl AndaBackend {
         //println!("{:?}", &resp.json().await?);
         let projects: Vec<Project> = resp.json().await?;
         Ok(projects)
+    }
+
+    pub async fn build_metadata(&self, build_id: Uuid, scope: Option<String>, source: Option<String>, config: &AndaConfig) -> Result<Build> {
+        let url = format!("{}/builds/{}/metadata", self.url, build_id);
+        let meta = BuildMeta {
+            scope,
+            source,
+            config_meta: Some(config.clone()),
+        };
+        let resp = self
+            .client
+            .post(&url)
+            .json(&meta)
+            .send()
+            .await?;
+        //println!("{:?}", &resp.json().await?);
+        let build: Build = resp.json().await?;
+        Ok(build)
     }
 
     pub async fn get_build(&self, id: Uuid) -> Result<Build> {
@@ -163,7 +223,7 @@ impl AndaBackend {
     pub async fn upload_build(&self, target_id: Uuid, packfile_path: &PathBuf, scope: Option<String>) -> Result<Build> {
         let url = format!("{}/builds", self.url);
 
-        debug!("{}", target_id);
+        //debug!("{}", target_id);
 
         let mut buf = Vec::new();
 
@@ -183,7 +243,7 @@ impl AndaBackend {
                     .to_owned(),
             );
 
-        println!("{:?}", file_part);
+        //println!("{:?}", file_part);
         let _target_part = multipart::Part::text(target_id.to_string());
         let mut form = Form::new()
             .percent_encode_noop()
@@ -248,6 +308,13 @@ impl AndaBackend {
         
         let target: Target = resp.json().await?;
         Ok(target)
+    }
+
+    pub async fn new_artifact_with_metadata(&self, artifact: Artifact) -> Result<Artifact> {
+        let url = format!("{}/artifacts/metadata", self.url);
+        let resp = self.client.post(&url).json(&artifact).send().await?;
+        let artifact: Artifact = resp.json().await?;
+        Ok(artifact)
     }
 
     pub fn stream_logs(&self, id: Uuid) -> EventSource {

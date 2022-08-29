@@ -2,9 +2,9 @@ FROM fedora:latest as builder
 
 WORKDIR /build
 
-COPY . .
-
 RUN dnf install -y rustc cargo openssl-devel
+
+COPY . .
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/build/target \

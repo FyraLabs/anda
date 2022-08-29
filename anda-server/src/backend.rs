@@ -218,10 +218,17 @@ pub struct RpmArtifact {
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DockerArtifact {
+    pub name: String,
+    pub tag: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArtifactMeta {
     pub art_type: String,
     pub file: Option<FileArtifact>,
     pub rpm: Option<RpmArtifact>,
+    pub docker: Option<DockerArtifact>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -417,6 +424,7 @@ impl S3Object for Artifact {
             art_type: "file".to_string(),
             file: Some(file_meta),
             rpm: rpm_meta,
+            docker: None,
         });
 
         self.add().await?;
@@ -465,7 +473,15 @@ pub struct Build {
     pub build_type: String,
     #[serde(skip_serializing)]
     pub logs: Option<String>,
-    pub metadata: Option<serde_json::Value>
+    pub metadata: Option<BuildMeta>
+}
+
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BuildMeta {
+    pub scope: Option<String>,
+    pub source: Option<String>,
+    pub config_meta: Option<serde_json::Value>,
 }
 
 impl From<build::Model> for Build {
@@ -479,7 +495,9 @@ impl From<build::Model> for Build {
             compose_id: model.compose_id,
             build_type: model.build_type,
             logs: model.logs,
-            metadata: model.metadata,
+            metadata: model.metadata.map(|m| {
+                serde_json::from_value(m).unwrap()
+            }),
         }
     }
 }
@@ -546,6 +564,17 @@ impl Build {
         let build = build::ActiveModel {
             id: ActiveValue::Set(self.id),
             build_type: ActiveValue::Set(build_type.to_string()),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Ok(Build::from(res))
+    }
+
+    pub async fn update_metadata(&self, metadata: BuildMeta) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            metadata: ActiveValue::Set(Some(serde_json::to_value(&metadata).unwrap())),
             ..Default::default()
         };
         let res = build::ActiveModel::update(build, db).await?;

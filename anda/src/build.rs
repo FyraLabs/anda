@@ -3,6 +3,7 @@ use buildkit_llb::{
     prelude::{FileSystem, LayerPath, MultiOwnedOutput, OperationBuilder},
     utils::{OperationOutput, OutputIdx},
 };
+use chrono::Utc;
 use execute::Execute;
 use futures::FutureExt;
 use log::{debug, error, info};
@@ -11,20 +12,25 @@ use owo_colors::OwoColorize;
 use reqwest::{multipart, ClientBuilder};
 use serde::Serialize;
 use solvent::DepGraph;
+use uuid::Uuid;
 use std::{
     collections::{BTreeMap, HashMap},
     env,
     path::PathBuf,
-    process::ExitStatus,
+    process::{ExitStatus, Stdio},
 };
-use tokio::{fs::File, io::AsyncReadExt};
+use tokio::{
+    fs::File,
+    io::{AsyncReadExt, AsyncWriteExt},
+};
 use walkdir::WalkDir;
 
 use crate::{
-    config::Project,
+    api::{AndaBackend, Artifact, ArtifactMeta, DockerArtifact},
+    config::{DockerImage, Project},
     container::{Buildkit, BuildkitOptions},
     error::{BuilderError, ProjectError},
-    util,
+    util, BuildkitLog,
 };
 
 trait ExitOkPolyfill {
@@ -306,7 +312,7 @@ impl ProjectBuilder {
     ) -> Result<OperationOutput<'static>, BuilderError> {
         // load config
         let config = crate::config::load_config(&builder_opts.config_location)?;
-/*         if !stage_name.eq("") {
+        /*         if !stage_name.eq("") {
             eprintln!(
                 " -> {}: `{}`",
                 "Starting script stage".yellow(),
@@ -481,49 +487,153 @@ impl ProjectBuilder {
 
     pub async fn build_docker(
         &self,
+        tag: &String,
+        image: &DockerImage,
+        //project: &Project,
+        opts: &BuilderOptions,
+    ) -> Result<(), BuilderError> {
+        let version = image
+            .version
+            .as_ref()
+            .map(|s| format!(":{}", s))
+            .unwrap_or_else(String::new);
+
+        let tag_string = format!("{}{}", tag, version);
+
+        eprintln!(
+            " -> {} `{}`",
+            "Building docker image".yellow(),
+            tag_string.white().italic()
+        );
+
+        let mut extra_args = Vec::new();
+        match opts.buildkit_log {
+            BuildkitLog::Tty => {
+                extra_args.push("--progress=tty");
+            }
+            BuildkitLog::Auto => {
+                extra_args.push("--progress=auto");
+            }
+            BuildkitLog::Plain => {
+                extra_args.push("--progress=plain");
+            }
+        }
+        let buildkit_host = if let Ok(buildkit_host) = env::var("BUILDKIT_HOST") {
+            buildkit_host
+        } else {
+            "docker-container://anda-buildkitd".to_string()
+        };
+
+        let mut cmd = tokio::process::Command::new("buildctl");
+        let mut cmd = cmd
+            .arg("build")
+            .arg("--frontend")
+            .arg("dockerfile.v0")
+            .args(&[
+                "--local",
+                &format!("context={}", image.workdir.to_str().unwrap()),
+            ])
+            .args(&[
+                "--local",
+                &format!("dockerfile={}", image.workdir.to_str().unwrap()),
+            ])
+            .args(&[
+                "--opt",
+                &format!(
+                    "filename={}",
+                    image
+                        .dockerfile
+                        .as_ref()
+                        .unwrap_or(&PathBuf::from("Dockerfile"))
+                        .to_str()
+                        .unwrap()
+                ),
+            ])
+            .args(&extra_args)
+            .current_dir(&self.root)
+            .env("BUILDKIT_HOST", buildkit_host);
+
+        // check if build id is set
+        if env::var("ANDA_BUILD_ID").is_ok() {
+            cmd = cmd.args(&[
+                "--output",
+                &format!("type=image,name={},push=true,registry.insecure=true", tag_string),
+            ]);
+            let mut cmd = cmd.spawn()?;
+            cmd.wait().await?;
+
+            // submit new artifact to the server
+            let backend = AndaBackend::new(None);
+            let artifact = Artifact {
+                build_id: Uuid::parse_str(&env::var("ANDA_BUILD_ID").unwrap()).unwrap(),
+                filename: tag_string.clone(),
+                id: Uuid::nil(),
+                metadata: Some(
+                    ArtifactMeta {
+                        art_type: "docker".to_string(),
+                        docker: Some(DockerArtifact {
+                            name: tag.to_string(),
+                            tag: version.to_string(),
+                        }),
+                        file: None,
+                        rpm: None,
+                    }
+                ),
+                path: tag_string.clone(),
+                timestamp: Utc::now(),
+                url: tag_string.clone(),
+            };
+            backend.new_artifact_with_metadata(artifact).await?;
+
+        } else {
+            cmd = cmd
+                .stdout(Stdio::piped())
+                .args(&["--output", &format!("type=docker,name={}", tag_string)]);
+            // pipe stdout into var
+            let mut output = cmd.spawn()?;
+            let mut image_data = Vec::new();
+            let _image = output
+                .stdout
+                .take()
+                .unwrap()
+                .read_to_end(&mut image_data)
+                .await?;
+            // docker load the image
+            eprintln!(" -> {}", "Loading Docker image".yellow());
+            let mut docker = tokio::process::Command::new("docker")
+                .arg("load")
+                .stdin(Stdio::piped())
+                .current_dir(&self.root)
+                .spawn()?;
+            //let mut docker = docker.spawn()?;
+            docker
+                .stdin
+                .as_mut()
+                .unwrap()
+                .write_all(&image_data)
+                .await?;
+            docker.wait().await?;
+        }
+        Ok(())
+    }
+
+    pub async fn build_docker_all(
+        &self,
         project: &Project,
         opts: &BuilderOptions,
     ) -> Result<(), BuilderError> {
         eprintln!(":: {}", "Building docker image...".yellow());
-        todo!();
+        //todo!();
         // TODO: Rewrite this with BuildKit in mind
 
-        let mut tasks = Vec::new();
+        // let mut tasks = Vec::new();
 
         for (tag, image) in &project.docker.as_ref().unwrap().image {
-            let task = {
-                let version = image
-                    .version
-                    .as_ref()
-                    .map(|s| format!(":{}", s))
-                    .unwrap_or_else(String::new);
-
-                let tag_string = format!("{}{}", tag, version);
-
-                let command = format!(
-                    "docker build -t {} {}",
-                    tag_string,
-                    &image.workdir.to_str().unwrap()
-                );
-                eprintln!("$ {}", command.black());
-                eprintln!(
-                    " -> {} `{}`",
-                    "Building docker image".yellow(),
-                    tag_string.white().italic().to_string().to_owned()
-                );
-
-                tokio::process::Command::new("bash")
-                    .arg("-c")
-                    .arg(command)
-                    .current_dir(&self.root)
-                    .status()
-            };
-
-            tasks.push(task.boxed());
+            self.build_docker(tag, image, opts).await?;
         }
-        for task in tasks {
-            task.await?;
-        }
+        // for task in tasks {
+        //     task.await?;
+        // }
         Ok(())
     }
 
@@ -551,7 +661,7 @@ impl ProjectBuilder {
             tasks.push(self.build_rpm(project, opts).boxed());
         }
         if project.docker.is_some() {
-            tasks.push(self.build_docker(project, opts).boxed());
+            tasks.push(self.build_docker_all(project, opts).boxed());
         }
         for task in tasks {
             task.await?;
@@ -574,12 +684,24 @@ impl ProjectBuilder {
         let re = regex::Regex::new(r"(.+)::([^:]+)(:(.+))?")
             .map_err(|e| BuilderError::Other(format!("Can't make regex: {}", e)))?;
         let config = crate::config::load_config(&opts.config_location)?;
+        if env::var("ANDA_BUILD_ID").is_ok() {
+            let backend = AndaBackend::new(None);
+            let build_id = env::var("ANDA_BUILD_ID").unwrap();
+            backend
+                .build_metadata(
+                    uuid::Uuid::parse_str(&build_id).unwrap(),
+                    Some(query.to_string()),
+                    None,
+                    &config,
+                )
+                .await?;
+        }
 
         if re.captures(query).is_none() {
             eprintln!("Assuming query is just the project name. Passing to standard builder");
             return self.build(vec![query.to_string()], opts).await;
         }
-        
+
         for cap in re.captures_iter(query) {
             debug!("capture: {:?}", cap);
             let project = &cap[1];
@@ -617,8 +739,13 @@ impl ProjectBuilder {
                             .await?;
                     }
                     "docker" => {
-                        project.docker.as_ref().ok_or_else(close)?;
-                        self.build_docker(project, opts).await?;
+                        let docker = project.docker.as_ref().ok_or_else(close)?;
+                        let tag = stage.to_string();
+                        // eprintln!("{:?}", cap);
+                        eprintln!("{:?}", docker);
+                        self.build_docker(&tag, docker.image.get(&tag).unwrap(), opts).await?;
+                        // project.docker.as_ref().ok_or_else(close)?;
+                        // self.build_docker_all(project, opts).await?;
                     }
                     _ => {}
                 }
@@ -626,6 +753,12 @@ impl ProjectBuilder {
             // return Err(BuilderError::Command("Invalid argument passed".to_string()));
         }
         if env::var("ANDA_BUILD_ID").is_ok() {
+            if PathBuf::from("anda-build").exists() {
+                println!("anda-build folder exists");
+            } else {
+                println!("anda-build folder doesn't exist");
+                std::fs::create_dir("anda-build").unwrap();
+            }
             eprintln!("uploading artifacts...");
             self.push_folder(PathBuf::from(output_path.clone())).await?;
         };
@@ -640,7 +773,18 @@ impl ProjectBuilder {
     ) -> Result<(), BuilderError> {
         let config = crate::config::load_config(&opts.config_location)?;
         let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
-
+        if env::var("ANDA_BUILD_ID").is_ok() {
+            let backend = AndaBackend::new(None);
+            let build_id = env::var("ANDA_BUILD_ID").unwrap();
+            backend
+                .build_metadata(
+                    uuid::Uuid::parse_str(&build_id).unwrap(),
+                    Some(projects.join(",")),
+                    None,
+                    &config,
+                )
+                .await?;
+        }
         if !projects.is_empty() {
             for proj in projects {
                 let project = config

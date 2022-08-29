@@ -11,7 +11,7 @@ cli:
     cargo run --bin anda
 
 web:
-    cd anda-frontend && pnpm run dev
+    cd anda-frontend && pnpm run dev --host
 
 
 build-web:

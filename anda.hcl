@@ -63,18 +63,26 @@ project "anda" {
         }
     }
 
-    /* docker {
-        image "anda/anda" {
+    docker {
+        image "local-registry:5050/anda/anda" {
             tag_latest = true
-            version = "$COMMIT_ID"
+            version = "latest"
             workdir = "."
+            dockerfile = "Dockerfile"
+        }
+        image "172.16.5.4:5050/anda/anda-client" {
+            tag_latest = true
+            version = "latest"
+            workdir = "."
+            dockerfile = "client.dockerfile"
         }
         image "test" {
             tag_latest = true
             version = "$COMMIT_ID"
             workdir = "."
+            dockerfile = "Dockerfile"
         }
-    } */
+    }
 
     rollback {
         stage "build" {

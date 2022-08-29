@@ -168,7 +168,7 @@ enum Command {
 
         /// Image to build with
         #[clap(short, long, value_name = "IMAGE")]
-        image: Option<String>
+        image: Option<String>,
     },
 
     /// Sets up buildkit using docker
@@ -205,7 +205,23 @@ async fn main() -> Result<()> {
             };
 
             if let Ok(url) = reqwest::Url::parse(&path) {
-                info!("path is a URL, calling downloader");
+                if url.scheme() == "git" {
+                    eprintln!("path is a git url, calling packer");
+                    let packfile = ProjectPacker::pack_git(path.strip_prefix("git:").unwrap())
+                        .await
+                        .map_err(|e| {
+                            error!("{}", e);
+                            anyhow!("{}", e)
+                        })?;
+                    ProjectPacker::unpack_and_build(&packfile, workdir, &opts, projects, scope)
+                        .await
+                        .map_err(|e| {
+                            error!("{}", e);
+                            anyhow!("{}", e)
+                        })?;
+                    return Ok(());
+                }
+
                 ProjectPacker::download_and_call_unpack_build(
                     url.as_str(),
                     workdir,
@@ -225,7 +241,7 @@ async fn main() -> Result<()> {
 
             // check if path is file
             if path.is_file() {
-                info!("path is a file, calling builder");
+                eprintln!("path is a file, calling builder");
 
                 if path
                     .file_name()
@@ -276,12 +292,8 @@ async fn main() -> Result<()> {
 
             let path_str = path.to_str().unwrap();
 
-            if path_str.starts_with("http") && path_str.ends_with(".git")
-                || path_str.starts_with("git://") && path_str.ends_with(".git")
-                || path_str.starts_with("ssh") && path_str.ends_with(".git")
-                || path_str.starts_with("git@") && path_str.ends_with(".git")
-            {
-                info!("path is a git url, calling packer");
+            if path_str.starts_with("git:") {
+                eprintln!("path is a git url, calling packer");
                 ProjectPacker::pack_git(path_str).await.map_err(|e| {
                     error!("{}", e);
                     anyhow!("{}", e)
@@ -344,22 +356,16 @@ async fn main() -> Result<()> {
 
                 // try to parse UUID
                 if let Ok(uuid) = uuid::Uuid::parse_str(&project) {
-                    backend
-                        .tag_build_project(b.id, uuid)
-                        .await
-                        .map_err(|e| {
-                            error!("{}", e);
-                            anyhow!("{}", e)
-                        })?;
+                    backend.tag_build_project(b.id, uuid).await.map_err(|e| {
+                        error!("{}", e);
+                        anyhow!("{}", e)
+                    })?;
                 } else {
                     // try and get project by name
-                    let project = backend
-                        .get_project_by_name(project)
-                        .await
-                        .map_err(|e| {
-                            error!("{}", e);
-                            anyhow!("{}", e)
-                        })?;
+                    let project = backend.get_project_by_name(project).await.map_err(|e| {
+                        error!("{}", e);
+                        anyhow!("{}", e)
+                    })?;
 
                     // tag the build with the project
                     backend
@@ -371,7 +377,7 @@ async fn main() -> Result<()> {
                         })?;
                 }
             }
-            
+
             // print out endpoint and link to build
             println!("View build status: {}/app/build_info/{}", backend.url, b.id);
 
@@ -388,18 +394,14 @@ async fn main() -> Result<()> {
                             } else {
                                 println!("{}", msg.data);
                             }
-                        },
-                        Err(err) => {
-                            match err {
-                                reqwest_eventsource::Error::StreamEnded => {
-                                    es.close()
-                                }
-                                _ => {
-                                    println!("Error: {}", err);
-                                    es.close();
-                                }
-                            }
                         }
+                        Err(err) => match err {
+                            reqwest_eventsource::Error::StreamEnded => es.close(),
+                            _ => {
+                                println!("Error: {}", err);
+                                es.close();
+                            }
+                        },
                     }
                 }
             }
@@ -430,7 +432,6 @@ async fn main() -> Result<()> {
             }
         }
         Command::WatchLogs { build_id } => {
-
             // try and parse the uuid
             if let Err(e) = uuid::Uuid::parse_str(&build_id) {
                 anyhow::bail!("invalid build id: {}", e);
@@ -439,30 +440,26 @@ async fn main() -> Result<()> {
             let build_id = uuid::Uuid::parse_str(&build_id).unwrap();
 
             let api = api::AndaBackend::new(None);
-                let mut es = api.stream_logs(build_id);
-                while let Some(e) = es.next().await {
-                    match e {
-                        Ok(Event::Open) => eprintln!("=== Starting log stream ==="),
-                        Ok(Event::Message(msg)) => {
-                            // check for event type
-                            if msg.event == *"end" {
-                                eprintln!("=== Log stream ended ===");
-                            } else {
-                                println!("{}", msg.data);
-                            }
-                        },
-                        Err(err) => {
-                            match err {
-                                reqwest_eventsource::Error::StreamEnded => {
-                                    es.close()
-                                }
-                                _ => {
-                                    println!("Error: {}", err);
-                                    es.close();
-                                }
-                            }
+            let mut es = api.stream_logs(build_id);
+            while let Some(e) = es.next().await {
+                match e {
+                    Ok(Event::Open) => eprintln!("=== Starting log stream ==="),
+                    Ok(Event::Message(msg)) => {
+                        // check for event type
+                        if msg.event == *"end" {
+                            eprintln!("=== Log stream ended ===");
+                        } else {
+                            println!("{}", msg.data);
                         }
                     }
+                    Err(err) => match err {
+                        reqwest_eventsource::Error::StreamEnded => es.close(),
+                        _ => {
+                            println!("Error: {}", err);
+                            es.close();
+                        }
+                    },
+                }
             }
         }
         Command::NewTarget { name, arch, image } => {

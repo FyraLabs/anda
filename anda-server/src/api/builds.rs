@@ -1,5 +1,5 @@
 use crate::{
-    backend::{AndaBackend, Build, BuildCache, BuildStatus, S3Object, Target, Artifact},
+    backend::{AndaBackend, Build, BuildCache, BuildStatus, S3Object, Target, Artifact, BuildMeta},
     tasks::{full_logs, format_stream, format_actual_stream, full_logs_db},
 };
 
@@ -26,6 +26,7 @@ pub(crate) fn routes() -> Vec<Route> {
         tag_project,
         get_log,
         get_artifacts,
+        update_metadata,
     ]
 }
 
@@ -142,8 +143,6 @@ async fn update_status(data: Form<BuildUpdateStatus>) -> Json<Build> {
     Json(build.unwrap())
 }
 
-// TODO: Tag target?
-
 #[derive(FromForm)]
 struct BuildTag {
     id: Uuid,
@@ -208,4 +207,14 @@ async fn get_log(id: Uuid) -> Result<EventStream![], Status> {
 #[get("/<id>/artifacts", rank = 5)]
 async fn get_artifacts(id: Uuid) -> Option<Json<Vec<Artifact>>> {
     Artifact::get_by_build_id(id).await.map(Json).ok()
+}
+
+#[post("/<id>/metadata", data = "<data>")]
+async fn update_metadata(id: Uuid, data: Json<BuildMeta>) -> Json<Build> {
+    let build = Build::get(id)
+        .await
+        .expect("Failed to update build metadata")
+        .update_metadata(data.0)
+        .await;
+    Json(build.unwrap())
 }

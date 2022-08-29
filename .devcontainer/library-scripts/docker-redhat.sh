@@ -177,7 +177,7 @@ dockerd_start="$(cat << 'INNEREOF'
     if [ $? -eq 0 ]
     then
         echo "Setting dockerd Azure DNS."
-        CUSTOMDNS="--dns 168.63.129.16"
+        CUSTOMDNS="--dns 1.1.1.1"
     else
         echo "Not setting dockerd DNS manually."
         CUSTOMDNS=""
