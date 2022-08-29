@@ -573,7 +573,7 @@ impl ProjectBuilder {
                         art_type: "docker".to_string(),
                         docker: Some(DockerArtifact {
                             name: tag.to_string(),
-                            tag: version.to_string(),
+                            tag: version.to_string().strip_prefix(':').unwrap().to_string(),
                         }),
                         file: None,
                         rpm: None,
@@ -742,7 +742,7 @@ impl ProjectBuilder {
                         let docker = project.docker.as_ref().ok_or_else(close)?;
                         let tag = stage.to_string();
                         // eprintln!("{:?}", cap);
-                        eprintln!("{:?}", docker);
+                        // eprintln!("{:?}", docker);
                         self.build_docker(&tag, docker.image.get(&tag).unwrap(), opts).await?;
                         // project.docker.as_ref().ok_or_else(close)?;
                         // self.build_docker_all(project, opts).await?;
