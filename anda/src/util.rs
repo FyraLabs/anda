@@ -111,10 +111,10 @@ impl ProjectPacker {
         std::env::set_current_dir(path).unwrap();
 
         let pb = ProgressBar::new(file_list.len() as u64);
-        pb.set_style(ProgressStyle::with_template(
-            "{pos}/{len} Packing [{bar:30}] {msg}"
-        ).unwrap()
-        .progress_chars("=> ")
+        pb.set_style(
+            ProgressStyle::with_template("{pos}/{len} Packing [{bar:30}] {msg}")
+                .unwrap()
+                .progress_chars("=> "),
         );
 
         //tar.append_dir_all(".", path)?;
@@ -259,7 +259,6 @@ impl ProjectPacker {
         // print current dir
         debug!("{}", std::env::current_dir().unwrap().display());
         // execute anda build internally
-
 
         let builder = crate::build::ProjectBuilder::new(workdir);
         if let Some(scope) = scope {

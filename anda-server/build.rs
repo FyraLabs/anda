@@ -1,4 +1,4 @@
-use std::{fs, process::Command, env};
+use std::{env, fs, process::Command};
 // use std::env;
 // use std::path::PathBuf;
 use anyhow::Result;
@@ -7,9 +7,7 @@ use shells::sh;
 use in_container::in_container;
 
 fn pnpm() -> Result<()> {
-    Command::new("pnpm")
-    .arg("install")
-    .status()?;
+    Command::new("pnpm").arg("install").status()?;
     Ok(())
 }
 
@@ -34,13 +32,13 @@ fn main() {
         }
         //panic!("pnpm is not installed, and not in a build container! install pnpm and try again");
     }
-    
-    
+
     Command::new("pnpm")
         .arg("build")
         .arg("--outDir")
         .arg(format!("{}/web", env::var("OUT_DIR").unwrap()))
-        .status().unwrap();
+        .status()
+        .unwrap();
     std::env::set_current_dir(old_pwd).unwrap();
 
     // if symlink already exists
@@ -64,7 +62,6 @@ fn main() {
     if let Ok(symlink_path) = symlink {
         if symlink_path.to_str().unwrap() == "anda-frontend/dist" {
             println!("symlink already exists");
-            
         } else {
             std::os::unix::fs::symlink("anda-frontend/dist", format!("{}/dist", out_dir)).unwrap();
         }

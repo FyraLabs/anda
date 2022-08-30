@@ -863,8 +863,6 @@ impl From<compose::Model> for Compose {
     }
 }*/
 
-
-
 #[async_trait]
 impl DatabaseEntity for Compose {
     async fn add(&self) -> Result<Compose> {
@@ -971,7 +969,6 @@ impl DatabaseEntity for Compose {
 //     }
 // }
 
-
 impl From<target::Model> for Target {
     fn from(model: target::Model) -> Self {
         Target {
@@ -982,7 +979,6 @@ impl From<target::Model> for Target {
         }
     }
 }
-
 
 #[async_trait]
 impl DatabaseEntity for Target {
@@ -1039,16 +1035,13 @@ impl DatabaseEntity for Target {
     }
 }
 
-
 #[async_trait]
 pub trait TargetDb {
     async fn delete(&self) -> Result<()>;
     async fn get_by_name(name: String) -> Result<Target>;
-
 }
 #[async_trait]
 impl TargetDb for Target {
-
     async fn delete(&self) -> Result<()> {
         let db = DbPool::get().await;
         // check if target exists

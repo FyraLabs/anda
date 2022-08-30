@@ -47,4 +47,3 @@ impl std::fmt::Display for ProjectError {
         }
     }
 }
-

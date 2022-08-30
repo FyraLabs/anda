@@ -7,7 +7,15 @@ use rocket::Route;
 use serde::{Deserialize, Serialize};
 
 pub(crate) fn routes() -> Vec<Route> {
-    routes![index, get, get_by_name, new, get_artifacts, set_summary, delete]
+    routes![
+        index,
+        get,
+        get_by_name,
+        new,
+        get_artifacts,
+        set_summary,
+        delete
+    ]
 }
 
 #[get("/?<limit>&<page>&<all>")]
@@ -63,11 +71,13 @@ async fn new(data: Form<ProjectNew>) -> Result<Json<Project>, Status> {
     Ok(Json(project))
 }
 
-
 #[delete("/<id>")]
 async fn delete(id: Uuid) -> Result<(), Status> {
     let project = Project::get(id).await.map_err(|_| Status::NotFound)?;
-    project.delete().await.map_err(|_| Status::InternalServerError)?;
+    project
+        .delete()
+        .await
+        .map_err(|_| Status::InternalServerError)?;
     Ok(())
 }
 

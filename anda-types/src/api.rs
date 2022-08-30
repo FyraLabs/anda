@@ -1,9 +1,8 @@
-
 use uuid::Uuid;
 
+use chrono::{offset::Utc, DateTime};
 use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};
-use chrono::{offset::Utc, DateTime};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Serialize, Deserialize)]
 pub enum BuildStatus {
     Pending = 0,
@@ -49,9 +48,7 @@ pub struct RpmArtifact {
     pub epoch: Option<String>,
     pub version: String,
     pub release: Option<String>,
-
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DockerArtifact {
@@ -78,7 +75,6 @@ pub struct Artifact {
     pub metadata: Option<ArtifactMeta>,
 }
 
-
 impl Artifact {
     pub fn new(filename: String, path: String, build_id: Uuid) -> Self {
         Self {
@@ -88,7 +84,7 @@ impl Artifact {
             build_id,
             timestamp: chrono::Utc::now(),
             url: String::new(),
-            metadata: None
+            metadata: None,
         }
     }
 }
@@ -104,7 +100,7 @@ pub struct Build {
     pub build_type: String,
     #[serde(skip_serializing)]
     pub logs: Option<String>,
-    pub metadata: Option<BuildMeta>
+    pub metadata: Option<BuildMeta>,
 }
 
 impl Build {
@@ -140,7 +136,7 @@ pub struct Project {
     pub id: Uuid,
     pub name: String,
     pub description: Option<String>,
-    pub summary: Option<String>
+    pub summary: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

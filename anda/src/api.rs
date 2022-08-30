@@ -6,7 +6,6 @@
 
 use anyhow::{Ok, Result};
 
-
 use reqwest::{
     multipart::{self, Form},
     Client,
@@ -18,8 +17,8 @@ use tokio::io::AsyncReadExt;
 use std::{env, path::PathBuf};
 use uuid::Uuid;
 
-use anda_types::config::AndaConfig;
 pub use anda_types::api::*;
+use anda_types::config::AndaConfig;
 
 #[derive(Clone)]
 pub(crate) struct AndaBackend {
@@ -75,19 +74,20 @@ impl AndaBackend {
         Ok(projects)
     }
 
-    pub async fn build_metadata(&self, build_id: Uuid, scope: Option<String>, source: Option<String>, config: &AndaConfig) -> Result<Build> {
+    pub async fn build_metadata(
+        &self,
+        build_id: Uuid,
+        scope: Option<String>,
+        source: Option<String>,
+        config: &AndaConfig,
+    ) -> Result<Build> {
         let url = format!("{}/builds/{}/metadata", self.url, build_id);
         let meta = BuildMeta {
             scope,
             source,
             config_meta: Some(config.clone()),
         };
-        let resp = self
-            .client
-            .post(&url)
-            .json(&meta)
-            .send()
-            .await?;
+        let resp = self.client.post(&url).json(&meta).send().await?;
         //println!("{:?}", &resp.json().await?);
         let build: Build = resp.json().await?;
         Ok(build)
@@ -146,7 +146,12 @@ impl AndaBackend {
         Ok(project)
     }
 
-    pub async fn upload_build(&self, target_id: Uuid, packfile_path: &PathBuf, scope: Option<String>) -> Result<Build> {
+    pub async fn upload_build(
+        &self,
+        target_id: Uuid,
+        packfile_path: &PathBuf,
+        scope: Option<String>,
+    ) -> Result<Build> {
         let url = format!("{}/builds", self.url);
 
         //debug!("{}", target_id);
@@ -190,7 +195,6 @@ impl AndaBackend {
         Ok(build)
     }
 
-
     pub async fn tag_build_project(&self, build_id: Uuid, project_id: Uuid) -> Result<Build> {
         let url = format!("{}/builds/tag_project", self.url);
         let form = Form::new()
@@ -221,7 +225,12 @@ impl AndaBackend {
         Ok(target)
     }
 
-    pub async fn new_target(&self, name: &str, arch: &str, image: Option<String>) -> Result<Target> {
+    pub async fn new_target(
+        &self,
+        name: &str,
+        arch: &str,
+        image: Option<String>,
+    ) -> Result<Target> {
         let url = format!("{}/targets/", self.url);
         let target = Target {
             id: Uuid::nil(),
@@ -231,7 +240,7 @@ impl AndaBackend {
         };
 
         let resp = self.client.post(&url).json(&target).send().await?;
-        
+
         let target: Target = resp.json().await?;
         Ok(target)
     }

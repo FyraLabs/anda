@@ -1,11 +1,11 @@
 use anyhow::Result;
 use aws_sdk_s3::{
-    output::{PutObjectOutput, ListObjectsOutput, GetObjectOutput},
+    output::{GetObjectOutput, ListObjectsOutput, PutObjectOutput},
     types::ByteStream,
     {Client, Config, Credentials, Endpoint, Region},
 };
 use lazy_static::lazy_static;
-use std::{env, path::PathBuf, collections::HashMap};
+use std::{collections::HashMap, env, path::PathBuf};
 use tokio::{fs::File, io::AsyncReadExt};
 use walkdir::WalkDir;
 
@@ -41,7 +41,12 @@ impl S3Artifact {
         })
     }
 
-    pub async fn upload_file(&self, dest: &str, src: PathBuf, metadata: HashMap<String, String>) -> Result<PutObjectOutput> {
+    pub async fn upload_file(
+        &self,
+        dest: &str,
+        src: PathBuf,
+        metadata: HashMap<String, String>,
+    ) -> Result<PutObjectOutput> {
         // convert path to absoluate path
         let file_path = src.canonicalize()?;
         println!("Uploading {} to {}", file_path.display(), dest);
@@ -65,9 +70,7 @@ impl S3Artifact {
         for (key, value) in metadata.iter() {
             ret = ret.metadata(key, value);
         }
-        let ret = ret
-            .send()
-            .await?;
+        let ret = ret.send().await?;
         // self.connection.put_object(path, &bytes).await?;
         Ok(ret)
     }
@@ -85,9 +88,10 @@ impl S3Artifact {
                     dest,
                     file_path.strip_prefix(&src).unwrap().display()
                 );
-                self.upload_file(&real_path, file_path, HashMap::new()).await?;
+                self.upload_file(&real_path, file_path, HashMap::new())
+                    .await?;
             }
-        };
+        }
         Ok(())
     }
 
@@ -167,7 +171,11 @@ mod test_s3 {
     async fn test_s3_upload() {
         let artifact = S3Artifact::new().unwrap();
         artifact
-            .upload_file("/test/cargo.toml", PathBuf::from("./Cargo.toml"), HashMap::new())
+            .upload_file(
+                "/test/cargo.toml",
+                PathBuf::from("./Cargo.toml"),
+                HashMap::new(),
+            )
             .await
             .unwrap();
     }

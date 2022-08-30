@@ -4,10 +4,10 @@
 
 use async_once_cell::OnceCell;
 use dotenv::dotenv;
+use migration::{Migrator, MigratorTrait};
 use sea_orm::*;
 use sea_orm_rocket::{rocket::figment::Figment, Database};
 use std::env;
-use migration::{Migrator, MigratorTrait};
 
 pub struct DbPool {
     pub conn: sea_orm::DatabaseConnection,

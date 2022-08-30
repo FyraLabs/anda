@@ -8,8 +8,6 @@ use std::io::Write;
 
 use tabwriter::TabWriter;
 
-
-
 #[derive(Subcommand)]
 pub enum BackendCommand {
     /// List Andaman Artifacts
@@ -79,7 +77,7 @@ pub(crate) async fn match_subcmd(cmd: &BackendCommand) -> Result<()> {
 
 pub async fn buildinfo(build_id: Uuid) -> Result<()> {
     let build = api::AndaBackend::new(None).get_build(build_id).await?;
-    
+
     println!("Build ID: {}", build.id.simple());
     println!("Status: {}", build.status);
     println!("Build Type: {}", build.build_type);
@@ -91,7 +89,6 @@ pub async fn buildinfo(build_id: Uuid) -> Result<()> {
         println!("Compose ID: {}", id.simple());
     }
 
-    
     //println!("{}", serde_json::to_string_pretty(&build)?);
     Ok(())
 }

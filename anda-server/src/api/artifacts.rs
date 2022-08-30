@@ -56,13 +56,18 @@ async fn index(
 #[get("/<id>", rank = 5)]
 async fn get(id: Uuid) -> Option<Json<Artifact>> {
     //NOTE: ID is a path string to the file, so we probably need to see if Rocket can handle escaping slashes
-    <anda_types::Artifact as crate::backend::DatabaseEntity>::get(id).await.ok().map(Json)
+    <anda_types::Artifact as crate::backend::DatabaseEntity>::get(id)
+        .await
+        .ok()
+        .map(Json)
 }
 
 #[get("/<id>/file", rank = 5)]
 async fn get_raw_file(id: Uuid) -> Result<Redirect, Status> {
     // Gets file name, then redirects to the file
-    let artifact = <anda_types::Artifact as crate::backend::DatabaseEntity>::get(id).await.map_err(|_| Status::NotFound)?;
+    let artifact = <anda_types::Artifact as crate::backend::DatabaseEntity>::get(id)
+        .await
+        .map_err(|_| Status::NotFound)?;
     // redirect to the file
     let redirect = Redirect::found(format!("/artifacts/{}/file/{}", artifact.id, artifact.path));
     Ok(redirect)

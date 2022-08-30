@@ -1,6 +1,6 @@
 //! Andaman client error handler
-use std::fmt::{Display, Formatter};
 use anda_types::error::*;
+use std::fmt::{Display, Formatter};
 // derive macro that implements the From<anyhow::Error> trait
 
 // pub enum ProjectError {

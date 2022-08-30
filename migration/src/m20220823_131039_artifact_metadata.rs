@@ -1,5 +1,5 @@
-use sea_orm_migration::prelude::*;
 use sea_orm_migration::prelude::MigrationTrait;
+use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -15,7 +15,8 @@ impl MigrationTrait for Migration {
                     .table(Alias::new("artifact"))
                     .add_column(ColumnDef::new(Alias::new("metadata")).json_binary())
                     .to_owned(),
-            ).await
+            )
+            .await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
@@ -27,6 +28,7 @@ impl MigrationTrait for Migration {
                     .table(Alias::new("artifact"))
                     .drop_column(Alias::new("metadata"))
                     .to_owned(),
-            ).await
+            )
+            .await
     }
 }

@@ -1,11 +1,9 @@
 use anyhow::{anyhow, Result};
-use buildkit_llb::{
-    utils::{OperationOutput},
-};
+use buildkit_llb::utils::OperationOutput;
 use chrono::Utc;
 use execute::Execute;
 use futures::FutureExt;
-use log::{debug};
+use log::debug;
 use mime_guess::MimeGuess;
 use owo_colors::OwoColorize;
 use reqwest::{multipart, ClientBuilder};
@@ -29,9 +27,10 @@ use anda_types::{config::Project, DockerImage};
 use anda_types::api::*;
 
 use crate::{
+    api::AndaBackend,
     container::{Buildkit, BuildkitOptions},
     error::BuilderError,
-    util, BuildkitLog, api::AndaBackend,
+    util, BuildkitLog,
 };
 
 use anda_types::error::ProjectError;

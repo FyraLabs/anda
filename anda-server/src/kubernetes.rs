@@ -59,7 +59,6 @@ pub async fn dispatch_build(
 
     let mut cmd = vec!["anda".to_string(), "build".to_string()];
 
-    
     cmd.push(pack_url.clone());
     // TODO: add buildkit host here
     if let Some(scope) = scope {
@@ -131,7 +130,6 @@ pub async fn dispatch_build(
     //let logs = watch_jobs().await;
     // stream logs
 
-
     /*     while let Some(status) = stream.try_next().await? {
         match status {
             WatchEvent::Added(s) => println!("Added {}", s.name_any()),
@@ -141,9 +139,6 @@ pub async fn dispatch_build(
             WatchEvent::Error(s) => println!("{}", s),
         }
     } */
-
-
-
 
     /* let mut logstream = get_logs(pod_name.clone()).await?.boxed();
 
@@ -219,7 +214,7 @@ pub async fn get_logs(
     // wait 2 seconds for pod to be ready
     //tokio::time::sleep(Duration::from_secs(2)).await;
     // check if pod is ready
-    
+
     pods.log_stream(
         &id,
         &LogParams {
@@ -227,7 +222,6 @@ pub async fn get_logs(
             //previous: true,
             //tail_lines: Some(100),
             //since_seconds: Some(-1),
-            
             ..Default::default()
         },
     )
@@ -237,10 +231,14 @@ pub async fn get_logs(
 pub async fn get_full_logs(id: String) -> Result<String, kube::Error> {
     let pods = K8S::pods().await;
 
-    pods.logs(&id, &LogParams {
-        follow: false,
-        //since_seconds: Some(0),
-        //previous: true,
-        ..Default::default()
-    }).await
+    pods.logs(
+        &id,
+        &LogParams {
+            follow: false,
+            //since_seconds: Some(0),
+            //previous: true,
+            ..Default::default()
+        },
+    )
+    .await
 }

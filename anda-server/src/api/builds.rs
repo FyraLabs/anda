@@ -1,6 +1,9 @@
 use crate::{
-    backend::{AndaBackend, Build, BuildCache, BuildStatus, S3Object, Target, Artifact, BuildMeta, ArtifactDb, DatabaseEntity, BuildDb},
-    tasks::{full_logs, format_stream, format_actual_stream, full_logs_db},
+    backend::{
+        AndaBackend, Artifact, ArtifactDb, Build, BuildCache, BuildDb, BuildMeta, BuildStatus,
+        DatabaseEntity, S3Object, Target,
+    },
+    tasks::{format_actual_stream, format_stream, full_logs, full_logs_db},
 };
 
 use futures::StreamExt;
@@ -184,17 +187,20 @@ async fn tag_project(data: Form<BuildTag>) -> Json<Build> {
 async fn get_log(id: Uuid) -> Result<EventStream![], Status> {
     let build = Build::get(id).await.map_err(|_| Status::NotFound)?;
 
-    let mut logstream = if build.status != BuildStatus::Running && build.status != BuildStatus::Pending {
-        // get full logs
-        let logs = full_logs_db(build.id.to_string()).await.unwrap();
+    let mut logstream =
+        if build.status != BuildStatus::Running && build.status != BuildStatus::Pending {
+            // get full logs
+            let logs = full_logs_db(build.id.to_string()).await.unwrap();
 
-        //println!("{:?}", logs);
-        format_stream(logs).await.unwrap().boxed()
-    } else {
-        let logstream = crate::tasks::stream_logs(id.to_string()).await;
-        format_actual_stream(logstream.unwrap())
-            .await.unwrap().boxed()
-    };
+            //println!("{:?}", logs);
+            format_stream(logs).await.unwrap().boxed()
+        } else {
+            let logstream = crate::tasks::stream_logs(id.to_string()).await;
+            format_actual_stream(logstream.unwrap())
+                .await
+                .unwrap()
+                .boxed()
+        };
     Ok(EventStream! {
         // TODO: catch errors
         while let Some(log) = logstream.next().await {
