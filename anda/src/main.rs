@@ -209,13 +209,13 @@ async fn main() -> Result<()> {
                     let packfile = ProjectPacker::pack_git(path.strip_prefix("git:").unwrap())
                         .await
                         .map_err(|e| {
-                            error!("{}", e);
+                            // error!("{}", e);
                             anyhow!("{}", e)
                         })?;
                     ProjectPacker::unpack_and_build(&packfile, workdir, &opts, projects, scope)
                         .await
                         .map_err(|e| {
-                            error!("{}", e);
+                            // error!("{}", e);
                             anyhow!("{}", e)
                         })?;
                     return Ok(());
@@ -230,7 +230,7 @@ async fn main() -> Result<()> {
                 )
                 .await
                 .map_err(|e| {
-                    error!("{}", e);
+                    // error!("{}", e);
                     anyhow!("{}", e)
                 })?;
                 return Ok(());
@@ -253,7 +253,7 @@ async fn main() -> Result<()> {
                     ProjectPacker::unpack_and_build(&path, workdir, &opts, projects, scope)
                         .await
                         .map_err(|e| {
-                            error!("{}", e);
+                            // error!("{}", e);
                             anyhow!("{}", e)
                         })?;
                 } else {
@@ -267,7 +267,7 @@ async fn main() -> Result<()> {
                         .build_in_scope(&scope, &opts)
                         .await
                         .map_err(|e| {
-                            error!("{}", e);
+                            // error!("{}", e);
                             anyhow!("{}", e)
                         })?;
                     // cargo run --bin anda build -s anda::
@@ -276,7 +276,7 @@ async fn main() -> Result<()> {
                         .build(projects, &opts)
                         .await
                         .map_err(|e| {
-                            error!("{}", e);
+                            // error!("{}", e);
                             anyhow!("{}", e)
                         })?;
                 }
@@ -294,7 +294,7 @@ async fn main() -> Result<()> {
             if path_str.starts_with("git:") {
                 eprintln!("path is a git url, calling packer");
                 ProjectPacker::pack_git(path_str).await.map_err(|e| {
-                    error!("{}", e);
+                    // error!("{}", e);
                     anyhow!("{}", e)
                 })?;
             } else {
@@ -302,14 +302,13 @@ async fn main() -> Result<()> {
                     "Packing from {}",
                     fs::canonicalize(path.clone())
                         .map_err(|e| {
-                            error!("{}", e);
-                            e
+                            anyhow!("{}", e)
                         })?
                         .display()
                 );
                 //build::start_build(&path)?;
                 let p = ProjectPacker::pack(&path, output).await.map_err(|e| {
-                    error!("{}", e);
+                    // error!("{}", e);
                     anyhow!("{}", e)
                 })?;
 
@@ -326,7 +325,7 @@ async fn main() -> Result<()> {
             // pack the project, then push to backend
 
             let p = ProjectPacker::pack(&path, None).await.map_err(|e| {
-                error!("{}", e);
+                // error!("{}", e);
                 anyhow!("{}", e)
             })?;
 
@@ -334,7 +333,7 @@ async fn main() -> Result<()> {
             let backend = api::AndaBackend::new(None);
             // get target by name
             let target = backend.get_target_by_name(&target).await.map_err(|e| {
-                error!("{}", e);
+                // error!("{}", e);
                 anyhow!("{}", e)
             })?;
 
@@ -345,7 +344,7 @@ async fn main() -> Result<()> {
                 .upload_build(target.id, &p, scope)
                 .await
                 .map_err(|e| {
-                    error!("{}", e);
+                    // error!("{}", e);
                     anyhow!("{}", e)
                 })?;
             //println!("{:?}", b);
@@ -356,13 +355,13 @@ async fn main() -> Result<()> {
                 // try to parse UUID
                 if let Ok(uuid) = uuid::Uuid::parse_str(&project) {
                     backend.tag_build_project(b.id, uuid).await.map_err(|e| {
-                        error!("{}", e);
+                        // error!("{}", e);
                         anyhow!("{}", e)
                     })?;
                 } else {
                     // try and get project by name
                     let project = backend.get_project_by_name(project).await.map_err(|e| {
-                        error!("{}", e);
+                        // error!("{}", e);
                         anyhow!("{}", e)
                     })?;
 
@@ -371,7 +370,7 @@ async fn main() -> Result<()> {
                         .tag_build_project(b.id, project.id)
                         .await
                         .map_err(|e| {
-                            error!("{}", e);
+                            // error!("{}", e);
                             anyhow!("{}", e)
                         })?;
                 }
@@ -464,7 +463,7 @@ async fn main() -> Result<()> {
         Command::NewTarget { name, arch, image } => {
             let backend = api::AndaBackend::new(None);
             let target = backend.new_target(&name, &arch, image).await.map_err(|e| {
-                error!("{}", e);
+                // error!("{}", e);
                 anyhow!("{}", e)
             })?;
             println!("{:?}", target);

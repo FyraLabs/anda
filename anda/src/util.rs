@@ -159,7 +159,7 @@ impl ProjectPacker {
     ) -> Result<(), PackerError> {
         let tmp_dir = tempfile::tempdir().unwrap();
         // download file using reqwest
-        let resp = reqwest::get(url).await.unwrap();
+        let resp = reqwest::get(url).await.map_err(|e|PackerError::Other(format!("Unable to download file: {}", e)))?;
         //let mut buf = vec![];
         let filename = resp
             .url()
