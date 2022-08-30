@@ -24,6 +24,10 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Project,
+    #[sea_orm(
+        has_many = "super::build::Entity"
+    )]
+    Build,
 }
 
 impl Related<super::project::Entity> for Entity {

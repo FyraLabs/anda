@@ -16,7 +16,7 @@ use std::time::SystemTime;
 use std::{collections::HashMap, path::PathBuf};
 //use sea_orm::FromJsonQueryResult;
 use crate::s3_object::{S3Artifact, BUCKET, S3_ENDPOINT};
-pub use anda_types::*;
+pub use anda_types::{*, api::Project};
 use db::DbPool;
 use num_derive::FromPrimitive;
 use sea_orm::{prelude::Uuid, *};
@@ -83,6 +83,9 @@ pub trait DatabaseEntity {
     where
         Self: Sized;
     async fn update(&self) -> Result<Self>
+    where
+        Self: Sized;
+    async fn delete(&self) -> Result<()>
     where
         Self: Sized;
 }
@@ -224,21 +227,6 @@ impl S3Object for BuildCache {
     }
 }
 
-/*impl From<crate::backend_old::Artifact> for Artifact {
-    fn from(artifact: crate::backend_old::Artifact) -> Self {
-        Artifact {
-            id: artifact.id,
-            filename: artifact.filename,
-            url: artifact.get_url(),
-            build_id: artifact.build_id,
-            timestamp: artifact.timestamp,
-            metadata: None,
-            // TODO
-            path: "".to_string()
-        }
-    }
-}*/
-
 impl From<artifact::Model> for Artifact {
     fn from(model: artifact::Model) -> Self {
         let filepath = model.name.clone();
@@ -340,16 +328,30 @@ impl DatabaseEntity for Artifact {
         Ok(artifact.into_iter().map(Artifact::from).collect())
     }
 
-    fn update<'life0, 'async_trait>(
-        &'life0 self,
-    ) -> core::pin::Pin<
-        Box<dyn core::future::Future<Output = Result<Self>> + core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn update(&self) -> Result<Artifact> {
+        let db = DbPool::get().await;
+        let model = artifact::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            build_id: ActiveValue::Set(self.build_id),
+            name: ActiveValue::Set(self.path.clone()),
+            timestamp: ActiveValue::Set(self.timestamp),
+            url: ActiveValue::Set(self.url.clone()),
+            metadata: ActiveValue::Set(
+                self.metadata
+                    .clone()
+                    .map(|m| serde_json::to_value(m).unwrap()),
+            ),
+        };
+        let ret = artifact::ActiveModel::update(model, db).await?;
+        Ok(Artifact::from(ret))
+    }
+    async fn delete(&self) -> Result<()> {
+        let db = DbPool::get().await;
+        let _ = artifact::Entity::find_by_id(self.id)
+            .one(db)
+            .await?;
+        artifact::Entity::delete_by_id(self.id).exec(db).await?;
+        Ok(())
     }
 }
 
@@ -550,6 +552,12 @@ impl DatabaseEntity for Build {
         let res = build::ActiveModel::update(build, db).await?;
         Ok(Build::from(res))
     }
+    
+    async fn delete(&self) -> Result<()> {
+        let db = DbPool::get().await;
+        build::Entity::delete_by_id(self.id).exec(db).await?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -696,14 +704,6 @@ impl BuildDb for Build {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Project {
-    pub id: Uuid,
-    pub name: String,
-    pub description: Option<String>,
-    pub summary: Option<String>,
-}
-
 impl From<project::Model> for Project {
     fn from(model: project::Model) -> Self {
         Project {
@@ -715,49 +715,11 @@ impl From<project::Model> for Project {
     }
 }
 
-impl Project {
-    pub fn new(name: String, description: Option<String>) -> Self {
-        dotenv::dotenv().ok();
-        Self {
-            id: Uuid::new_v4(),
-            name,
-            description,
-            summary: None,
-        }
-    }
-
-    pub async fn add(&self) -> Result<Project> {
-        let db = DbPool::get().await;
-        let project = project::ActiveModel {
-            id: ActiveValue::Set(self.id),
-            name: ActiveValue::Set(self.name.clone()),
-            description: ActiveValue::Set(self.description.clone()),
-            summary: ActiveValue::Set(self.summary.clone()),
-        };
-        let res = project::ActiveModel::insert(project, db).await?;
-        Ok(Project::from(res))
-    }
-
-    /// Gets a project by ID
-    pub async fn get(id: Uuid) -> Result<Project> {
-        let db = DbPool::get().await;
-        let project = project::Entity::find_by_id(id)
-            .one(db)
-            .await?
-            .ok_or_else(|| anyhow!("Project not found"))?;
-        Ok(Project::from(project))
-    }
-
-    pub async fn list(limit: usize, page: usize) -> Result<Vec<Project>> {
-        let db = DbPool::get().await;
-        let project = project::Entity::find()
-            .paginate(db, limit)
-            .fetch_page(page)
-            .await?;
-        Ok(project.into_iter().map(Project::from).collect())
-    }
-
-    pub async fn get_by_name(name: String) -> Result<Project> {
+#[async_trait]
+pub trait ProjectDb {
+    async fn get_by_name(name: String) -> Result<Project> 
+        where Self: Sized
+    {
         let db = DbPool::get().await;
         let project = project::Entity::find()
             .filter(project::Column::Name.eq(name))
@@ -766,14 +728,48 @@ impl Project {
             .ok_or_else(|| anyhow!("Project not found"))?;
         Ok(Project::from(project))
     }
+    async fn update_name(&self, name: String) -> Result<Self>
+        where Self: Sized;
+    async fn update_description(&self, description: String) -> Result<Self>
+        where Self: Sized;
+    async fn update_summary(&self, summary: Option<String>) -> Result<Self>
+        where Self: Sized;
+    async fn list_artifacts(&self) -> Result<Vec<Artifact>>
+        where Self: Sized;
+}
 
-    pub async fn list_all() -> Result<Vec<Project>> {
+#[async_trait]
+impl ProjectDb for Project {
+    async fn update_name(&self, name: String) -> Result<Self> {
         let db = DbPool::get().await;
-        let project = project::Entity::find().all(db).await?;
-        Ok(project.into_iter().map(Project::from).collect())
+        let project = project::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            name: ActiveValue::Set(name),
+            ..Default::default()
+        };
+        let res = project::ActiveModel::update(project, db).await?;
+        Ok(Project::from(res))
     }
-
-    pub async fn list_artifacts(&self) -> Result<Vec<Artifact>> {
+    async fn get_by_name(name: String) -> Result<Self> {
+        let db = DbPool::get().await;
+        let project = project::Entity::find()
+            .filter(project::Column::Name.eq(name))
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Project not found"))?;
+        Ok(Project::from(project))
+    }
+    async fn update_description(&self, description: String) -> Result<Self> {
+        let db = DbPool::get().await;
+        let project = project::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            description: ActiveValue::Set(Some(description)),
+            ..Default::default()
+        };
+        let res = project::ActiveModel::update(project, db).await?;
+        Ok(Project::from(res))
+    }
+    async fn list_artifacts(&self) -> Result<Vec<Artifact>> {
         let db = DbPool::get().await;
         let builds = Build::get_by_project_id(self.id).await?;
 
@@ -788,29 +784,7 @@ impl Project {
         Ok(artifacts)
     }
 
-    pub async fn update_name(&self, name: String) -> Result<Project> {
-        let db = DbPool::get().await;
-        let project = project::ActiveModel {
-            id: ActiveValue::Set(self.id),
-            name: ActiveValue::Set(name),
-            ..Default::default()
-        };
-        let res = project::ActiveModel::update(project, db).await?;
-        Ok(Project::from(res))
-    }
-
-    pub async fn update_description(&self, description: String) -> Result<Project> {
-        let db = DbPool::get().await;
-        let project = project::ActiveModel {
-            id: ActiveValue::Set(self.id),
-            description: ActiveValue::Set(Some(description)),
-            ..Default::default()
-        };
-        let res = project::ActiveModel::update(project, db).await?;
-        Ok(Project::from(res))
-    }
-
-    pub async fn update_summary(&self, summary: Option<String>) -> Result<Project> {
+    async fn update_summary(&self, summary: Option<String>) -> Result<Self> {
         let db = DbPool::get().await;
         let project = project::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -821,7 +795,51 @@ impl Project {
         Ok(Project::from(res))
     }
 
-    pub async fn delete(&self) -> Result<()> {
+}
+
+#[async_trait]
+impl DatabaseEntity for Project {
+
+    async fn add(&self) -> Result<Project> {
+        let db = DbPool::get().await;
+        let project = project::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            name: ActiveValue::Set(self.name.clone()),
+            description: ActiveValue::Set(self.description.clone()),
+            summary: ActiveValue::Set(self.summary.clone()),
+        };
+        let res = project::ActiveModel::insert(project, db).await?;
+        Ok(Project::from(res))
+    }
+
+    /// Gets a project by ID
+    async fn get(id: Uuid) -> Result<Project> {
+        let db = DbPool::get().await;
+        let project = project::Entity::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Project not found"))?;
+        Ok(Project::from(project))
+    }
+
+    async fn list(limit: usize, page: usize) -> Result<Vec<Project>> {
+        let db = DbPool::get().await;
+        let project = project::Entity::find()
+            .paginate(db, limit)
+            .fetch_page(page)
+            .await?;
+        Ok(project.into_iter().map(Project::from).collect())
+    }
+
+
+
+    async fn list_all() -> Result<Vec<Project>> {
+        let db = DbPool::get().await;
+        let project = project::Entity::find().all(db).await?;
+        Ok(project.into_iter().map(Project::from).collect())
+    }
+
+    async fn delete(&self) -> Result<()> {
         let db = DbPool::get().await;
         // check if project exists
         let _ = project::Entity::find_by_id(self.id)
@@ -830,6 +848,18 @@ impl Project {
             .ok_or_else(|| anyhow!("Project not found"))?;
         project::Entity::delete_by_id(self.id).exec(db).await?;
         Ok(())
+    }
+
+    async fn update(&self) -> Result<Project> {
+        let db = DbPool::get().await;
+        let project = project::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            name: ActiveValue::Set(self.name.clone()),
+            description: ActiveValue::Set(self.description.clone()),
+            summary: ActiveValue::Set(self.summary.clone()),
+        };
+        let res = project::ActiveModel::update(project, db).await?;
+        Ok(Project::from(res))
     }
 }
 
@@ -912,6 +942,17 @@ impl DatabaseEntity for Compose {
         };
         let res = compose::ActiveModel::update(compose, db).await?;
         Ok(Compose::from(res))
+    }
+
+    async fn delete(&self) -> Result<()> {
+        let db = DbPool::get().await;
+        // check if compose exists
+        let _ = compose::Entity::find_by_id(self.id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Compose not found"))?;
+        compose::Entity::delete_by_id(self.id).exec(db).await?;
+        Ok(())
     }
 }
 
@@ -1033,15 +1074,7 @@ impl DatabaseEntity for Target {
         let res = target::ActiveModel::update(target, db).await?;
         Ok(Target::from(res))
     }
-}
 
-#[async_trait]
-pub trait TargetDb {
-    async fn delete(&self) -> Result<()>;
-    async fn get_by_name(name: String) -> Result<Target>;
-}
-#[async_trait]
-impl TargetDb for Target {
     async fn delete(&self) -> Result<()> {
         let db = DbPool::get().await;
         // check if target exists
@@ -1052,6 +1085,14 @@ impl TargetDb for Target {
         target::Entity::delete_by_id(self.id).exec(db).await?;
         Ok(())
     }
+}
+
+#[async_trait]
+pub trait TargetDb {
+    async fn get_by_name(name: String) -> Result<Target>;
+}
+#[async_trait]
+impl TargetDb for Target {
 
     async fn get_by_name(name: String) -> Result<Target> {
         let db = DbPool::get().await;

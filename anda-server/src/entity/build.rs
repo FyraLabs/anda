@@ -21,13 +21,13 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::target::Entity",
+        belongs_to = "super::project::Entity",
         from = "Column::ProjectId",
-        to = "super::target::Column::Id",
+        to = "super::project::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    Target2,
+    Project,
     #[sea_orm(
         belongs_to = "super::target::Entity",
         from = "Column::TargetId",
@@ -35,7 +35,15 @@ pub enum Relation {
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    Target1,
+    Target,
+    #[sea_orm(
+        belongs_to = "super::compose::Entity",
+        from = "Column::ComposeId",
+        to = "super::compose::Column::Id",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    Compose,
     #[sea_orm(has_many = "super::artifact::Entity")]
     Artifact,
 }
@@ -43,6 +51,13 @@ pub enum Relation {
 impl Related<super::artifact::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Artifact.def()
+    }
+}
+
+
+impl Related<super::compose::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Compose.def()
     }
 }
 

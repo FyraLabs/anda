@@ -139,6 +139,17 @@ pub struct Project {
     pub summary: Option<String>,
 }
 
+impl Project {
+    pub fn new(name: String, description: Option<String>) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            description,
+            summary: None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Compose {
     pub id: Uuid,

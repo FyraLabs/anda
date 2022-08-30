@@ -1,4 +1,4 @@
-use crate::backend::{Artifact, Project};
+use crate::backend::{Artifact, Project, DatabaseEntity, ProjectDb};
 use rocket::form::Form;
 use rocket::http::Status;
 use rocket::serde::json::Json;
