@@ -1,18 +1,16 @@
 use anyhow::{anyhow, Result};
 use buildkit_llb::{
-    prelude::{FileSystem, LayerPath, MultiOwnedOutput, OperationBuilder},
-    utils::{OperationOutput, OutputIdx},
+    utils::{OperationOutput},
 };
 use chrono::Utc;
 use execute::Execute;
 use futures::FutureExt;
-use log::{debug, error, info};
+use log::{debug};
 use mime_guess::MimeGuess;
 use owo_colors::OwoColorize;
 use reqwest::{multipart, ClientBuilder};
 use serde::Serialize;
 use solvent::DepGraph;
-use uuid::Uuid;
 use std::{
     collections::{BTreeMap, HashMap},
     env,
@@ -23,15 +21,20 @@ use tokio::{
     fs::File,
     io::{AsyncReadExt, AsyncWriteExt},
 };
+use uuid::Uuid;
 use walkdir::WalkDir;
 
+use anda_types::{config::Project, DockerImage};
+
+use anda_types::api::*;
+
 use crate::{
-    api::{AndaBackend, Artifact, ArtifactMeta, DockerArtifact},
-    config::{DockerImage, Project},
     container::{Buildkit, BuildkitOptions},
-    error::{BuilderError, ProjectError},
-    util, BuildkitLog,
+    error::BuilderError,
+    util, BuildkitLog, api::AndaBackend,
 };
+
+use anda_types::error::ProjectError;
 
 trait ExitOkPolyfill {
     fn exit_ok_polyfilled(&self) -> Result<()>;
@@ -163,7 +166,7 @@ impl ProjectBuilder {
         project: &Project,
         opts: &BuilderOptions,
     ) -> Result<BTreeMap<String, String>, BuilderError> {
-        let config = crate::config::load_config(&opts.config_location)?;
+        let config = anda_types::load_config(&opts.config_location)?;
 
         //println!("{:#?}", project.env);
 
@@ -204,7 +207,7 @@ impl ProjectBuilder {
             "fedora:latest".to_owned()
         };
 
-        let config = crate::config::load_config(&builder_opts.config_location)?;
+        let config = anda_types::config::load_config(&builder_opts.config_location)?;
         let project_name = config.find_key_for_value(project).unwrap();
 
         let _output_path =
@@ -225,15 +228,15 @@ impl ProjectBuilder {
         .context(buildkit_llb::prelude::Source::local("context"));
         let mode = &project.rpmbuild.as_ref().unwrap().mode;
         match mode {
-            crate::config::RpmBuildMode::Standard => {
+            anda_types::config::RpmBuildMode::Standard => {
                 b.build_rpm(
                     project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
-                    crate::config::RpmBuildMode::Standard,
+                    anda_types::config::RpmBuildMode::Standard,
                     project.rpmbuild.as_ref().unwrap().build_deps.as_ref(),
                 );
                 b.execute(builder_opts)?;
             }
-            crate::config::RpmBuildMode::Cargo => {
+            anda_types::config::RpmBuildMode::Cargo => {
                 let cargo_project =
                     if let Some(proj) = project.rpmbuild.as_ref().unwrap().package.as_ref() {
                         proj.to_owned()
@@ -242,7 +245,7 @@ impl ProjectBuilder {
                     };
                 b.build_rpm(
                     &cargo_project,
-                    crate::config::RpmBuildMode::Cargo,
+                    anda_types::config::RpmBuildMode::Cargo,
                     project.rpmbuild.as_ref().unwrap().build_deps.as_ref(),
                 );
                 b.execute(builder_opts)?;
@@ -304,14 +307,14 @@ impl ProjectBuilder {
 
     pub async fn run_stage(
         &self,
-        stage: &crate::config::Stage,
+        stage: &anda_types::config::Stage,
         stage_name: &String,
         project: &Project,
         builder_opts: &BuilderOptions,
         prev_output: Option<OperationOutput<'static>>,
     ) -> Result<OperationOutput<'static>, BuilderError> {
         // load config
-        let config = crate::config::load_config(&builder_opts.config_location)?;
+        let config = anda_types::config::load_config(&builder_opts.config_location)?;
         /*         if !stage_name.eq("") {
             eprintln!(
                 " -> {}: `{}`",
@@ -381,8 +384,8 @@ impl ProjectBuilder {
     pub async fn run_rollback(
         &self,
         project: &Project,
-        stage: &crate::config::Stage,
-        opts: &BuilderOptions,
+        stage: &anda_types::config::Stage,
+        _opts: &BuilderOptions,
     ) -> Result<(), BuilderError> {
         if project.rollback.is_some() {
             let rollback = project.rollback.as_ref().unwrap();
@@ -406,7 +409,7 @@ impl ProjectBuilder {
         opts: &BuilderOptions,
     ) -> Result<(), BuilderError> {
         // we should turn this into a tuple of (stage, stage_name)
-        let mut depgraph: DepGraph<&crate::config::Stage> = DepGraph::new();
+        let mut depgraph: DepGraph<&anda_types::config::Stage> = DepGraph::new();
         eprintln!(":: {}", "Running build script...".yellow());
         let script = project.script.as_ref().unwrap();
         for stage in script.stage.values() {
@@ -419,10 +422,10 @@ impl ProjectBuilder {
                         .get_stage(d)
                         .unwrap_or_else(|| panic!("Can't find stage {}", d.as_str()))
                 })
-                .collect::<Vec<&crate::config::Stage>>();
+                .collect::<Vec<&anda_types::config::Stage>>();
             depgraph.register_dependencies(stage, depends);
         }
-        let final_stage = &crate::config::Stage {
+        let final_stage = &anda_types::config::Stage {
             depends: None,
             commands: vec![],
             image: None,
@@ -557,7 +560,10 @@ impl ProjectBuilder {
         if env::var("ANDA_BUILD_ID").is_ok() {
             cmd = cmd.args(&[
                 "--output",
-                &format!("type=image,name={},push=true,registry.insecure=true", tag_string),
+                &format!(
+                    "type=image,name={},push=true,registry.insecure=true",
+                    tag_string
+                ),
             ]);
             let mut cmd = cmd.spawn()?;
             cmd.wait().await?;
@@ -568,23 +574,20 @@ impl ProjectBuilder {
                 build_id: Uuid::parse_str(&env::var("ANDA_BUILD_ID").unwrap()).unwrap(),
                 filename: tag_string.clone(),
                 id: Uuid::nil(),
-                metadata: Some(
-                    ArtifactMeta {
-                        art_type: "docker".to_string(),
-                        docker: Some(DockerArtifact {
-                            name: tag.to_string(),
-                            tag: version.to_string().strip_prefix(':').unwrap().to_string(),
-                        }),
-                        file: None,
-                        rpm: None,
-                    }
-                ),
+                metadata: Some(ArtifactMeta {
+                    art_type: "docker".to_string(),
+                    docker: Some(DockerArtifact {
+                        name: tag.to_string(),
+                        tag: version.to_string().strip_prefix(':').unwrap().to_string(),
+                    }),
+                    file: None,
+                    rpm: None,
+                }),
                 path: tag_string.clone(),
                 timestamp: Utc::now(),
                 url: tag_string.clone(),
             };
             backend.new_artifact_with_metadata(artifact).await?;
-
         } else {
             cmd = cmd
                 .stdout(Stdio::piped())
@@ -683,7 +686,7 @@ impl ProjectBuilder {
         let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
         let re = regex::Regex::new(r"(.+)::([^:]+)(:(.+))?")
             .map_err(|e| BuilderError::Other(format!("Can't make regex: {}", e)))?;
-        let config = crate::config::load_config(&opts.config_location)?;
+        let config = anda_types::config::load_config(&opts.config_location)?;
         if env::var("ANDA_BUILD_ID").is_ok() {
             let backend = AndaBackend::new(None);
             let build_id = env::var("ANDA_BUILD_ID").unwrap();
@@ -743,7 +746,8 @@ impl ProjectBuilder {
                         let tag = stage.to_string();
                         // eprintln!("{:?}", cap);
                         // eprintln!("{:?}", docker);
-                        self.build_docker(&tag, docker.image.get(&tag).unwrap(), opts).await?;
+                        self.build_docker(&tag, docker.image.get(&tag).unwrap(), opts)
+                            .await?;
                         // project.docker.as_ref().ok_or_else(close)?;
                         // self.build_docker_all(project, opts).await?;
                     }
@@ -771,7 +775,7 @@ impl ProjectBuilder {
         projects: Vec<String>,
         opts: &BuilderOptions,
     ) -> Result<(), BuilderError> {
-        let config = crate::config::load_config(&opts.config_location)?;
+        let config = anda_types::config::load_config(&opts.config_location)?;
         let output_path = env::var("ANDA_OUTPUT_PATH").unwrap_or_else(|_| "anda-build".to_string());
         if env::var("ANDA_BUILD_ID").is_ok() {
             let backend = AndaBackend::new(None);

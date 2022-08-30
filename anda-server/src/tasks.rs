@@ -6,10 +6,12 @@ use kube::core::WatchEvent;
 use rocket::fairing::{Fairing, Info, Kind};
 use rocket::{Rocket, Orbit};
 use sea_orm::prelude::Uuid;
+use crate::backend::{DatabaseEntity, BuildDb};
 use crate::kubernetes::{watch_jobs, BuildStatusEvent, K8S, get_logs, get_full_logs};
 use futures::{stream, Stream, StreamExt, TryStreamExt, TryStream};
 use tokio::io::AsyncBufReadExt;
 use anyhow::Result;
+use anda_types::BuildStatus;
 pub struct TaskManager;
 
 
@@ -41,13 +43,13 @@ async fn watch_status() -> Result<()> {
                     println!("Running: {}", id);
                     // Update build statusd
                     let build = crate::backend::Build::get(Uuid::parse_str(&id).unwrap()).await.unwrap();
-                    build.update_status(crate::backend::BuildStatus::Running as i32).await.unwrap();
+                    build.update_status(BuildStatus::Running as i32).await.unwrap();
                     //print_logs(id).await.unwrap();
                 }
                 BuildStatusEvent::Succeeded(id) => {
                     println!("Succeeded: {}", id);
                     let build = crate::backend::Build::get(Uuid::parse_str(&id).unwrap()).await.unwrap();
-                    build.update_status(crate::backend::BuildStatus::Success as i32).await.unwrap();
+                    build.update_status(BuildStatus::Success as i32).await.unwrap();
                     // update logs
                     // let logs = full_logs(id).await.unwrap();
                     // build.update_logs(logs).await.unwrap();
@@ -56,7 +58,7 @@ async fn watch_status() -> Result<()> {
                 BuildStatusEvent::Failed(id) => {
                     println!("Failed: {}", id);
                     let build = crate::backend::Build::get(Uuid::parse_str(&id).unwrap()).await.unwrap();
-                    build.update_status(crate::backend::BuildStatus::Failure as i32).await.unwrap();
+                    build.update_status(BuildStatus::Failure as i32).await.unwrap();
                     // update logs
                     // let logs = full_logs(id).await.unwrap();
                     // build.update_logs(logs).await.unwrap();
@@ -79,7 +81,6 @@ async fn watch_logs() -> Result<()> {
                 BuildStatusEvent::Succeeded(id) => {
                     println!("Succeeded: {}", id);
                     let build = crate::backend::Build::get(Uuid::parse_str(&id).unwrap()).await.unwrap();
-                    //build.update_status(crate::backend::BuildStatus::Success as i32).await.unwrap();
                     // update logs
                     let logs = full_logs(id).await.unwrap();
                     build.update_logs(logs).await.unwrap();
@@ -88,7 +89,6 @@ async fn watch_logs() -> Result<()> {
                 BuildStatusEvent::Failed(id) => {
                     println!("Failed: {}", id);
                     let build = crate::backend::Build::get(Uuid::parse_str(&id).unwrap()).await.unwrap();
-                    build.update_status(crate::backend::BuildStatus::Failure as i32).await.unwrap();
                     // update logs
                     let logs = full_logs(id).await.unwrap();
                     build.update_logs(logs).await.unwrap();

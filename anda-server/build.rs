@@ -64,7 +64,7 @@ fn main() {
     if let Ok(symlink_path) = symlink {
         if symlink_path.to_str().unwrap() == "anda-frontend/dist" {
             println!("symlink already exists");
-            return;
+            
         } else {
             std::os::unix::fs::symlink("anda-frontend/dist", format!("{}/dist", out_dir)).unwrap();
         }

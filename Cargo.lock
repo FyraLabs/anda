@@ -94,6 +94,7 @@ checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
 name = "anda"
 version = "0.1.0"
 dependencies = [
+ "anda-types",
  "anyhow",
  "async-compression",
  "async_zip",
@@ -116,7 +117,6 @@ dependencies = [
  "reqwest",
  "reqwest-eventsource",
  "serde",
- "serde_derive",
  "serde_json",
  "solvent",
  "tabwriter",
@@ -143,6 +143,7 @@ name = "anda-server"
 version = "0.1.0"
 dependencies = [
  "anda-db-migration",
+ "anda-types",
  "anyhow",
  "async-once-cell",
  "async-trait",
@@ -176,6 +177,22 @@ dependencies = [
  "tempfile",
  "tokio 1.20.1",
  "walkdir",
+]
+
+[[package]]
+name = "anda-types"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "hcl-rs",
+ "log",
+ "num",
+ "num-derive",
+ "num-traits",
+ "serde",
+ "serde_json",
+ "uuid",
 ]
 
 [[package]]

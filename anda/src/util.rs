@@ -14,7 +14,7 @@ use std::{fs, io};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
-use uuid::Uuid;
+
 use indicatif::{ProgressBar, ProgressStyle};
 
 /// Returns the current commit hash of the given repository located at the given path.
@@ -272,13 +272,13 @@ impl ProjectPacker {
     }
 }
 
-/// Packs the project and pushes it to the server
-pub async fn push_build(root: &PathBuf) -> Result<crate::api::Build, PackerError> {
-    let packfile = ProjectPacker::pack(root, None).await?;
+// /// Packs the project and pushes it to the server
+// pub async fn push_build(root: &PathBuf) -> Result<crate::api::Build, PackerError> {
+//     let packfile = ProjectPacker::pack(root, None).await?;
 
-    let _build_push = crate::api::AndaBackend::new(None)
-        .upload_build(Uuid::nil(), &packfile, None)
-        .await?;
+//     let _build_push = crate::api::AndaBackend::new(None)
+//         .upload_build(Uuid::nil(), &packfile, None)
+//         .await?;
 
-    todo!()
-}
+//     todo!()
+// }

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use buildkit_llb::{
     prelude::{
@@ -11,12 +11,12 @@ use buildkit_llb::{
 //use buildkit_llb::prelude::*;
 use owo_colors::OwoColorize;
 
-use std::{sync::Arc, env};
 use std::{
     collections::BTreeMap,
     io::{stdout, BufRead},
     path::PathBuf,
 };
+use std::{env, sync::Arc};
 
 use crate::{build, BuildkitLog};
 
@@ -282,7 +282,8 @@ impl Buildkit {
                     .mount(Mount::Layer(OutputIdx(0), image.output(), "/"))
                     .mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"))
             }
-            cmd = cmd.mount(Mount::SharedCache("/var/cache/dnf"))
+            cmd = cmd
+                .mount(Mount::SharedCache("/var/cache/dnf"))
                 .mount(Mount::SharedCache("/var/cache/anda"));
 
             let cmd = cmd.ref_counted();
@@ -313,7 +314,8 @@ impl Buildkit {
                     .mount(Mount::Layer(OutputIdx(0), image.output(), "/"))
                     .mount(Mount::Scratch(OutputIdx(1), "/src/anda-build"))
             }
-            cmd = cmd.mount(Mount::SharedCache("/var/cache/dnf"))
+            cmd = cmd
+                .mount(Mount::SharedCache("/var/cache/dnf"))
                 .mount(Mount::SharedCache("/var/cache/anda"));
 
             let cmd = cmd.ref_counted();
@@ -382,7 +384,7 @@ impl Buildkit {
     pub fn build_rpm(
         &mut self,
         rpm: &str,
-        mode: crate::config::RpmBuildMode,
+        mode: anda_types::config::RpmBuildMode,
         pre_buildreqs: Option<&Vec<String>>,
     ) -> &mut Buildkit {
         if let Some(image) = &self.image.clone() {
@@ -410,11 +412,11 @@ impl Buildkit {
                 .custom_name(name)
                 .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
             match mode {
-                crate::config::RpmBuildMode::Standard => {
+                anda_types::config::RpmBuildMode::Standard => {
                     self.command(&format!("sudo dnf builddep -y {}", rpm));
                     cmd = cmd.args(&["anda_build_rpm", "rpmbuild", "-p", rpm]);
                 }
-                crate::config::RpmBuildMode::Cargo => {
+                anda_types::config::RpmBuildMode::Cargo => {
                     cmd = cmd.args(&["anda_build_rpm", "cargo", "-p", rpm]);
                 }
             }
@@ -560,8 +562,4 @@ impl Buildkit {
 }
 
 #[cfg(test)]
-mod test_docker {
-    use std::env;
-
-    use super::*;
-}
+mod test_docker {}

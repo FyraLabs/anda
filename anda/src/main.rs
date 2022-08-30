@@ -3,9 +3,9 @@
 use anyhow::{anyhow, Result};
 
 use clap::{AppSettings, ArgEnum, Parser, Subcommand};
-use log::{debug, error, info};
+use log::{debug, error};
 use reqwest_eventsource::Event;
-use reqwest_eventsource::EventSource;
+// use reqwest_eventsource::EventSource;
 use std::fs;
 use std::{path::PathBuf, str::FromStr};
 use tokio_stream::StreamExt;
@@ -13,7 +13,6 @@ use tokio_stream::StreamExt;
 mod api;
 mod backend;
 mod build;
-mod config;
 mod container;
 mod error;
 mod util;

@@ -5,95 +5,21 @@
 //! See the `anda-server` crate in the Andaman repository for more information.
 
 use anyhow::{Ok, Result};
-use chrono::{DateTime, Utc};
-use log::debug;
+
+
 use reqwest::{
     multipart::{self, Form},
     Client,
 };
 use reqwest_eventsource::EventSource;
-use serde::{Deserialize, Serialize};
+
 use tokio::io::AsyncReadExt;
 
 use std::{env, path::PathBuf};
 use uuid::Uuid;
 
-use crate::config::AndaConfig;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileArtifact {
-    pub e_tag: Option<String>,
-    pub filename: Option<String>,
-    pub size: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RpmArtifact {
-    pub name: String,
-    pub arch: String,
-    pub epoch: Option<String>,
-    pub version: String,
-    pub release: Option<String>,
-
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DockerArtifact {
-    pub name: String,
-    pub tag: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ArtifactMeta {
-    pub art_type: String,
-    pub file: Option<FileArtifact>,
-    pub rpm: Option<RpmArtifact>,
-    pub docker: Option<DockerArtifact>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Artifact {
-    pub id: Uuid,
-    pub filename: String,
-    pub path: String,
-    pub url: String,
-    pub build_id: Uuid,
-    pub timestamp: DateTime<Utc>,
-    pub metadata: Option<ArtifactMeta>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Project {
-    pub id: Uuid,
-    pub name: String,
-    pub description: Option<String>,
-    pub summary: Option<String>
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Build {
-    pub id: Uuid,
-    pub status: String,
-    pub project_id: Option<Uuid>,
-    pub timestamp: DateTime<Utc>,
-    pub compose_id: Option<Uuid>,
-    pub build_type: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Target {
-    pub id: Uuid,
-    pub name: String,
-    pub image: Option<String>,
-    pub arch: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct BuildMeta {
-    pub scope: Option<String>,
-    pub source: Option<String>,
-    pub config_meta: Option<AndaConfig>,
-}
+use anda_types::config::AndaConfig;
+pub use anda_types::api::*;
 
 #[derive(Clone)]
 pub(crate) struct AndaBackend {

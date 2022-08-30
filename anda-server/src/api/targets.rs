@@ -1,4 +1,4 @@
-use crate::backend::Target;
+use crate::backend::{Target, TargetDb, DatabaseEntity};
 
 use rocket::http::Status;
 use rocket::serde::json::Json;
@@ -68,7 +68,7 @@ async fn update(id: Uuid, data: Json<TargetForm>) -> Result<Json<Target>, Status
     target.arch = data.arch.clone();
     target.image = data.image.clone();
     let t = target
-        .update(id)
+        .update()
         .await
         .map_err(|_| Status::InternalServerError)?;
     Ok(Json(t))

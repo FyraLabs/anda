@@ -1,4 +1,4 @@
-use crate::backend::Compose;
+use crate::backend::{Compose, DatabaseEntity};
 
 use rocket::http::Status;
 use rocket::serde::json::Json;

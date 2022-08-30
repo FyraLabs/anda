@@ -1,5 +1,5 @@
 use crate::{
-    backend::{AndaBackend, Build, BuildCache, BuildStatus, S3Object, Target, Artifact, BuildMeta},
+    backend::{AndaBackend, Build, BuildCache, BuildStatus, S3Object, Target, Artifact, BuildMeta, ArtifactDb, DatabaseEntity, BuildDb},
     tasks::{full_logs, format_stream, format_actual_stream, full_logs_db},
 };
 

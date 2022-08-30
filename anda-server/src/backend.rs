@@ -4,34 +4,40 @@
 //! The builder will then be responsible for building the project.
 //! The server will start a Kubernetes job and manage the build process (hopefully).
 
-use std::{path::PathBuf, collections::HashMap};
-use std::time::SystemTime;
 use crate::{
     db,
-    entity::{artifact, build, project, target, compose},
+    entity::{artifact, build, compose, project, target},
 };
 use anyhow::{anyhow, Result};
-use chrono::{offset::Utc, DateTime};
 use aws_sdk_s3::types::{ByteStream, DateTime as AmazonDateTime};
+use chrono::{offset::Utc, DateTime};
 use log::debug;
+use std::time::SystemTime;
+use std::{collections::HashMap, path::PathBuf};
 //use sea_orm::FromJsonQueryResult;
-use tokio::{fs::File, io::{AsyncReadExt, AsyncWriteExt, BufReader}, process::Command};
-use db::DbPool;
 use crate::s3_object::{S3Artifact, BUCKET, S3_ENDPOINT};
-use sea_orm::{prelude::Uuid, *};
+pub use anda_types::*;
+use db::DbPool;
 use num_derive::FromPrimitive;
+use sea_orm::{prelude::Uuid, *};
 use serde::{Deserialize, Serialize};
+use tokio::{
+    fs::File,
+    io::{AsyncReadExt, AsyncWriteExt, BufReader},
+    process::Command,
+};
+
 //use crate::backend_old::S3Object;
 
 use crate::kubernetes::dispatch_build;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Serialize, Deserialize)]
-pub enum BuildStatus {
-    Pending = 0,
-    Running = 1,
-    Success = 2,
-    Failure = 3,
-}
+// #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Serialize, Deserialize)]
+// pub enum BuildStatus {
+//     Pending = 0,
+//     Running = 1,
+//     Success = 2,
+//     Failure = 3,
+// }
 
 pub struct AndaBackend {
     build_id: Uuid,
@@ -58,24 +64,43 @@ impl AndaBackend {
             "owo".to_string(),
             project_scope.map(|s| s.to_string()),
         )
-            .await?;
+        .await?;
         Ok(())
     }
 }
 #[async_trait]
+pub trait DatabaseEntity {
+    async fn get(id: Uuid) -> Result<Self>
+    where
+        Self: Sized;
+    async fn list(limit: usize, page: usize) -> Result<Vec<Self>>
+    where
+        Self: Sized;
+    async fn list_all() -> Result<Vec<Self>>
+    where
+        Self: Sized;
+    async fn add(&self) -> Result<Self>
+    where
+        Self: Sized;
+    async fn update(&self) -> Result<Self>
+    where
+        Self: Sized;
+}
+
+#[async_trait]
 pub trait S3Object {
     fn get_url(&self) -> String;
-    async fn get(uuid: Uuid) -> Result<Self>
-        where
-            Self: Sized;
+    async fn get_data(uuid: Uuid) -> Result<Self>
+    where
+        Self: Sized;
     /// Pull raw data from S3
     async fn pull_bytes(&self) -> Result<ByteStream>
-        where
-            Self: Sized;
+    where
+        Self: Sized;
     /// Upload file to S3
     async fn upload_file(self, path: PathBuf) -> Result<Self>
-        where
-            Self: Sized;
+    where
+        Self: Sized;
 }
 
 // Temporary files for file uploads.
@@ -97,7 +122,9 @@ impl UploadCache {
 
         let dest_path = format!("build_cache/{}/{}", Uuid::new_v4().simple(), self.filename);
 
-        let _ = obj.upload_file(&dest_path, self.path.to_owned(), HashMap::new()).await?;
+        let _ = obj
+            .upload_file(&dest_path, self.path.to_owned(), HashMap::new())
+            .await?;
         println!("Uploaded {}", dest_path);
         Ok(())
     }
@@ -135,9 +162,9 @@ impl S3Object for BuildCache {
         )
     }
 
-    async fn get(uuid: Uuid) -> Result<Self>
-        where
-            Self: Sized,
+    async fn get_data(uuid: Uuid) -> Result<Self>
+    where
+        Self: Sized,
     {
         // List all files in S3
         let obj = S3Artifact::new()?.connection;
@@ -163,8 +190,8 @@ impl S3Object for BuildCache {
     }
 
     async fn pull_bytes(&self) -> Result<ByteStream>
-        where
-            Self: Sized,
+    where
+        Self: Sized,
     {
         // Get from S3
         todo!()
@@ -197,51 +224,6 @@ impl S3Object for BuildCache {
     }
 }
 
-
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileArtifact {
-    pub e_tag: Option<String>,
-    pub filename: Option<String>,
-    pub size: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RpmArtifact {
-    pub name: String,
-    pub arch: String,
-    pub epoch: Option<String>,
-    pub version: String,
-    pub release: Option<String>,
-
-}
-
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DockerArtifact {
-    pub name: String,
-    pub tag: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ArtifactMeta {
-    pub art_type: String,
-    pub file: Option<FileArtifact>,
-    pub rpm: Option<RpmArtifact>,
-    pub docker: Option<DockerArtifact>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Artifact {
-    pub id: Uuid,
-    pub filename: String,
-    pub path: String,
-    pub url: String,
-    pub build_id: Uuid,
-    pub timestamp: DateTime<Utc>,
-    pub metadata: Option<ArtifactMeta>,
-}
-
 /*impl From<crate::backend_old::Artifact> for Artifact {
     fn from(artifact: crate::backend_old::Artifact) -> Self {
         Artifact {
@@ -268,79 +250,14 @@ impl From<artifact::Model> for Artifact {
             filename,
             timestamp: model.timestamp,
             url: model.url,
-            metadata: model.metadata.map(|m| {
-                serde_json::from_value(m).unwrap()
-            }),
+            metadata: model.metadata.map(|m| serde_json::from_value(m).unwrap()),
         }
     }
 }
-
-impl Artifact {
-    pub fn new(filename: String, path: String, build_id: Uuid) -> Self {
-        dotenv::dotenv().ok();
-        Self {
-            id: Uuid::new_v4(),
-            filename,
-            path,
-            build_id,
-            timestamp: chrono::Utc::now(),
-            url: String::new(),
-            metadata: None
-        }
-    }
-
-    pub async fn add(&self) -> Result<Artifact> {
-        let db = DbPool::get().await;
-        let model = artifact::ActiveModel {
-            id: ActiveValue::Set(self.id),
-            build_id: ActiveValue::Set(self.build_id),
-            name: ActiveValue::Set(self.path.clone()),
-            timestamp: ActiveValue::Set(self.timestamp),
-            url: ActiveValue::Set(self.url.clone()),
-            metadata: ActiveValue::Set(self.metadata.clone().map(|m| {
-                serde_json::to_value(m).unwrap()
-            })),
-        };
-        let ret = artifact::ActiveModel::insert(model, db).await?;
-        Ok(Artifact::from(ret))
-    }
-
-    /// Gets an artifact by ID
-    pub async fn get(id: Uuid) -> Result<Artifact> {
-        let db = DbPool::get().await;
-        let artifact = artifact::Entity::find_by_id(id)
-            .one(db)
-            .await?
-            .ok_or_else(|| anyhow!("Artifact not found"))?;
-        // Marshall the types from our internal representation to the actual DB representation.
-        Ok(Artifact::from(artifact))
-    }
-
-    /// Lists all available artifact (Paginated)
-    pub async fn list(limit: usize, page: usize) -> Result<Vec<Artifact>> {
-        let db = DbPool::get().await;
-        let artifact = artifact::Entity::find()
-            .order_by_desc(artifact::Column::Timestamp)
-            .paginate(db, limit)
-            .fetch_page(page)
-            .await?;
-        // Marshall the types from our internal representation to the actual DB representation.
-        Ok(artifact.into_iter().map(Artifact::from).collect())
-    }
-
-    /// Lists all available artifacts
-    pub async fn list_all() -> Result<Vec<Artifact>> {
-        let db = DbPool::get().await;
-        let artifact = artifact::Entity::find()
-            .order_by_desc(artifact::Column::Timestamp)
-            .all(db)
-            .await?;
-        // Marshall the types from our internal representation to the actual DB representation.
-        Ok(artifact.into_iter().map(Artifact::from).collect())
-    }
-
+#[async_trait]
+pub trait ArtifactDb {
     /// Gets an artifact by the build it was associated with (with Build ID)
-    pub async fn get_by_build_id(build_id: Uuid) -> Result<Vec<Artifact>> {
+    async fn get_by_build_id(build_id: Uuid) -> Result<Vec<Artifact>> {
         let db = DbPool::get().await;
         let artifact = artifact::Entity::find()
             .filter(artifact::Column::BuildId.eq(build_id))
@@ -351,7 +268,7 @@ impl Artifact {
     }
 
     /// Searches for an artifact
-    pub async fn search(query: &str) -> Vec<Artifact> {
+    async fn search(query: &str) -> Vec<Artifact> {
         let db = DbPool::get().await;
         let artifact = artifact::Entity::find()
             .filter(
@@ -364,6 +281,75 @@ impl Artifact {
             .unwrap();
         // Marshall the types from our internal representation to the actual DB representation.
         artifact.into_iter().map(Artifact::from).collect()
+    }
+}
+
+impl ArtifactDb for Artifact {}
+
+#[async_trait]
+impl DatabaseEntity for Artifact {
+    async fn add(&self) -> Result<Artifact> {
+        let db = DbPool::get().await;
+        let model = artifact::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            build_id: ActiveValue::Set(self.build_id),
+            name: ActiveValue::Set(self.path.clone()),
+            timestamp: ActiveValue::Set(self.timestamp),
+            url: ActiveValue::Set(self.url.clone()),
+            metadata: ActiveValue::Set(
+                self.metadata
+                    .clone()
+                    .map(|m| serde_json::to_value(m).unwrap()),
+            ),
+        };
+        let ret = artifact::ActiveModel::insert(model, db).await?;
+        Ok(Artifact::from(ret))
+    }
+
+    /// Gets an artifact by ID
+    async fn get(id: Uuid) -> Result<Artifact> {
+        let db = DbPool::get().await;
+        let artifact = artifact::Entity::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Artifact not found"))?;
+        // Marshall the types from our internal representation to the actual DB representation.
+        Ok(Artifact::from(artifact))
+    }
+
+    /// Lists all available artifact (Paginated)
+    async fn list(limit: usize, page: usize) -> Result<Vec<Artifact>> {
+        let db = DbPool::get().await;
+        let artifact = artifact::Entity::find()
+            .order_by_desc(artifact::Column::Timestamp)
+            .paginate(db, limit)
+            .fetch_page(page)
+            .await?;
+        // Marshall the types from our internal representation to the actual DB representation.
+        Ok(artifact.into_iter().map(Artifact::from).collect())
+    }
+
+    /// Lists all available artifacts
+    async fn list_all() -> Result<Vec<Artifact>> {
+        let db = DbPool::get().await;
+        let artifact = artifact::Entity::find()
+            .order_by_desc(artifact::Column::Timestamp)
+            .all(db)
+            .await?;
+        // Marshall the types from our internal representation to the actual DB representation.
+        Ok(artifact.into_iter().map(Artifact::from).collect())
+    }
+
+    fn update<'life0, 'async_trait>(
+        &'life0 self,
+    ) -> core::pin::Pin<
+        Box<dyn core::future::Future<Output = Result<Self>> + core::marker::Send + 'async_trait>,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
     }
 }
 
@@ -387,7 +373,9 @@ impl S3Object for Artifact {
         //self.add().await?;
         let mut metadata = HashMap::new();
         metadata.insert("build_id".to_string(), self.build_id.to_string());
-        let o = obj.upload_file(&dest_path, path.to_owned(), metadata).await?;
+        let o = obj
+            .upload_file(&dest_path, path.to_owned(), metadata)
+            .await?;
 
         // process metadata for artifact
 
@@ -395,7 +383,12 @@ impl S3Object for Artifact {
 
         let file_meta = FileArtifact {
             e_tag: o.e_tag().map(|e| e.to_string()),
-            size: Some(file.metadata().await.expect("Failed to get file metadata").len()),
+            size: Some(
+                file.metadata()
+                    .await
+                    .expect("Failed to get file metadata")
+                    .len(),
+            ),
             filename: Some(self.filename.clone()),
         };
 
@@ -404,9 +397,9 @@ impl S3Object for Artifact {
         let rpm_meta = if self.filename.ends_with(".rpm") {
             // Read RPM metadata
             let mut buf_reader = BufReader::new(file);
-            let rpm = rpm::RPMPackage::parse_async(&mut buf_reader).await.map_err(|e| {
-                anyhow!("Failed to parse RPM: {}", e)
-            })?;
+            let rpm = rpm::RPMPackage::parse_async(&mut buf_reader)
+                .await
+                .map_err(|e| anyhow!("Failed to parse RPM: {}", e))?;
             let meta = rpm.metadata;
             //meta.header.
             Some(RpmArtifact {
@@ -447,42 +440,40 @@ impl S3Object for Artifact {
         let e_tag = file_meta.e_tag.as_ref().unwrap();
         println!("e_tag: {}", e_tag);
 
-        let path = format!("artifacts/{}/{}", self.build_id.simple(),self.path);
+        let path = format!("artifacts/{}/{}", self.build_id.simple(), self.path);
         println!("path: {}", path);
         s3.get_by_e_tag(e_tag, &path).await.map(|b| b.body)
     }
 
-    async fn get(uuid: Uuid) -> Result<Self>
-        where
-            Self: Sized,
+    async fn get_data(uuid: Uuid) -> Result<Self>
+    where
+        Self: Sized,
     {
         let artifact_meta = Artifact::get(uuid).await?;
         Ok(artifact_meta)
     }
 }
 
+// #[derive(Clone, Debug, Serialize, Deserialize)]
+// pub struct Build {
+//     pub id: Uuid,
+//     pub status: BuildStatus,
+//     pub target_id: Option<Uuid>,
+//     pub project_id: Option<Uuid>,
+//     pub timestamp: DateTime<Utc>,
+//     pub compose_id: Option<Uuid>,
+//     pub build_type: String,
+//     #[serde(skip_serializing)]
+//     pub logs: Option<String>,
+//     pub metadata: Option<BuildMeta>
+// }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Build {
-    pub id: Uuid,
-    pub status: BuildStatus,
-    pub target_id: Option<Uuid>,
-    pub project_id: Option<Uuid>,
-    pub timestamp: DateTime<Utc>,
-    pub compose_id: Option<Uuid>,
-    pub build_type: String,
-    #[serde(skip_serializing)]
-    pub logs: Option<String>,
-    pub metadata: Option<BuildMeta>
-}
-
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BuildMeta {
-    pub scope: Option<String>,
-    pub source: Option<String>,
-    pub config_meta: Option<serde_json::Value>,
-}
+// #[derive(Clone, Debug, Serialize, Deserialize)]
+// pub struct BuildMeta {
+//     pub scope: Option<String>,
+//     pub source: Option<String>,
+//     pub config_meta: Option<serde_json::Value>,
+// }
 
 impl From<build::Model> for Build {
     fn from(model: build::Model) -> Self {
@@ -491,39 +482,48 @@ impl From<build::Model> for Build {
             status: num::FromPrimitive::from_i32(model.status).unwrap(),
             target_id: model.target_id,
             project_id: model.project_id,
-            timestamp:  model.timestamp,
+            timestamp: model.timestamp,
             compose_id: model.compose_id,
             build_type: model.build_type,
             logs: model.logs,
-            metadata: model.metadata.map(|m| {
-                serde_json::from_value(m).unwrap()
-            }),
+            metadata: model.metadata.map(|m| serde_json::from_value(m).unwrap()),
         }
     }
 }
 
-impl Build {
-    pub fn new(
-        target_id: Option<Uuid>,
-        project_id: Option<Uuid>,
-        compose_id: Option<Uuid>,
-        build_type: String,
-    ) -> Self {
-        dotenv::dotenv().ok();
-        Self {
-            id: Uuid::new_v4(),
-            target_id,
-            project_id,
-            compose_id,
-            status: BuildStatus::Pending,
-            timestamp: Utc::now(),
-            build_type,
-            logs: None,
-            metadata: None,
-        }
+#[async_trait]
+impl DatabaseEntity for Build {
+    /// Gets a build by ID
+    async fn get(id: Uuid) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::Entity::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("Build not found"))?;
+        Ok(Build::from(build))
     }
 
-    pub async fn add(&self) -> Result<Build> {
+    async fn list(limit: usize, page: usize) -> Result<Vec<Build>> {
+        let db = DbPool::get().await;
+        let build = build::Entity::find()
+            .order_by(build::Column::Timestamp, Order::Desc)
+            .paginate(db, limit)
+            .fetch_page(page)
+            .await?;
+
+        Ok(build.into_iter().map(Build::from).collect())
+    }
+
+    async fn list_all() -> Result<Vec<Build>> {
+        let db = DbPool::get().await;
+        let build = build::Entity::find()
+            .order_by(build::Column::Timestamp, Order::Desc)
+            .all(db)
+            .await?;
+        Ok(build.into_iter().map(Build::from).collect())
+    }
+
+    async fn add(&self) -> Result<Build> {
         let db = DbPool::get().await;
         let build = build::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -537,7 +537,49 @@ impl Build {
         Ok(Build::from(res))
     }
 
-    pub async fn update_logs(&self, logs: String) -> Result<Build> {
+    async fn update(&self) -> Result<Build> {
+        let db = DbPool::get().await;
+        let build = build::ActiveModel {
+            id: ActiveValue::Set(self.id),
+            status: ActiveValue::Set(self.status as i32),
+            target_id: ActiveValue::Set(self.target_id),
+            timestamp: ActiveValue::Set(self.timestamp),
+            build_type: ActiveValue::Set(self.build_type.clone()),
+            ..Default::default()
+        };
+        let res = build::ActiveModel::update(build, db).await?;
+        Ok(Build::from(res))
+    }
+}
+
+#[async_trait]
+pub trait BuildDb {
+    async fn update_logs(&self, logs: String) -> Result<Build>;
+
+    async fn update_status(&self, status: i32) -> Result<Build>;
+
+    async fn update_type(&self, build_type: &str) -> Result<Build>;
+
+    async fn update_metadata(&self, metadata: BuildMeta) -> Result<Build>;
+
+    async fn tag_compose(&self, compose_id: Uuid) -> Result<Build>;
+
+    async fn tag_target(&self, target_id: Uuid) -> Result<Build>;
+
+    async fn untag_target(&self) -> Result<Build>;
+
+    async fn tag_project(&self, project_id: Uuid) -> Result<Build>;
+
+    async fn get_by_target_id(target_id: Uuid) -> Result<Vec<Build>>;
+
+    async fn get_by_project_id(project_id: Uuid) -> Result<Vec<Build>>;
+
+    async fn get_by_compose_id(compose_id: Uuid) -> Result<Vec<Build>>;
+}
+
+#[async_trait]
+impl BuildDb for Build {
+    async fn update_logs(&self, logs: String) -> Result<Build> {
         let db = DbPool::get().await;
         let build = build::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -547,8 +589,7 @@ impl Build {
         let res = build::ActiveModel::update(build, db).await?;
         Ok(Build::from(res))
     }
-
-    pub async fn update_status(&self, status: i32) -> Result<Build> {
+    async fn update_status(&self, status: i32) -> Result<Build> {
         let db = DbPool::get().await;
         let build = build::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -558,8 +599,7 @@ impl Build {
         let res = build::ActiveModel::update(build, db).await?;
         Ok(Build::from(res))
     }
-
-    pub async fn update_type(&self, build_type: &str) -> Result<Build> {
+    async fn update_type(&self, build_type: &str) -> Result<Build> {
         let db = DbPool::get().await;
         let build = build::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -570,7 +610,7 @@ impl Build {
         Ok(Build::from(res))
     }
 
-    pub async fn update_metadata(&self, metadata: BuildMeta) -> Result<Build> {
+    async fn update_metadata(&self, metadata: BuildMeta) -> Result<Build> {
         let db = DbPool::get().await;
         let build = build::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -581,7 +621,7 @@ impl Build {
         Ok(Build::from(res))
     }
 
-    pub async fn tag_compose(&self, compose_id: Uuid) -> Result<Build> {
+    async fn tag_compose(&self, compose_id: Uuid) -> Result<Build> {
         let db = DbPool::get().await;
         let build = build::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -592,7 +632,7 @@ impl Build {
         Ok(Build::from(res))
     }
 
-    pub async fn tag_target(&self, target_id: Uuid) -> Result<Build> {
+    async fn tag_target(&self, target_id: Uuid) -> Result<Build> {
         let db = DbPool::get().await;
         let build = build::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -603,7 +643,7 @@ impl Build {
         Ok(Build::from(res))
     }
 
-    pub async fn untag_target(&self) -> Result<Build> {
+    async fn untag_target(&self) -> Result<Build> {
         let db = DbPool::get().await;
         let build = build::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -614,7 +654,7 @@ impl Build {
         Ok(Build::from(res))
     }
 
-    pub async fn tag_project(&self, project_id: Uuid) -> Result<Build> {
+    async fn tag_project(&self, project_id: Uuid) -> Result<Build> {
         let db = DbPool::get().await;
         let build = build::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -625,37 +665,7 @@ impl Build {
         Ok(Build::from(res))
     }
 
-    /// Gets a build by ID
-    pub async fn get(id: Uuid) -> Result<Build> {
-        let db = DbPool::get().await;
-        let build = build::Entity::find_by_id(id)
-            .one(db)
-            .await?
-            .ok_or_else(|| anyhow!("Build not found"))?;
-        Ok(Build::from(build))
-    }
-
-    pub async fn list(limit: usize, page: usize) -> Result<Vec<Build>> {
-        let db = DbPool::get().await;
-        let build = build::Entity::find()
-            .order_by(build::Column::Timestamp, Order::Desc)
-            .paginate(db, limit)
-            .fetch_page(page)
-            .await?;
-
-        Ok(build.into_iter().map(Build::from).collect())
-    }
-
-    pub async fn list_all() -> Result<Vec<Build>> {
-        let db = DbPool::get().await;
-        let build = build::Entity::find()
-            .order_by(build::Column::Timestamp, Order::Desc)
-            .all(db)
-            .await?;
-        Ok(build.into_iter().map(Build::from).collect())
-    }
-
-    pub async fn get_by_target_id(target_id: Uuid) -> Result<Vec<Build>> {
+    async fn get_by_target_id(target_id: Uuid) -> Result<Vec<Build>> {
         let db = DbPool::get().await;
         let build = build::Entity::find()
             .order_by(build::Column::Timestamp, Order::Desc)
@@ -665,7 +675,7 @@ impl Build {
         Ok(build.into_iter().map(Build::from).collect())
     }
 
-    pub async fn get_by_project_id(project_id: Uuid) -> Result<Vec<Build>> {
+    async fn get_by_project_id(project_id: Uuid) -> Result<Vec<Build>> {
         let db = DbPool::get().await;
         let build = build::Entity::find()
             .order_by(build::Column::Timestamp, Order::Desc)
@@ -675,7 +685,7 @@ impl Build {
         Ok(build.into_iter().map(Build::from).collect())
     }
 
-    pub async fn get_by_compose_id(compose_id: Uuid) -> Result<Vec<Build>> {
+    async fn get_by_compose_id(compose_id: Uuid) -> Result<Vec<Build>> {
         let db = DbPool::get().await;
         let build = build::Entity::find()
             .order_by(build::Column::Timestamp, Order::Desc)
@@ -691,7 +701,7 @@ pub struct Project {
     pub id: Uuid,
     pub name: String,
     pub description: Option<String>,
-    pub summary: Option<String>
+    pub summary: Option<String>,
 }
 
 impl From<project::Model> for Project {
@@ -700,7 +710,7 @@ impl From<project::Model> for Project {
             id: model.id,
             name: model.name,
             description: model.description,
-            summary: model.summary
+            summary: model.summary,
         }
     }
 }
@@ -759,9 +769,7 @@ impl Project {
 
     pub async fn list_all() -> Result<Vec<Project>> {
         let db = DbPool::get().await;
-        let project = project::Entity::find()
-            .all(db)
-            .await?;
+        let project = project::Entity::find().all(db).await?;
         Ok(project.into_iter().map(Project::from).collect())
     }
 
@@ -825,13 +833,13 @@ impl Project {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Compose {
-    pub id: Uuid,
-    pub compose_ref: Option<String>,
-    pub target_id: Uuid,
-    pub timestamp: DateTime<Utc>,
-}
+// #[derive(Clone, Debug, Serialize, Deserialize)]
+// pub struct Compose {
+//     pub id: Uuid,
+//     pub compose_ref: Option<String>,
+//     pub target_id: Uuid,
+//     pub timestamp: DateTime<Utc>,
+// }
 
 impl From<compose::Model> for Compose {
     fn from(model: compose::Model) -> Self {
@@ -855,19 +863,11 @@ impl From<compose::Model> for Compose {
     }
 }*/
 
-impl Compose {
-    pub fn new(target_id: Uuid) -> Self {
-        dotenv::dotenv().ok();
-        Self {
-            id: Uuid::new_v4(),
-            compose_ref: None,
-            target_id,
-            timestamp: chrono::Utc::now(),
-        }
-    }
 
 
-    pub async fn add(&self) -> Result<Compose> {
+#[async_trait]
+impl DatabaseEntity for Compose {
+    async fn add(&self) -> Result<Compose> {
         let db = DbPool::get().await;
         let compose = compose::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -879,9 +879,8 @@ impl Compose {
         let res = compose::ActiveModel::insert(compose, db).await?;
         Ok(Compose::from(res))
     }
-
     /// Get compose by ID
-    pub async fn get(id: Uuid) -> Result<Compose> {
+    async fn get(id: Uuid) -> Result<Compose> {
         let db = DbPool::get().await;
         let compose = compose::Entity::find_by_id(id)
             .one(db)
@@ -890,7 +889,7 @@ impl Compose {
         Ok(Compose::from(compose))
     }
 
-    pub async fn list(limit: usize, page: usize) -> Result<Vec<Compose>> {
+    async fn list(limit: usize, page: usize) -> Result<Vec<Compose>> {
         let db = DbPool::get().await;
         let compose = compose::Entity::find()
             .paginate(db, limit)
@@ -899,15 +898,13 @@ impl Compose {
         Ok(compose.into_iter().map(Compose::from).collect())
     }
 
-    pub async fn list_all() -> Result<Vec<Compose>> {
+    async fn list_all() -> Result<Vec<Compose>> {
         let db = DbPool::get().await;
-        let compose = compose::Entity::find()
-            .all(db)
-            .await?;
+        let compose = compose::Entity::find().all(db).await?;
         Ok(compose.into_iter().map(Compose::from).collect())
     }
 
-    pub async fn update(&self) -> Result<Compose> {
+    async fn update(&self) -> Result<Compose> {
         let db = DbPool::get().await;
         let compose = compose::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -918,71 +915,65 @@ impl Compose {
         let res = compose::ActiveModel::update(compose, db).await?;
         Ok(Compose::from(res))
     }
-    pub async fn compose(self) -> Result<()>
-        where
-            Self: Sized,
-    {
-        // TODO: probably move this to a dedicated compose function/executable.
-
-        let tmpdir = tempfile::tempdir()?;
-
-        let rpmdir = tmpdir.path().join("rpm");
-
-        let builds = Build::get_by_compose_id(self.id).await?;
-        for build in builds {
-            let artifacts = Artifact::get_by_build_id(build.id).await?;
-            for artifact in artifacts {
-                let filename = &artifact.filename;
-
-                // download the artifacts
-                if filename.ends_with(".rpm") {
-                    let pkgs_dir = tmpdir.path().join("packages");
-
-                    // create rpmdir if it doesn't exist
-                    if !pkgs_dir.exists() {
-                        tokio::fs::create_dir_all(&pkgs_dir).await?;
-                    }
-                    // download the rpm artifact
-                    let rpm_path = pkgs_dir.join(filename);
-                    // get the file stream from the artifact
-                    let stream = artifact.pull_bytes().await?;
-                    // write the stream to the rpm file
-                    let mut rpm_file = File::create(&rpm_path).await?;
-                    let mut buf = vec![];
-
-                    stream.into_async_read().read_to_end(&mut buf).await?;
-
-                    rpm_file.write_all(&buf).await?;
-
-                }
-
-            }
-            // Compile the RPMs into a repository
-            // check if there is an rpmdir
-            if rpmdir.exists() {
-                // use createrepo to create the repository
-                let mut output = Command::new("createrepo")
-                    .arg(".")
-                    .current_dir(&rpmdir)
-                    .spawn()?;
-                let status = output.wait().await?;
-            }
-
-        }
-        Ok(())
-    }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Target {
-    pub id: Uuid,
-    pub name: String,
-    pub image: Option<String>,
-    pub arch: String,
-}
+// impl Compose {
 
-/*impl From<crate::backend_old::Target> for Target {
-    fn from(model: crate::backend_old::Target) -> Self {
+//     pub async fn compose(self) -> Result<()>
+//     where
+//         Self: Sized,
+//     {
+//         // TODO: probably move this to a dedicated compose function/executable.
+
+//         let tmpdir = tempfile::tempdir()?;
+
+//         let rpmdir = tmpdir.path().join("rpm");
+
+//         let builds = Build::get_by_compose_id(self.id).await?;
+//         for build in builds {
+//             let artifacts = Artifact::get_by_build_id(build.id).await?;
+//             for artifact in artifacts {
+//                 let filename = &artifact.filename;
+
+//                 // download the artifacts
+//                 if filename.ends_with(".rpm") {
+//                     let pkgs_dir = tmpdir.path().join("packages");
+
+//                     // create rpmdir if it doesn't exist
+//                     if !pkgs_dir.exists() {
+//                         tokio::fs::create_dir_all(&pkgs_dir).await?;
+//                     }
+//                     // download the rpm artifact
+//                     let rpm_path = pkgs_dir.join(filename);
+//                     // get the file stream from the artifact
+//                     let stream = artifact.pull_bytes().await?;
+//                     // write the stream to the rpm file
+//                     let mut rpm_file = File::create(&rpm_path).await?;
+//                     let mut buf = vec![];
+
+//                     stream.into_async_read().read_to_end(&mut buf).await?;
+
+//                     rpm_file.write_all(&buf).await?;
+//                 }
+//             }
+//             // Compile the RPMs into a repository
+//             // check if there is an rpmdir
+//             if rpmdir.exists() {
+//                 // use createrepo to create the repository
+//                 let mut output = Command::new("createrepo")
+//                     .arg(".")
+//                     .current_dir(&rpmdir)
+//                     .spawn()?;
+//                 let status = output.wait().await?;
+//             }
+//         }
+//         Ok(())
+//     }
+// }
+
+
+impl From<target::Model> for Target {
+    fn from(model: target::Model) -> Self {
         Target {
             id: model.id,
             name: model.name,
@@ -990,29 +981,12 @@ pub struct Target {
             arch: model.arch,
         }
     }
-}*/
+}
 
-impl Target {
-    pub fn new(name: String, image: Option<String>, arch: String) -> Self {
-        dotenv::dotenv().ok();
-        Self {
-            id: Uuid::new_v4(),
-            name,
-            image,
-            arch,
-        }
-    }
 
-    pub fn from_model(model: target::Model) -> Self {
-        Self {
-            id: model.id,
-            name: model.name,
-            image: model.image,
-            arch: model.arch,
-        }
-    }
-
-    pub async fn add(&self) -> Result<Target> {
+#[async_trait]
+impl DatabaseEntity for Target {
+    async fn add(&self) -> Result<Target> {
         let db = DbPool::get().await;
         let target = target::ActiveModel {
             id: ActiveValue::Set(self.id),
@@ -1021,10 +995,10 @@ impl Target {
             arch: ActiveValue::Set(self.arch.clone()),
         };
         let res = target::ActiveModel::insert(target, db).await?;
-        Ok(Target::from_model(res))
+        Ok(Target::from(res))
     }
 
-    pub async fn get(id: Uuid) -> Result<Target> {
+    async fn get(id: Uuid) -> Result<Target> {
         let db = DbPool::get().await;
         let target = target::Entity::find_by_id(id)
             .one(db)
@@ -1033,27 +1007,25 @@ impl Target {
                 error!("Target not found");
                 anyhow!("Target not found")
             })?;
-        Ok(Target::from_model(target))
+        Ok(Target::from(target))
     }
 
-    pub async fn list(limit: usize, page: usize) -> Result<Vec<Target>> {
+    async fn list(limit: usize, page: usize) -> Result<Vec<Target>> {
         let db = DbPool::get().await;
         let target = target::Entity::find()
             .paginate(db, limit)
             .fetch_page(page)
             .await?;
-        Ok(target.into_iter().map(Target::from_model).collect())
+        Ok(target.into_iter().map(Target::from).collect())
     }
 
-    pub async fn list_all() -> Result<Vec<Target>> {
+    async fn list_all() -> Result<Vec<Target>> {
         let db = DbPool::get().await;
-        let target = target::Entity::find()
-            .all(db)
-            .await?;
-        Ok(target.into_iter().map(Target::from_model).collect())
+        let target = target::Entity::find().all(db).await?;
+        Ok(target.into_iter().map(Target::from).collect())
     }
 
-    pub async fn update(&self, _id: Uuid) -> Result<Target> {
+    async fn update(&self) -> Result<Target> {
         let db = DbPool::get().await;
         // get target by id, then update it
         let target = target::ActiveModel {
@@ -1063,10 +1035,21 @@ impl Target {
             arch: ActiveValue::Set(self.arch.clone()),
         };
         let res = target::ActiveModel::update(target, db).await?;
-        Ok(Target::from_model(res))
+        Ok(Target::from(res))
     }
+}
 
-    pub async fn delete(&self) -> Result<()> {
+
+#[async_trait]
+pub trait TargetDb {
+    async fn delete(&self) -> Result<()>;
+    async fn get_by_name(name: String) -> Result<Target>;
+
+}
+#[async_trait]
+impl TargetDb for Target {
+
+    async fn delete(&self) -> Result<()> {
         let db = DbPool::get().await;
         // check if target exists
         let _ = target::Entity::find_by_id(self.id)
@@ -1077,13 +1060,13 @@ impl Target {
         Ok(())
     }
 
-    pub async fn get_by_name(name: String) -> Result<Target> {
+    async fn get_by_name(name: String) -> Result<Target> {
         let db = DbPool::get().await;
         let target = target::Entity::find()
             .filter(target::Column::Name.eq(name))
             .one(db)
             .await?
             .ok_or_else(|| anyhow!("Target not found"))?;
-        Ok(Target::from_model(target))
+        Ok(Target::from(target))
     }
 }
