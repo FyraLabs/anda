@@ -1,7 +1,6 @@
 use crate::backend::*;
 use crate::backend::{Artifact, S3Object};
 use log::debug;
-use rocket::fs::NamedFile;
 use rocket::http::Status;
 use rocket::response::Redirect;
 use rocket::{
@@ -12,10 +11,10 @@ use rocket::{
     Route,
 };
 use std::{collections::HashMap, path::PathBuf};
-use tokio::io::AsyncReadExt;
-
+use rocket_okapi::{openapi, openapi_get_routes, rapidoc::*, swagger_ui::*};
+use schemars::JsonSchema;
 pub(crate) fn routes() -> Vec<Route> {
-    routes![
+    openapi_get_routes![
         index,
         get,
         upload,
@@ -26,6 +25,7 @@ pub(crate) fn routes() -> Vec<Route> {
     ]
 }
 
+
 #[derive(FromForm)]
 pub struct ArtifactUpload<'r> {
     build_id: Uuid,
@@ -33,6 +33,7 @@ pub struct ArtifactUpload<'r> {
     // Can be multiple forms, starts with file/<path>
     files: HashMap<String, TempFile<'r>>,
 }
+#[openapi()]
 #[get("/?<limit>&<page>&<all>")]
 async fn index(
     page: Option<usize>,
@@ -52,7 +53,7 @@ async fn index(
     };
     Ok(Json(artifacts))
 }
-
+#[openapi()]
 #[get("/<id>", rank = 5)]
 async fn get(id: Uuid) -> Option<Json<Artifact>> {
     //NOTE: ID is a path string to the file, so we probably need to see if Rocket can handle escaping slashes
@@ -61,7 +62,7 @@ async fn get(id: Uuid) -> Option<Json<Artifact>> {
         .ok()
         .map(Json)
 }
-
+#[openapi()]
 #[get("/<id>/file", rank = 5)]
 async fn get_raw_file(id: Uuid) -> Result<Redirect, Status> {
     // Gets file name, then redirects to the file
@@ -74,6 +75,7 @@ async fn get_raw_file(id: Uuid) -> Result<Redirect, Status> {
 }
 
 /// WIP: Directory Listing
+#[openapi()]
 #[get("/<id>/file/<path..>", rank = 6)]
 async fn get_file(id: Uuid, path: PathBuf) -> Result<(ContentType, Vec<u8>), Status> {
     let artifact = Artifact::get(id).await.unwrap();
@@ -88,6 +90,7 @@ async fn get_file(id: Uuid, path: PathBuf) -> Result<(ContentType, Vec<u8>), Sta
 }
 
 // Upload artifact (entire folders) with form data
+// #[openapi()]
 #[post("/", data = "<data>")]
 async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
     debug!("Build ID: {}", data.build_id);
@@ -111,6 +114,7 @@ async fn upload(data: Form<ArtifactUpload<'_>>) -> Json<Vec<Artifact>> {
     Json(results)
 }
 
+#[openapi()]
 #[post("/metadata", data = "<data>")]
 async fn new_with_metadata(data: Json<Artifact>) -> Json<Artifact> {
     let mut artifact = data.into_inner();
@@ -120,6 +124,7 @@ async fn new_with_metadata(data: Json<Artifact>) -> Json<Artifact> {
     Json(artifact)
 }
 
+#[openapi()]
 #[get("/search?<query>")]
 async fn search(query: String) -> Json<Vec<Artifact>> {
     Json(Artifact::search(&query).await)

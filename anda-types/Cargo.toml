@@ -18,3 +18,4 @@ log = "~0.4.17"
 num = "0.4.0"
 num-derive = "0.3.3"
 num-traits = "0.2.15"
+schemars = {version = "0.8.10", features = ["uuid1", "chrono"]}

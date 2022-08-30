@@ -126,7 +126,7 @@ dependencies = [
  "tokio-tar",
  "tokio-util 0.7.3",
  "toml",
- "uuid",
+ "uuid 1.1.2",
  "walkdir",
 ]
 
@@ -165,8 +165,10 @@ dependencies = [
  "pretty_env_logger",
  "reqwest",
  "rocket",
+ "rocket_okapi",
  "rpm-rs",
  "rust-embed",
+ "schemars",
  "sea-orm",
  "sea-orm-rocket",
  "sea-query",
@@ -190,9 +192,10 @@ dependencies = [
  "num",
  "num-derive",
  "num-traits",
+ "schemars",
  "serde",
  "serde_json",
- "uuid",
+ "uuid 1.1.2",
 ]
 
 [[package]]
@@ -1303,12 +1306,12 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.14.1"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4529658bdda7fd6769b8614be250cdcfc3aeb0ee72fe66f9e41e5e5eb73eac02"
+checksum = "a01d95850c592940db9b8194bc39f4bc0e89dee5c4265e4b1807c34a9aba453c"
 dependencies = [
- "darling_core 0.14.1",
- "darling_macro 0.14.1",
+ "darling_core 0.13.4",
+ "darling_macro 0.13.4",
 ]
 
 [[package]]
@@ -1327,9 +1330,9 @@ dependencies = [
 
 [[package]]
 name = "darling_core"
-version = "0.14.1"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "649c91bc01e8b1eac09fb91e8dbc7d517684ca6be8ebc75bb9cafc894f9fdb6f"
+checksum = "859d65a907b6852c9361e3185c862aae7fafd2887876799fa55f5f99dc40d610"
 dependencies = [
  "fnv",
  "ident_case",
@@ -1352,11 +1355,11 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.14.1"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddfc69c5bfcbd2fc09a0f38451d2daf0e372e367986a83906d1b0dbc88134fb5"
+checksum = "9c972679f83bdf9c42bd905396b6c3588a843a17f0f16dfcfa3e2c5d57441835"
 dependencies = [
- "darling_core 0.14.1",
+ "darling_core 0.13.4",
  "quote",
  "syn",
 ]
@@ -2567,7 +2570,6 @@ dependencies = [
  "k8s-openapi",
  "kube-client",
  "kube-core",
- "kube-derive",
  "kube-runtime",
 ]
 
@@ -2618,23 +2620,9 @@ dependencies = [
  "json-patch",
  "k8s-openapi",
  "once_cell",
- "schemars",
  "serde",
  "serde_json",
  "thiserror",
-]
-
-[[package]]
-name = "kube-derive"
-version = "0.74.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66d74121eb41af4480052901f31142d8d9bbdf1b7c6b856da43bcb02f5b1b177"
-dependencies = [
- "darling 0.14.1",
- "proc-macro2",
- "quote",
- "serde_json",
- "syn",
 ]
 
 [[package]]
@@ -3143,6 +3131,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "okapi"
+version = "0.7.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce66b6366e049880a35c378123fddb630b1a1a3c37fa1ca70caaf4a09f6e2893"
+dependencies = [
+ "log",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3608,7 +3608,7 @@ dependencies = [
  "serde",
  "serde_json",
  "time 0.3.11",
- "uuid",
+ "uuid 1.1.2",
 ]
 
 [[package]]
@@ -4017,7 +4017,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.7.3",
  "ubyte",
- "uuid",
+ "uuid 1.1.2",
  "version_check 0.9.4",
  "yansi",
 ]
@@ -4063,7 +4063,36 @@ dependencies = [
  "time 0.3.11",
  "tokio 1.20.1",
  "uncased",
- "uuid",
+ "uuid 1.1.2",
+]
+
+[[package]]
+name = "rocket_okapi"
+version = "0.8.0-rc.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "489f4f5b120762f7974e65b919fc462d0660fd8b839026d8985b850fe5acccb0"
+dependencies = [
+ "either",
+ "log",
+ "okapi",
+ "rocket",
+ "rocket_okapi_codegen",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "rocket_okapi_codegen"
+version = "0.8.0-rc.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54f94d1ffe41472e08463d7a2674f1db04dc4df745285e8369b33d3cfd6b0308"
+dependencies = [
+ "darling 0.13.4",
+ "proc-macro2",
+ "quote",
+ "rocket_http",
+ "syn",
 ]
 
 [[package]]
@@ -4263,10 +4292,14 @@ version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1847b767a3d62d95cbf3d8a9f0e421cf57a0d8aa4f411d4b16525afb0284d4ed"
 dependencies = [
+ "chrono",
  "dyn-clone",
+ "indexmap",
  "schemars_derive",
  "serde",
  "serde_json",
+ "uuid 0.8.2",
+ "uuid 1.1.2",
 ]
 
 [[package]]
@@ -4337,7 +4370,7 @@ dependencies = [
  "time 0.3.11",
  "tracing",
  "url",
- "uuid",
+ "uuid 1.1.2",
 ]
 
 [[package]]
@@ -4419,7 +4452,7 @@ dependencies = [
  "sea-query-driver",
  "serde_json",
  "time 0.3.11",
- "uuid",
+ "uuid 1.1.2",
 ]
 
 [[package]]
@@ -4866,7 +4899,7 @@ dependencies = [
  "time 0.3.11",
  "tokio-stream",
  "url",
- "uuid",
+ "uuid 1.1.2",
  "webpki-roots",
  "whoami",
 ]
@@ -5771,6 +5804,12 @@ dependencies = [
  "libc",
  "log",
 ]
+
+[[package]]
+name = "uuid"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
 
 [[package]]
 name = "uuid"

@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use log::warn;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
@@ -7,7 +8,7 @@ use std::path::PathBuf;
 
 use crate::error::ProjectError;
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct AndaConfig {
     pub project: BTreeMap<String, Project>,
 }
@@ -24,7 +25,7 @@ impl AndaConfig {
     }
 }
 
-#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, JsonSchema)]
 pub struct Project {
     pub image: Option<String>,
     pub rpmbuild: Option<RpmBuild>,
@@ -35,7 +36,7 @@ pub struct Project {
     pub rollback: Option<Script>,
     pub env: Option<BTreeMap<String, String>>,
 }
-#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, JsonSchema)]
 pub struct Script {
     pub stage: BTreeMap<String, Stage>,
 }
@@ -55,24 +56,24 @@ impl Script {
     }
 }
 
-#[derive(Deserialize, Eq, PartialEq, Hash, PartialOrd, Ord, Serialize, Debug, Clone)]
+#[derive(Deserialize, Eq, PartialEq, Hash, PartialOrd, Ord, Serialize, Debug, Clone, JsonSchema)]
 pub struct Stage {
     pub image: Option<String>,
     pub depends: Option<Vec<String>>,
     pub commands: Vec<String>,
 }
 
-#[derive(Deserialize, Eq, PartialEq, Hash, PartialOrd, Ord, Serialize, Debug, Clone)]
+#[derive(Deserialize, Eq, PartialEq, Hash, PartialOrd, Ord, Serialize, Debug, Clone, JsonSchema)]
 pub struct PreScript {
     pub commands: Vec<String>,
 }
 
-#[derive(Deserialize, Eq, PartialEq, Hash, Serialize, Debug, Clone)]
+#[derive(Deserialize, Eq, PartialEq, Hash, Serialize, Debug, Clone, JsonSchema)]
 pub struct PostScript {
     pub commands: Vec<String>,
 }
 
-#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, JsonSchema)]
 pub struct RpmBuild {
     /// Image to build RPMs with
     /// If not specified, the image of the project is used
@@ -93,19 +94,19 @@ pub struct RpmBuild {
 fn default_rpm_mode() -> RpmBuildMode {
     RpmBuildMode::Standard
 }
-#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum RpmBuildMode {
     Standard,
     Cargo,
 }
 
-#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, JsonSchema)]
 pub struct Docker {
     pub image: BTreeMap<String, DockerImage>, // tag, file
 }
 
-#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, JsonSchema)]
 pub struct DockerImage {
     pub dockerfile: Option<PathBuf>,
     pub import: Option<PathBuf>,

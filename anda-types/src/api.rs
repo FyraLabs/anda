@@ -1,9 +1,10 @@
+use schemars::JsonSchema;
 use uuid::Uuid;
 
 use chrono::{offset::Utc, DateTime};
 use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Serialize, Deserialize, JsonSchema)]
 pub enum BuildStatus {
     Pending = 0,
     Running = 1,
@@ -34,14 +35,14 @@ impl std::fmt::Display for BuildStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FileArtifact {
     pub e_tag: Option<String>,
     pub filename: Option<String>,
     pub size: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct RpmArtifact {
     pub name: String,
     pub arch: String,
@@ -50,13 +51,13 @@ pub struct RpmArtifact {
     pub release: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct DockerArtifact {
     pub name: String,
     pub tag: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ArtifactMeta {
     pub art_type: String,
     pub file: Option<FileArtifact>,
@@ -64,7 +65,7 @@ pub struct ArtifactMeta {
     pub docker: Option<DockerArtifact>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Artifact {
     pub id: Uuid,
     pub filename: String,
@@ -89,7 +90,7 @@ impl Artifact {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Build {
     pub id: Uuid,
     pub status: BuildStatus,
@@ -124,14 +125,14 @@ impl Build {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct BuildMeta {
     pub scope: Option<String>,
     pub source: Option<String>,
     pub config_meta: Option<crate::AndaConfig>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Project {
     pub id: Uuid,
     pub name: String,
@@ -139,7 +140,7 @@ pub struct Project {
     pub summary: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Compose {
     pub id: Uuid,
     pub compose_ref: Option<String>,
