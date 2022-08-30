@@ -76,12 +76,6 @@ project "anda" {
             workdir = "."
             dockerfile = "client.dockerfile"
         }
-        image "test" {
-            tag_latest = true
-            version = "$COMMIT_ID"
-            workdir = "."
-            dockerfile = "Dockerfile"
-        }
     }
 
     rollback {

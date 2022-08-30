@@ -2,6 +2,12 @@ FROM rust:latest as builder
 
 WORKDIR /build
 
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+
+RUN apt-get install -y nodejs
+
+RUN curl -sL https://unpkg.com/@pnpm/self-installer | node
+
 COPY . .
 
 RUN cargo build --release --bin anda-server

@@ -56,8 +56,10 @@ version = "0.8.1"
 branch = "master"
 
 [build-dependencies]
-bindgen = "0.60.1"
-npm_rs = "0.2.1"
+anyhow = "1.0.58"
+in-container = "^1"
+is-root = "0.1"
+shells = "0.2"
 
 [[bin]]
 name = "anda-server"

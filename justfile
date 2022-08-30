@@ -59,7 +59,11 @@ docker-compose:
 minio-client: docker-compose
     mcli alias set anda http://localhost:9000 minioadmin minioadmin
 
-dev-env: docker-compose test-cluster test-buildkit docker-client
+database: docker-compose
+    psql postgresql://postgres:example@localhost:5432 -c "CREATE DATABASE anda;"
+
+
+dev-env: docker-compose database minio-client test-cluster test-buildkit docker-client
 
 test-push-anda:
     cargo run --bin anda push --target owo --scope test

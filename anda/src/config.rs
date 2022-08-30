@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use log::warn;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -166,7 +166,8 @@ pub fn check_config(config: AndaConfig) -> Result<AndaConfig, ProjectError> {
             if !rpmbuild.spec.exists() && rpmbuild.mode == RpmBuildMode::Standard {
                 errors.push(ProjectError::InvalidManifest(format!(
                     "error loading spec file `{}` for project `{}`: file does not exist",
-                    rpmbuild.spec.display(), key
+                    rpmbuild.spec.display(),
+                    key
                 )));
             }
             if let Some(projects) = &rpmbuild.project_depends {

@@ -19,7 +19,28 @@ To initialize an Andaman developer environment, you need:
 To quickly set up a developer environment, run the just task:
     
 ```bash
+# But first, copy over the .env file from the example
+cp .env.example .env
+# Then run the just task
 just dev-env
 ```
 
 This will build all the necessary components and set up a development environment.
+
+## Database schemas
+
+Andaman uses [SeaORM](https://www.sea-ql.org/SeaORM/) as its ORM.
+To make full use of the ORM, install the SeaORM CLI:
+    
+```bash
+# Install the SeaORM CLI
+cargo install sea-orm-cli
+
+# Start migration
+sea migrate up
+```
+
+Alternatively, you can directly run the SeaORM migrator exeuctable:
+```bash
+cargo run --bin anda-db-migration
+```

@@ -62,6 +62,26 @@ Andaman is a build system written in Rust, and is powered by the following compo
 * [x] Task scheduling for builds
 * [ ] Full repository composition
 * [ ] Build artifact signing
-* [ ] OCI containers
+* [x] OCI containers
 * [ ] OSTree composes (Flatpak and RPM-OSTree)
 * [x] Building RPMs using an alternative package spec format (see `cargo-generate-rpm`)
+
+
+## Build Instructions
+
+To build and use Andaman, you need the following:
+
+- [Rust](https://www.rust-lang.org) & Cargo `rustc` `cargo`
+- [BuildKit](https://github.com/moby/buildkit)
+- [PNPM](https://pnpm.io)
+- [Docker/Moby Engine](https://www.docker.com) `moby-engine`
+- [Minio](https://min.io)
+- [OpenSSL](https://www.openssl.org) `openssl-devel`
+- [PostgreSQL](https://www.postgresql.org) `libpq-devel`
+
+After installing the above, you can build Andaman by running `cargo build`.
+
+You can also self-host Andaman (Build using itself) by running `cargo anda build -s anda`.
+This builds Andaman using Cargo, and builds itself using the provided `anda.hcl` config file.
+
+For hacking Andaman, see the [Hacking guide](README.developers.md).

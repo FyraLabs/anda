@@ -1,7 +1,17 @@
-use npm_rs::*;
-use std::fs;
+use std::{fs, process::Command, env};
 // use std::env;
 // use std::path::PathBuf;
+use anyhow::Result;
+use shells::sh;
+// check if in container
+use in_container::in_container;
+
+fn pnpm() -> Result<()> {
+    Command::new("pnpm")
+    .arg("install")
+    .status()?;
+    Ok(())
+}
 
 fn main() {
     println!("cargo:rerun-if-changed=anda-frontend/src");
@@ -9,18 +19,28 @@ fn main() {
     let old_pwd = std::env::current_dir().unwrap();
     // change current directory to anda-frontend
     std::env::set_current_dir("anda-frontend").unwrap();
-    NpmEnv::default()
-        .with_node_env(&NodeEnv::from_cargo_profile().unwrap_or_default())
-        .init_env()
-        .install(None)
-        .exec()
-        .unwrap();
-    let exit_status = NpmEnv::default()
-        .with_node_env(&NodeEnv::from_cargo_profile().unwrap_or_default())
-        .init_env()
-        .run("build")
-        .exec()
-        .unwrap();
+    pnpm().unwrap();
+
+    if pnpm().is_err() && in_container() && is_root::is_root() {
+        // check if node is installed
+        if Command::new("node").status().unwrap().success() {
+            // This is not a good way to install pnpm, since it causes side effects.
+            // would be better if we added prebuild script to anda config.
+            sh!("curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm@7");
+            // try to run again
+            pnpm().unwrap();
+        } else {
+            panic!("node is not installed");
+        }
+        //panic!("pnpm is not installed, and not in a build container! install pnpm and try again");
+    }
+    
+    
+    Command::new("pnpm")
+        .arg("build")
+        .arg("--outDir")
+        .arg(format!("{}/web", env::var("OUT_DIR").unwrap()))
+        .status().unwrap();
     std::env::set_current_dir(old_pwd).unwrap();
 
     // if symlink already exists
@@ -53,5 +73,5 @@ fn main() {
     // copy anda-frontend/dist folder to anda-server/dist folder
     //std::os::unix::fs::symlink("../anda-frontend/dist", "dist").unwrap();
 
-    println!("{:?}", exit_status);
+    // println!("{:?}", exit_status);
 }

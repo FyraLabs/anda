@@ -55,7 +55,7 @@ mod tasks;
 use rust_embed::RustEmbed;
 
 #[derive(RustEmbed)]
-#[folder = "anda-frontend/dist"]
+#[folder = "$OUT_DIR/web"]
 struct Asset;
 
 #[get("/<_file..>")]
@@ -119,6 +119,7 @@ async fn rocket() -> Rocket<Build> {
 
     let figment = Config::figment()
         .merge(config)
+        .merge(Toml::file("/etc/anda-server/anda-server.toml").nested())
         .merge(Toml::file("anda-server.toml").nested())
         .merge(rocket::figment::providers::Env::prefixed("ANDA_"));
 
