@@ -35,8 +35,8 @@ async fn get(id: Uuid) -> Option<Json<Compose>> {
 }
 
 
-#[post("/")]
-async fn compose () -> Result<Json<Compose>, Status> {
-    let compose = Compose::compose().await.map(Json).ok().unwrap();
+#[post("/<id>")]
+async fn compose (id: Uuid) -> Result<Json<Compose>, Status> {
+    let compose = Compose::compose(id).await.map(Json).ok().unwrap();
     Ok(compose)
 }

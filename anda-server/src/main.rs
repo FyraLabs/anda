@@ -40,6 +40,9 @@ use rocket::{
 };
 use sea_orm_rocket::Database;
 use std::{borrow::Cow, ffi::OsStr, path::PathBuf};
+use rocket::fs::FileServer;
+use std::fs;
+
 
 mod api;
 mod auth;
@@ -123,6 +126,9 @@ async fn rocket() -> Rocket<Build> {
         .merge(Toml::file("anda-server.toml").nested())
         .merge(rocket::figment::providers::Env::prefixed("ANDA_"));
 
+
+    fs::create_dir_all("anda-build").unwrap();
+
     pretty_env_logger::init();
     info!(
         "Andaman Project Server, version {}",
@@ -134,12 +140,12 @@ async fn rocket() -> Rocket<Build> {
         .attach(cors::Cors)
         .attach(tasks::TaskManager)
         .attach(db::Db::init())
+        .mount("/repositories", FileServer::from("anda-build").rank(-100))
         .mount("/builds", api::builds_routes())
         .mount("/artifacts", api::artifacts_routes())
         .mount("/projects", api::projects_routes())
         .mount("/targets", api::targets_routes())
         .mount("/composes", api::composes_routes())
         .mount("/app", routes![index])
-        //.mount("/assets", FileServer::from("dist/assets"))
         .mount("/", routes![dist, root, callback])
 }

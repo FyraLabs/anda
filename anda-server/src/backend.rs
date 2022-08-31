@@ -957,12 +957,12 @@ impl DatabaseEntity for Compose {
 }
 #[async_trait]
 pub trait ComposeDb {
-    async fn compose() -> Result<Compose>;
+    async fn compose(target_id: Uuid) -> Result<Compose>;
 } 
 
 #[async_trait]
 impl ComposeDb for Compose {
-    async fn compose() -> Result<Compose> {
+    async fn compose(target_id: Uuid) -> Result<Compose> {
         // start compose
 
         // make folder at anda-build/compose
@@ -977,7 +977,7 @@ impl ComposeDb for Compose {
 
 
         // get target
-        let target = Target::get_by_name("owo".to_string()).await?;
+        let target = Target::get(target_id).await?;
         let target_id = target.id;
 
         let compose = Compose::new(target_id);
@@ -1021,7 +1021,8 @@ impl ComposeDb for Compose {
                     //println!("{:#?}", meta);
                     if let Some(rpm) = &meta.rpm {
                         // download the file
-                        let path = format!("anda-build/compose/rpms/{}", meta.file.as_ref().unwrap().filename.as_ref().unwrap());
+                        fs::create_dir_all(format!("anda-build/{}/rpms/", target.name))?;
+                        let path = format!("anda-build/{}/rpms/{}", target.name, meta.file.as_ref().unwrap().filename.as_ref().unwrap());
                         println!("downloading data to {}", path);
                         let mut file = File::create(&path).await.unwrap();
                         let data = artifact.pull_bytes().await?.collect().await.unwrap().into_bytes().to_vec();
@@ -1036,7 +1037,7 @@ impl ComposeDb for Compose {
         let output = Command::new("createrepo")
             .arg("--update")
             .arg("--verbose")
-            .arg("anda-build/compose/")
+            .arg(format!("anda-build/{}/", target.name))
             .status().await?;
     
 

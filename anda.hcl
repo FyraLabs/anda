@@ -113,7 +113,7 @@ project "test" {
         stage "build" {
             image = "ubuntu:latest"
             commands = [
-                "echo 'build command here'"
+                "echo 'build command here'",
                 "echo 'test' > anda-build/build.txt",
                 "ls -la anda-build"
             ]

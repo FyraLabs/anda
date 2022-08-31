@@ -34,7 +34,8 @@ wget https://github.com/moby/buildkit/releases/download/v0.10.3/buildkit-v0.10.3
 
 sudo tar -xzf /tmp/buildkit.tar.gz -C /usr/local/
 
-sudo dnf install https://dl.min.io/client/mc/release/linux-amd64/mcli-20220823054520.0.0.x86_64.rpm
-
+wget https://dl.min.io/client/mc/release/linux-amd64/mc
+chmod +x mc
+sudo mv mc /usr/local/bin/mc
 
 echo "127.0.0.1 local-registry" | sudo tee -a /etc/hosts
