@@ -1,4 +1,4 @@
-use crate::backend::{Compose, DatabaseEntity};
+use crate::backend::{Compose, DatabaseEntity, ComposeDb};
 
 use rocket::http::Status;
 use rocket::serde::json::Json;
@@ -6,7 +6,7 @@ use rocket::serde::uuid::Uuid;
 use rocket::Route;
 
 pub(crate) fn routes() -> Vec<Route> {
-    routes![index, get,]
+    routes![index, get, compose]
 }
 
 #[get("/?<limit>&<page>&<all>")]
@@ -32,4 +32,11 @@ async fn index(
 #[get("/<id>")]
 async fn get(id: Uuid) -> Option<Json<Compose>> {
     Compose::get(id).await.map(Json).ok()
+}
+
+
+#[post("/")]
+async fn compose () -> Result<Json<Compose>, Status> {
+    let compose = Compose::compose().await.map(Json).ok().unwrap();
+    Ok(compose)
 }

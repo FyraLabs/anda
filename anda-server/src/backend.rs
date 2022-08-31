@@ -12,7 +12,7 @@ use anyhow::{anyhow, Result};
 use aws_sdk_s3::types::{ByteStream, DateTime as AmazonDateTime};
 use chrono::{offset::Utc, DateTime};
 use log::debug;
-use std::time::SystemTime;
+use std::{time::SystemTime, fs};
 use std::{collections::HashMap, path::PathBuf};
 //use sea_orm::FromJsonQueryResult;
 use crate::s3_object::{S3Artifact, BUCKET, S3_ENDPOINT};
@@ -955,7 +955,90 @@ impl DatabaseEntity for Compose {
         Ok(())
     }
 }
+#[async_trait]
+pub trait ComposeDb {
+    async fn compose() -> Result<Compose>;
+} 
 
+#[async_trait]
+impl ComposeDb for Compose {
+    async fn compose() -> Result<Compose> {
+        // start compose
+
+        // make folder at anda-build/compose
+        // TODO: Replace this with something more robust
+        if !PathBuf::from("anda-build/compose/rpms").exists() {
+            fs::create_dir_all("anda-build/compose/rpms").unwrap();
+        } else {
+            // delete old compose
+            fs::remove_dir_all("anda-build/compose").unwrap();
+            fs::create_dir_all("anda-build/compose/rpms").unwrap();
+        }
+
+
+        // get target
+        let target = Target::get_by_name("owo".to_string()).await?;
+        let target_id = target.id;
+        
+        // get all projects
+        let projects = Project::list_all().await?;
+        
+        // get builds of project
+        let mut builds = Vec::new();
+
+        for project in projects {
+            let project_builds = Build::get_by_project_id(project.id).await?;
+            // get the latest build of the project that is tagged with the target id
+            // filter
+            let targeted_builds = project_builds.into_iter().filter(|builds| {
+                builds.target_id == Some(target_id) && builds.status == BuildStatus::Success
+            }).map(| mut build| {
+                build.logs = None;
+                build
+                // get the latest build
+            }).max_by(|a, b| a.timestamp.cmp(&b.timestamp));
+
+            if let Some(build) = targeted_builds {
+                builds.push(build);
+            }
+            //println!("{:#?}", targeted_builds);
+        }
+
+        //println!("{:#?}", builds);
+
+
+        // get rpm artifacts of build
+
+        for build in builds {
+            let artifacts = Artifact::get_by_build_id(build.id).await?;
+            for artifact in artifacts {
+                if let Some(meta) = &artifact.metadata {
+                    //println!("{:#?}", meta);
+                    if let Some(rpm) = &meta.rpm {
+                        // download the file
+                        let path = format!("anda-build/compose/rpms/{}", meta.file.as_ref().unwrap().filename.as_ref().unwrap());
+                        println!("downloading data to {}", path);
+                        let mut file = File::create(&path).await.unwrap();
+                        let data = artifact.pull_bytes().await?.collect().await.unwrap().into_bytes().to_vec();
+                        file.write_all(&data).await?;
+                    }
+                }
+            }
+        }
+
+
+        // run createrepo on compose folder
+        let output = Command::new("createrepo")
+            .arg("--update")
+            .arg("--verbose")
+            .arg("anda-build/compose/")
+            .status().await?;
+    
+
+        todo!()
+    }
+
+}
 // impl Compose {
 
 //     pub async fn compose(self) -> Result<()>
