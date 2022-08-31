@@ -979,6 +979,8 @@ impl ComposeDb for Compose {
         // get target
         let target = Target::get_by_name("owo".to_string()).await?;
         let target_id = target.id;
+
+        let compose = Compose::new(target_id);
         
         // get all projects
         let projects = Project::list_all().await?;
@@ -1010,6 +1012,9 @@ impl ComposeDb for Compose {
         // get rpm artifacts of build
 
         for build in builds {
+            let b = build.clone();
+            b.tag_compose(compose.id).await?;
+
             let artifacts = Artifact::get_by_build_id(build.id).await?;
             for artifact in artifacts {
                 if let Some(meta) = &artifact.metadata {
@@ -1035,7 +1040,7 @@ impl ComposeDb for Compose {
             .status().await?;
     
 
-        todo!()
+        Ok(compose)
     }
 
 }
