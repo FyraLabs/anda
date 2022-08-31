@@ -77,7 +77,7 @@ pub struct RpmBuild {
     /// Image to build RPMs with
     /// If not specified, the image of the project is used
     pub image: Option<String>,
-    pub spec: PathBuf,
+    pub spec: Option<PathBuf>,
     // serde default is standard
     /// Mode to use for the build.
     /// Default is `standard`. Builds an RPM normally from the spec file.
@@ -88,6 +88,9 @@ pub struct RpmBuild {
     /// Internal project dependencies
     pub project_depends: Option<Vec<String>>,
     pub build_deps: Option<Vec<String>>,
+
+    pub pre_script: Option<PreScript>,
+    pub post_script: Option<PostScript>,
 }
 
 fn default_rpm_mode() -> RpmBuildMode {
@@ -163,13 +166,22 @@ pub fn check_config(config: AndaConfig) -> Result<AndaConfig, ProjectError> {
             }
         }
         if let Some(rpmbuild) = &value.rpmbuild {
-            if !rpmbuild.spec.exists() && rpmbuild.mode == RpmBuildMode::Standard {
+            
+            if rpmbuild.mode == RpmBuildMode::Standard && rpmbuild.spec.is_none() || rpmbuild.mode == RpmBuildMode::Cargo && rpmbuild.package.is_none() {
                 errors.push(ProjectError::InvalidManifest(format!(
-                    "error loading spec file `{}` for project `{}`: file does not exist",
-                    rpmbuild.spec.display(),
+                    "project {} has no spec file or package for rpm build",
                     key
                 )));
             }
+
+            if rpmbuild.mode == RpmBuildMode::Standard && !rpmbuild.spec.as_ref().unwrap().exists() {
+                errors.push(ProjectError::InvalidManifest(format!(
+                    "spec file {} does not exist for project {}",
+                    rpmbuild.spec.as_ref().unwrap().display(), key
+                )));
+            }
+            
+
             if let Some(projects) = &rpmbuild.project_depends {
                 for project in projects {
                     if !config.project.contains_key(project) {

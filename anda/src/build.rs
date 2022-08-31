@@ -226,12 +226,15 @@ impl ProjectBuilder {
         .image(&image)
         .context(buildkit_llb::prelude::Source::local("context"));
         let mode = &project.rpmbuild.as_ref().unwrap().mode;
+        // We simply unwrap here because we know that there's a linter in place to ensure that the config is valid.
+        // Check anda_types::config for more information.
         match mode {
             anda_types::config::RpmBuildMode::Standard => {
                 b.build_rpm(
-                    project.rpmbuild.as_ref().unwrap().spec.to_str().unwrap(),
+                    project.rpmbuild.as_ref().unwrap().spec.as_ref().unwrap().to_str().unwrap(),
                     anda_types::config::RpmBuildMode::Standard,
                     project.rpmbuild.as_ref().unwrap().build_deps.as_ref(),
+                    project.rpmbuild.as_ref().unwrap(),
                 );
                 b.execute(builder_opts)?;
             }
@@ -246,6 +249,7 @@ impl ProjectBuilder {
                     &cargo_project,
                     anda_types::config::RpmBuildMode::Cargo,
                     project.rpmbuild.as_ref().unwrap().build_deps.as_ref(),
+                    project.rpmbuild.as_ref().unwrap(),
                 );
                 b.execute(builder_opts)?;
             }

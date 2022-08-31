@@ -1,3 +1,4 @@
+use anda_types::RpmBuild;
 use anyhow::Result;
 
 use buildkit_llb::{
@@ -386,6 +387,7 @@ impl Buildkit {
         rpm: &str,
         mode: anda_types::config::RpmBuildMode,
         pre_buildreqs: Option<&Vec<String>>,
+        build: &RpmBuild,
     ) -> &mut Buildkit {
         if let Some(image) = &self.image.clone() {
             let name = if let Some(context_name) = &self.options.context_name {
@@ -405,6 +407,12 @@ impl Buildkit {
                     let mut c = vec!["dnf", "install", "-y"];
                     c.extend(pre_buildreqs.iter().map(|x| x.as_str()));
                     self.command_args(c);
+                }
+            }
+
+            if let Some(pre_script) = build.pre_script.as_ref() {
+                for line in pre_script.commands.iter() {
+                    self.command(line);
                 }
             }
 
@@ -445,6 +453,11 @@ impl Buildkit {
             let cmd = cmd.ref_counted();
             self.artifact_cache = Some(cmd.output(1));
             self.cmd = Some(cmd);
+            if let Some(post_script) = build.post_script.as_ref() {
+                for line in post_script.commands.iter() {
+                    self.command(line);
+                }
+            }
         } else {
             panic!("No image specified");
         }

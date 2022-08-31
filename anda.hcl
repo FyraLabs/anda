@@ -87,7 +87,6 @@ project "anda" {
     }
 
     rpmbuild {
-        spec = "anda/tests/umpkg.spec"
         mode = "cargo"
         package = "anda"
         build_deps = ["openssl-devel", "rust-packaging"]
@@ -105,6 +104,9 @@ project "anda" {
     // if scripts are defined and type is docker or rpm, the scripts will be executed
     // before the package is built.
 }
+
+
+// TODO: When hcl-rs finally finishes expression parsing, we can implement build script macros
 
 project "test" {
     script {
@@ -127,5 +129,11 @@ project "test" {
     }
     rpmbuild {
         spec = "anda/tests/umpkg.spec"
+        pre_script = {
+            commands = ["echo 'hello'"]
+        }
+        post_script = {
+            commands = ["ls -la"]
+        }
     }
 }
