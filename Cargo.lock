@@ -882,8 +882,7 @@ dependencies = [
 [[package]]
 name = "buildkit-llb"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07e0fb9e4f5d77ed5b6797973f3314ce969a7e970fee63d91e374f83ff49430a"
+source = "git+https://github.com/FyraLabs/rust-buildkit.git#75b44f00188dd82441d36f401c383429b15e20e4"
 dependencies = [
  "buildkit-proto",
  "either",
@@ -899,8 +898,7 @@ dependencies = [
 [[package]]
 name = "buildkit-proto"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2de162725afbf2b54b0c3f2877e53be18d4cfde222b62cc5e96e7252eef1e815"
+source = "git+https://github.com/FyraLabs/rust-buildkit.git#75b44f00188dd82441d36f401c383429b15e20e4"
 dependencies = [
  "prost",
  "prost-types",

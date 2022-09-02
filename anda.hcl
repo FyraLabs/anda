@@ -119,11 +119,13 @@ project "test" {
             ]
         }
         stage "test" {
-            depends = ["build"]
+            //depends = ["build"]
             commands = [
                 "echo 'test command here'",
-                "cat anda-build/build.txt",
-                "ls -la anda-build"
+                // "mknod /dev/loop0 b 7 0",
+                "ls -l /dev",
+                //"losetup /dev/loop0 /tmp/test.img",
+                "losetup --find --show anda.hcl",
             ]
         }
     }

@@ -423,6 +423,7 @@ async fn main() -> Result<()> {
                 .arg("--restart")
                 .arg("always")
                 .arg("moby/buildkit:latest")
+                .arg("--allow-insecure-entitlement=security.insecure")
                 .status()?;
 
             if !c.success() {

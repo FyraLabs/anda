@@ -44,7 +44,7 @@ execute = "0.2.11"
 solvent = "0.8.3"
 #crossterm = "0.25.0"
 regex = "1.6.0"
-buildkit-llb = "0.2.0"
+buildkit-llb = { git = "https://github.com/FyraLabs/rust-buildkit.git" }
 reqwest-eventsource = "0.4.0"
 anda-types ={ path = "../anda-types", version = "0.1" }
 

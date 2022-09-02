@@ -228,6 +228,7 @@ impl Buildkit {
                 .args(&["-c", command])
                 .cwd("/src")
                 .custom_name(name)
+                .insecure(true)
                 .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
             if let Some(out) = &self.cmd {
                 cmd = cmd
@@ -554,6 +555,7 @@ impl Buildkit {
             .arg("--output")
             .arg("type=local,dest=anda-build")
             .args(&["--local", "context=."])
+            .args(&["--allow=security.insecure"])
             .args(&extra_args)
             //.arg("--opt")
             .env("BUILDKIT_HOST", buildkit_host)
