@@ -167,7 +167,7 @@ pub fn check_config(config: AndaConfig) -> Result<AndaConfig, ProjectError> {
         }
         if let Some(rpmbuild) = &value.rpmbuild {
             
-            if rpmbuild.mode == RpmBuildMode::Standard && rpmbuild.spec.is_none() || rpmbuild.mode == RpmBuildMode::Cargo && rpmbuild.package.is_none() {
+            if rpmbuild.mode == RpmBuildMode::Standard && rpmbuild.spec.is_none() {
                 errors.push(ProjectError::InvalidManifest(format!(
                     "project {} has no spec file or package for rpm build",
                     key
