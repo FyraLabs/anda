@@ -153,11 +153,13 @@ dependencies = [
  "chrono",
  "dotenv",
  "futures",
+ "http-auth-basic",
  "in-container",
  "is-root",
  "k8s-openapi",
  "kube",
  "lazy_static",
+ "ldap3",
  "log",
  "num",
  "num-derive",
@@ -2199,6 +2201,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-auth-basic"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd2e17aacf7f4a2428def798e2ff4f4f883c0987bdaf47dd5c8bc027bc9f1ebc"
+dependencies = [
+ "base64 0.13.0",
+]
+
+[[package]]
 name = "http-body"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2700,6 +2711,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "lber"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a99b520993b21a6faab32643cf4726573dc18ca4cf2d48cbeb24d248c86c930"
+dependencies = [
+ "byteorder",
+ "bytes 1.2.1",
+ "nom 2.2.1",
+]
+
+[[package]]
+name = "ldap3"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef35dc747152dd47bdc6aaeb35a232f84cbc8d84ae4cb9673aea810a6570ab8f"
+dependencies = [
+ "async-trait",
+ "bytes 1.2.1",
+ "futures",
+ "futures-util",
+ "lazy_static",
+ "lber",
+ "log",
+ "native-tls",
+ "nom 2.2.1",
+ "percent-encoding 2.1.0",
+ "thiserror",
+ "tokio 1.20.1",
+ "tokio-native-tls",
+ "tokio-stream",
+ "tokio-util 0.7.3",
+ "url",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3001,6 +3047,12 @@ dependencies = [
  "libc",
  "winapi 0.3.9",
 ]
+
+[[package]]
+name = "nom"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf51a729ecf40266a2368ad335a5fdde43471f545a967109cd62146ecf8b66ff"
 
 [[package]]
 name = "nom"

@@ -42,6 +42,8 @@ pretty_env_logger = "0.4.0"
 tempfile = "3.3.0"
 sea-query = "0.26.3"
 #rpm-rs = "0.8.1"
+http-auth-basic = "0.3.3"
+ldap3 = "0.10.5"
 
 anda-types = { path = "../anda-types", version = "*"}
 
