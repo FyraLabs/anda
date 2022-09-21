@@ -3,7 +3,7 @@ use crate::{
         AndaBackend, Artifact, ArtifactDb, Build, BuildCache, BuildDb, BuildMeta, BuildStatus,
         DatabaseEntity, S3Object, Target,
     },
-    tasks::{format_actual_stream, format_stream, full_logs, full_logs_db},
+    tasks::{format_actual_stream, format_stream, full_logs_db},
 };
 
 use futures::StreamExt;
@@ -67,7 +67,7 @@ async fn get_by_target(target_id: Uuid) -> Option<Json<Vec<Build>>> {
 pub struct BuildSubmission<'r> {
     project_id: Option<Uuid>,
     target_id: Uuid,
-    src_file: TempFile<'r>,
+    src_file: Option<TempFile<'r>>,
     project: Option<String>,
 }
 
@@ -84,33 +84,40 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
     // upload the file to S3
 
     //println!("{:?}", data.src_file.name());
-    let cache = BuildCache::new(
-        data.src_file
-            .raw_name()
-            .ok_or(Status::BadRequest)?
-            .dangerous_unsafe_unsanitized_raw()
-            .to_string(),
-    )
-    .upload_file(
-        data.src_file
-            .path()
-            .ok_or(Status::InternalServerError)?
-            .to_path_buf(),
-    )
-    .await
-    .map_err(|_| Status::InternalServerError)?;
 
-    debug!("Generating build");
-    // process backend request
-    let int_build = Build::new(
-        Some(target.id),
-        data.project_id,
-        None,
-        "BuildSubmission".to_string(),
-    )
-    .add()
-    .await
-    .map_err(|_| Status::InternalServerError)?;
+    let mut int_build: Build;
+
+    if let Some(src_file) = data.src_file.as_ref() {
+
+        let cache = BuildCache::new(
+            src_file
+                .raw_name()
+                .ok_or(Status::BadRequest)?
+                .dangerous_unsafe_unsanitized_raw()
+                .to_string(),
+        )
+        .upload_file(
+            src_file
+                .path()
+                .ok_or(Status::InternalServerError)?
+                .to_path_buf(),
+        )
+        .await
+        .map_err(|_| Status::InternalServerError)?;
+    
+        debug!("Generating build");
+        // process backend request
+        int_build = Build::new(
+            Some(target.id),
+            data.project_id,
+            None,
+            "BuildFromPack".to_string(),
+        )
+        .add()
+        .await
+        .map_err(|_| Status::InternalServerError)?;
+    }
+
 
     let build = AndaBackend::new(
         int_build.id,
