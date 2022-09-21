@@ -3,52 +3,6 @@ project "anda" {
         commands = ["echo 'hello'"]
     }
 
-    script {
-        stage "build" {
-            commands = [
-                "echo 'build command here'",
-                "echo $TEST",
-                "echo Branch: \"$BRANCH\"",
-                "echo Project: $PROJECT_NAME > anda-build/build.txt",
-                "ls -la"
-                "echo Commit ID: $COMMIT_ID",
-            ]
-        }
-
-        stage "test" {
-            depends = ["build"]
-            commands = [
-                "ls -la anda-build",
-                "echo 'test command here'",
-                "echo $TEST",
-                "cat anda-build/build.txt",
-            ]
-        }
-    }
-
-    docker {
-        image "local-registry:5050/anda/anda" {
-            tag_latest = true
-            version = "latest"
-            workdir = "."
-            dockerfile = "Dockerfile"
-        }
-        image "172.16.5.4:5050/anda/anda-client" {
-            tag_latest = true
-            version = "latest"
-            workdir = "."
-            dockerfile = "client.dockerfile"
-        }
-    }
-
-    rollback {
-        stage "build" {
-            commands = [
-                "echo 'rollback command here'"
-            ]
-        }
-    }
-
     rpmbuild {
         mode = "cargo"
         package = "anda"
@@ -72,27 +26,7 @@ project "anda" {
 // TODO: When hcl-rs finally finishes expression parsing, we can implement build script macros
 
 project "test" {
-    script {
-        stage "build" {
-            image = "ubuntu:latest"
-            commands = [
-                "echo 'build command here'",
-                "echo 'test' > anda-build/build.txt",
-                "ls -la anda-build"
-            ]
-        }
-        stage "test" {
-            //depends = ["build"]
-            commands = [
-                "echo 'test command here'",
-                // "mknod /dev/loop0 b 7 0",
-                "ls -l /dev",
-                //"losetup /dev/loop0 /tmp/test.img",
-                "losetup --find --show anda.hcl",
-            ]
-        }
-    }
-    rpmbuild {
+    rpm {
         spec = "anda/tests/umpkg.spec"
         pre_script = {
             commands = ["ls -la /dev",

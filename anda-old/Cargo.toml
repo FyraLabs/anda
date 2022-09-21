@@ -1,5 +1,5 @@
 [package]
-name = "anda"
+name = "anda-old"
 version = "0.1.0"
 edition = "2021"
 description = "Andaman Package Manager and frontend"

@@ -73,7 +73,7 @@ impl Default for BuildkitLog {
 enum Command {
     /// Build an Andaman project
     Build {
-        /// Path to the project
+        /// Path to  the project
         /// If not specified, the current directory is used
         #[clap(value_name = "PROJECT_PATH", default_value = ".")]
         path: String,
