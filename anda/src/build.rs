@@ -370,6 +370,11 @@ impl ProjectBuilder {
         .finish()
         .await?; */
 
+        if let Some(pre_script) = &project.pre_script {
+            for script in &pre_script.commands {
+                b.command(script);
+            }
+        }
         for command in &stage.commands {
             b.command(command);
         }

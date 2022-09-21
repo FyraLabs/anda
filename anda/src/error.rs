@@ -97,8 +97,8 @@ impl Display for PackerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             PackerError::Build(e) => write!(f, "Build: {}", e),
-            PackerError::Path(e) => write!(f, "Path: {}", e),
             PackerError::Io(e) => write!(f, "IO: {}", e),
+            PackerError::Path(e) => write!(f, "Path: {}", e),
             PackerError::Git(e) => write!(f, "Git: {}", e),
             PackerError::Other(e) => write!(f, "{}", e),
         }

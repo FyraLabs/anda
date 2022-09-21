@@ -68,11 +68,14 @@ pub struct BuildSubmission<'r> {
     project_id: Option<Uuid>,
     target_id: Uuid,
     src_file: Option<TempFile<'r>>,
+    url: Option<String>,
     project: Option<String>,
 }
 
 #[post("/", data = "<data>")]
 async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> {
+    let default_image = "local-registry:5050/anda/anda-client".to_string();
+
     debug!("{:?}", data.target_id);
     let target = Target::get(data.target_id)
         .await
@@ -85,10 +88,9 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
 
     //println!("{:?}", data.src_file.name());
 
-    let mut int_build: Build;
+    let mut int_build: Option<Build> = None;
 
     if let Some(src_file) = data.src_file.as_ref() {
-
         let cache = BuildCache::new(
             src_file
                 .raw_name()
@@ -104,37 +106,62 @@ async fn submit(data: Form<BuildSubmission<'_>>) -> Result<Json<Build>, Status> 
         )
         .await
         .map_err(|_| Status::InternalServerError)?;
-    
+
         debug!("Generating build");
         // process backend request
-        int_build = Build::new(
-            Some(target.id),
-            data.project_id,
+        int_build = Some(
+            Build::new(
+                Some(target.id),
+                data.project_id,
+                None,
+                "BuildFromPack".to_string(),
+            )
+            .add()
+            .await
+            .map_err(|_| Status::InternalServerError)?,
+        );
+        let build = AndaBackend::new(
+            int_build.clone().unwrap().id,
+            Some(cache),
             None,
-            "BuildFromPack".to_string(),
-        )
-        .add()
-        .await
-        .map_err(|_| Status::InternalServerError)?;
+            target.image.unwrap_or(default_image),
+        );
+        //debug!("{:?}", int_build);
+        // actually add build to database
+        build
+            .build(data.project.as_deref())
+            .await
+            .map_err(|_| Status::InternalServerError)?;
+    } else if let Some(url) = data.url.as_ref() {
+        // we skip the uploading process
+        int_build = Some(
+            Build::new(
+                Some(target.id),
+                data.project_id,
+                None,
+                "BuildFromUrl".to_string(),
+            )
+            .add()
+            .await
+            .map_err(|_| Status::InternalServerError)?,
+        );
+
+        let build = AndaBackend::new(
+            int_build.clone().unwrap().id,
+            None,
+            Some(url.to_string()),
+            target.image.unwrap_or(default_image),
+        );
+
+        build
+            .build(data.project.as_deref())
+            .await
+            .map_err(|_| Status::InternalServerError)?;
+    } else {
+        return Err(Status::BadRequest);
     }
 
-
-    let build = AndaBackend::new(
-        int_build.id,
-        cache,
-        target
-            .image
-            .unwrap_or_else(|| "local-registry:5050/anda/anda-client".to_string()),
-    );
-
-    debug!("{:?}", int_build);
-    // actually add build to database
-    build
-        .build(data.project.as_deref())
-        .await
-        .map_err(|_| Status::InternalServerError)?;
-
-    Ok(Json(int_build))
+    Ok(Json(int_build.unwrap()))
 }
 
 #[derive(FromForm)]

@@ -41,15 +41,17 @@ use crate::kubernetes::dispatch_build;
 
 pub struct AndaBackend {
     build_id: Uuid,
-    pack: BuildCache,
+    pack: Option<BuildCache>,
+    url: Option<String>,
     image: String,
 }
 
 impl AndaBackend {
-    pub fn new(build_id: Uuid, pack: BuildCache, image: String) -> Self {
+    pub fn new(build_id: Uuid, pack: Option<BuildCache>,url: Option<String>, image: String) -> Self {
         AndaBackend {
             build_id,
             pack,
+            url,
             image,
         }
     }
@@ -57,10 +59,19 @@ impl AndaBackend {
     // Proxy function to the actual build method.
     // Matches the method enum and calls the appropriate method.
     pub async fn build(&self, project_scope: Option<&str>) -> Result<()> {
+
+        let url = if let Some(pack) = self.pack.clone() {
+            pack.get_url()
+        } else if let Some(url) = self.url.clone() {
+            url
+        } else {
+            return Err(anyhow!("No build cache or url provided"));
+        };
+
         dispatch_build(
             self.build_id.to_string(),
             self.image.to_string(),
-            self.pack.get_url(),
+            url,
             "owo".to_string(),
             project_scope.map(|s| s.to_string()),
         )

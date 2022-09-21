@@ -56,12 +56,12 @@ impl Buildkit {
         }
     }
 
-    pub fn dependency_context(mut self, switch: bool) -> Buildkit {
-        if switch {
-            self.options.transfer_artifacts = Some(true);
-        }
-        self
-    }
+    // pub fn dependency_context(mut self, switch: bool) -> Buildkit {
+    //     if switch {
+    //         self.options.transfer_artifacts = Some(true);
+    //     }
+    //     self
+    // }
 
     pub fn context(mut self, ctx: LocalSource) -> Buildkit {
         let mut context = ctx;
@@ -398,7 +398,7 @@ impl Buildkit {
             };
             self.command_nocontext("echo 'keepcache=true' >> /etc/dnf/dnf.conf");
             self.command_nocontext(
-                "sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools argbash rustc cargo createrepo_c",
+                "sudo dnf install -y rpm-build dnf-plugins-core rpmdevtools argbash rustc cargo createrepo_c mock",
             );
             self.cargo_builddeps();
             self.inject_rpm_script();
@@ -419,10 +419,12 @@ impl Buildkit {
 
             let mut cmd = LLBCommand::run("/bin/bash")
                 .custom_name(name)
+                .ignore_cache(true)
+                .insecure(true)
                 .env_iter(self.options.env.as_ref().unwrap_or(&BTreeMap::new()));
             match mode {
                 anda_types::config::RpmBuildMode::Standard => {
-                    self.command(&format!("sudo dnf builddep -y {}", rpm));
+                    //self.command(&format!("sudo dnf builddep -y {}", rpm));
                     cmd = cmd.args(&["anda_build_rpm", "rpmbuild", "-p", rpm]);
                 }
                 anda_types::config::RpmBuildMode::Cargo => {

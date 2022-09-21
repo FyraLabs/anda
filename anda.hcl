@@ -2,43 +2,6 @@ project "anda" {
     pre_script {
         commands = ["echo 'hello'"]
     }
-    /*
-
-    script {
-        stage "build" {
-            depends = ["prepare"]
-            commands = [
-                "cargo build --release"
-                ]
-        }
-        stage "test" {
-            depends = ["build"]
-            commands = [
-                "cargo test --release"
-                ]
-        }
-    }
-
-
-
-    docker {
-        image "anda/anda" {
-            version = "latest"
-            dir = "."
-        }
-    }
-
-
-    rollback {
-        stage "build" {
-            commands = [
-                "echo 'rollback'"
-            ]
-
-        }
-    }
-
-    */
 
     script {
         stage "build" {
@@ -132,10 +95,14 @@ project "test" {
     rpmbuild {
         spec = "anda/tests/umpkg.spec"
         pre_script = {
-            commands = ["echo 'hello'"]
+            commands = ["ls -la /dev",
+
+            ]
         }
         post_script = {
-            commands = ["ls -la"]
+            commands = ["ls -la",
+            "tail anda-build/rpm/src/*.log"
+            ]
         }
     }
 }

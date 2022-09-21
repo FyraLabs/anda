@@ -369,6 +369,6 @@ mod test_parser {
         
                 
         "#;
-        let config = parse_config(config);
+        parse_config(config).ok();
     }
 }
