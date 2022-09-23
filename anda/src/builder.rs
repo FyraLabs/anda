@@ -1,6 +1,6 @@
 use crate::{
     artifacts::{Artifacts, PackageType},
-    rpm_spec::{self, RPMBuilder, RPMOptions, RPMExtraOptions}, Cli,
+    rpm_spec::{RPMBuilder, RPMOptions, RPMExtraOptions}, Cli,
 };
 use anda_config::{AndaConfig, Project};
 use anyhow::{anyhow, Result};
@@ -32,12 +32,18 @@ pub fn build_project(
         rpm_opts.def_macro("_disable_source_fetch", "0");
     }
 
+    let mut artifacts = Artifacts::new();
+
     // get project
     match package {
         PackageType::All => {
             // build all packages
             if let Some(rpmbuild) = &project.rpm {
-                build_rpm(rpm_opts, &rpmbuild.spec, rpm_builder).unwrap();
+                let art = build_rpm(rpm_opts, &rpmbuild.spec, rpm_builder).unwrap();
+
+                for artifact in art {
+                    artifacts.add(artifact.to_string_lossy().to_string(), PackageType::Rpm);
+                }
             }
         },
         PackageType::Rpm => {
@@ -51,6 +57,19 @@ pub fn build_project(
         PackageType::Podman => todo!(),
         PackageType::Flatpak => todo!(),
         PackageType::RpmOstree => todo!(),
+    }
+
+    for (path, arttype) in artifacts.packages {
+        let type_string = match arttype {
+            PackageType::Rpm => "RPM",
+            PackageType::Docker => "Docker image",
+            PackageType::Podman => "Podman image",
+            PackageType::Flatpak => "flatpak",
+            PackageType::RpmOstree => "rpm-ostree compose",
+            _ => "unknown artifact",
+        };
+
+        println!("Built {}: {}", type_string, path);
     }
 }
 

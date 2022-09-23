@@ -82,7 +82,7 @@ impl RPMExtraOptions for RPMOptions {
 #[derive(ArgEnum, Debug, Clone, Copy)]
 pub enum RPMBuilder {
     Mock,
-    RpmBuild,
+    Rpmbuild,
 }
 
 impl FromStr for RPMBuilder {
@@ -90,7 +90,7 @@ impl FromStr for RPMBuilder {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "mock" => Ok(RPMBuilder::Mock),
-            "rpmbuild" => Ok(RPMBuilder::RpmBuild),
+            "rpmbuild" => Ok(RPMBuilder::Rpmbuild),
             _ => Err(anyhow!("Invalid RPM builder: {}", s)),
         }
     }
@@ -108,7 +108,7 @@ impl RPMBuilder {
 
                 mock.build(spec)
             }
-            RPMBuilder::RpmBuild => {
+            RPMBuilder::Rpmbuild => {
                 let rpmbuild =
                     RPMBuildBackend::new(options.sources.clone(), options.resultdir.clone());
 
@@ -323,9 +323,11 @@ impl RPMSpecBackend for MockBackend {
         for entry in walkdir::WalkDir::new(tmp.path()) {
             let entry = entry?;
             //eprintln!("entry: {:?}", entry.file_name());
-            if entry.file_name().to_string_lossy().ends_with(".rpm") {
+
+            if entry.file_name().to_string_lossy().ends_with(".src.rpm") {
+            } else if entry.file_name().to_string_lossy().ends_with(".rpm") {
                 //rpms.push(entry.path().to_path_buf());
-                eprintln!("found rpm: {:?}", rpms);
+                //eprintln!("found rpm: {:?}", rpms);
 
                 let rpms_dir = self.resultdir.join("rpm/rpms");
                 std::fs::create_dir_all(&rpms_dir)?;
@@ -334,7 +336,7 @@ impl RPMSpecBackend for MockBackend {
                 rpms.push(dest);
             }
         }
-        println!("rpms: {:?}", rpms);
+        //println!("rpms: {:?}", rpms);
         Ok(rpms)
     }
 }
@@ -465,7 +467,7 @@ impl RPMSpecBackend for RPMBuildBackend {
             //eprintln!("entry: {:?}", entry.file_name());
             if entry.file_name().to_string_lossy().ends_with(".rpm") {
                 //rpms.push(entry.path().to_path_buf());
-                eprintln!("found rpm: {:?}", rpms);
+                // eprintln!("found rpm: {:?}", rpms);
 
                 let rpms_dir = self.resultdir.join("rpm/rpms");
                 std::fs::create_dir_all(&rpms_dir)?;
@@ -475,7 +477,7 @@ impl RPMSpecBackend for RPMBuildBackend {
             }
         }
 
-        println!("rpms: {:?}", rpms);
+        //println!("rpms: {:?}", rpms);
         Ok(rpms)
     }
 
@@ -511,7 +513,7 @@ impl RPMSpecBackend for RPMBuildBackend {
                 //rpms.push(srpm_dir.join(entry.file_name()));
             } else if entry.file_name().to_string_lossy().ends_with(".rpm") {
                 //rpms.push(entry.path().to_path_buf());
-                eprintln!("found rpm: {:?}", rpms);
+                // eprintln!("found rpm: {:?}", rpms);
 
                 let rpms_dir = self.resultdir.join("rpm/rpms");
                 std::fs::create_dir_all(&rpms_dir)?;
@@ -521,7 +523,7 @@ impl RPMSpecBackend for RPMBuildBackend {
             }
         }
 
-        println!("rpms: {:?}", rpms);
+        //println!("rpms: {:?}", rpms);
         Ok(rpms)
     }
 }
