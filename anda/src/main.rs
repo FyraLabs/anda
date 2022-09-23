@@ -3,6 +3,7 @@ mod artifacts;
 mod cmd;
 mod rpm_spec;
 mod flatpak;
+mod oci;
 mod builder;
 
 use anyhow::{anyhow, Result};
@@ -64,6 +65,8 @@ enum Command {
         #[clap(long, short = 'c')]
         mock_config: Option<String>,
     },
+    /// Cleans up the build directory
+    Clean,
 }
 
 fn main() -> Result<()> {
@@ -83,6 +86,19 @@ fn main() -> Result<()> {
         } => {
 
             builder::builder(&cli, all, project, package, no_mirrors, rpm_builder, mock_config)?;
+        },
+        Command::Clean => {
+            println!("Cleaning up build directory");
+            let clean = std::fs::remove_dir_all(&cli.target_dir);
+            if clean.is_err() {
+                // match the errors
+                match clean.err().unwrap().kind() {
+                    std::io::ErrorKind::NotFound => {}
+                    e => {
+                        println!("Error cleaning up build directory: {:?}", e);
+                    }
+                }
+            }
         }
     }
 

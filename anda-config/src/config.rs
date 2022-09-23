@@ -32,8 +32,8 @@ impl AndaConfig {
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
 pub struct Project {
     pub rpm: Option<RpmBuild>,
-    pub docker: Option<Docker>,
     pub podman: Option<Docker>,
+    pub docker: Option<Docker>,
     pub flatpak: Option<Flatpak>,
     pub pre_script: Option<PreScript>,
     pub post_script: Option<PostScript>,
@@ -68,18 +68,16 @@ pub struct Docker {
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
 pub struct DockerImage {
-    pub dockerfile: Option<PathBuf>,
+    pub dockerfile: Option<String>,
     pub import: Option<PathBuf>,
     pub tag_latest: Option<bool>,
-    pub workdir: PathBuf,
+    pub context: String,
     pub version: Option<String>,
 }
 
-
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
 pub struct Flatpak {
-    pub manifest: Option<PathBuf>,
-    pub build_dir: Option<PathBuf>,
+    pub manifest: PathBuf,
     pub pre_script: Option<PreScript>,
     pub post_script: Option<PostScript>,
 }
