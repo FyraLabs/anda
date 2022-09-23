@@ -2,6 +2,7 @@
 
 // derive macro that implements the From<anyhow::Error> trait
 
+#[derive(Debug)]
 pub enum ProjectError {
     NoManifest,
     InvalidManifest(String),

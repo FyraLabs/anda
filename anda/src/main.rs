@@ -6,7 +6,7 @@ mod builder;
 
 use anyhow::{anyhow, Result};
 
-use crate::rpm_spec::RPMSpecBackend;
+use crate::{builder::build_rpm};
 use clap::{AppSettings, ArgEnum, Parser, Subcommand, ValueEnum};
 use std::{path::PathBuf, str::FromStr};
 
@@ -15,7 +15,7 @@ use self::artifacts::PackageType;
 #[derive(Parser, Debug)]
 #[clap(about, version)]
 #[clap(global_setting = AppSettings::DeriveDisplayOrder)]
-struct Cli {
+pub struct Cli {
     #[clap(subcommand)]
     command: Command,
 
@@ -29,7 +29,7 @@ struct Cli {
 
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 enum Command {
     /// Build a project
     Build {
@@ -41,16 +41,15 @@ enum Command {
         #[clap()]
         project: Option<String>,
 
-        /// Builds a specific artifact format (default: all)
-        /// possible values: rpm, docker, podman, flatpak, rpm-ostree
+        /// Builds a specific artifact format
         #[clap(short, long, arg_enum, default_value = "all")]
         package: PackageType,
 
         //TODO: Move this to an argument group (clap 4.0 feature(?))
-        /// Mock: Do not mirror repositories
+        /// Mock: Do not mirror repositories.
         /// This is useful for quickly building test repositories
-        /// without having to wait for the mirror to finish
-        /// This argument is ignored if the build is not RPM Mock
+        /// without having to wait for the mirror to finish.
+        /// This argument is ignored if the build is not RPM Mock.
         #[clap(long, action)]
         no_mirrors: bool,
 
@@ -59,48 +58,32 @@ enum Command {
         /// default: mock
         #[clap(long, arg_enum, default_value = "mock")]
         rpm_builder: rpm_spec::RPMBuilder,
+
+        /// Mock: Mock configuration
+        #[clap(long, short = 'c')]
+        mock_config: Option<String>,
     },
 }
 
-fn main() {
+fn main() -> Result<()> {
     //println!("Hello, world!");
     let cli = Cli::parse();
 
-    println!("{:?}", cli);
+    println!("{:?}", &cli);
 
-    match cli.command {
+    match cli.command.clone() {
         Command::Build {
             all,
             project,
             package,
             no_mirrors,
             rpm_builder,
+            mock_config,
         } => {
-            println!("Build command");
-            println!("all: {}", all);
-            println!("project: {:?}", project);
-            println!("package: {:?}", package);
 
-            let cwd = std::env::current_dir().unwrap();
-
-            match package {
-                PackageType::Rpm => {
-                    let opts =
-                        rpm_spec::RPMOptions::new(None, cwd, cli.target_dir.clone());
-                    //let result = backend.build(&cwd.join("tests/umpkg.spec")).unwrap();
-
-                    let result = rpm_builder.build(&PathBuf::from("tests/umpkg.spec"), &opts).unwrap();
-
-                    for path in result {
-                        println!("Built: {}", path.display());
-                    }
-                }
-                PackageType::Docker => todo!(),
-                PackageType::Podman => todo!(),
-                PackageType::Flatpak => todo!(),
-                PackageType::RpmOstree => todo!(),
-                PackageType::All => todo!(),
-            }
+            builder::builder(&cli, all, project, package, no_mirrors, rpm_builder, mock_config)?;
         }
     }
+
+    Ok(())
 }

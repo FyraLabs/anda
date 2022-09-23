@@ -33,6 +33,8 @@ impl AndaConfig {
 pub struct Project {
     pub rpm: Option<RpmBuild>,
     pub docker: Option<Docker>,
+    pub podman: Option<Docker>,
+    pub flatpak: Option<Flatpak>,
     pub pre_script: Option<PreScript>,
     pub post_script: Option<PostScript>,
     pub env: Option<BTreeMap<String, String>>,
@@ -49,15 +51,11 @@ pub struct PostScript {
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
 pub struct RpmBuild {
-    /// Image to build RPMs with
-    /// If not specified, the image of the project is used
-    pub image: Option<String>,
-    pub spec: Option<PathBuf>,
+    pub spec: PathBuf,
+
+    pub sources: Option<PathBuf>,
 
     pub package: Option<String>,
-    /// Internal project dependencies
-    pub project_depends: Option<Vec<String>>,
-    pub build_deps: Option<Vec<String>>,
 
     pub pre_script: Option<PreScript>,
     pub post_script: Option<PostScript>,
@@ -75,6 +73,14 @@ pub struct DockerImage {
     pub tag_latest: Option<bool>,
     pub workdir: PathBuf,
     pub version: Option<String>,
+}
+
+
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
+pub struct Flatpak {
+    pub manifest: Option<PathBuf>,
+    pub pre_script: Option<PreScript>,
+    pub post_script: Option<PostScript>,
 }
 
 pub fn load_from_file(path: &PathBuf) -> Result<AndaConfig, ProjectError> {
