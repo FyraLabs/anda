@@ -1,8 +1,8 @@
 //! OCI Builder backend
 //! Supports Docker and Podman
 
-use anyhow::{anyhow, Result};
-use std::path::PathBuf;
+use anyhow::{Result};
+
 use std::process::Command;
 
 #[derive(Clone, Copy)]
@@ -77,8 +77,11 @@ pub fn build_oci(
     version: String,
     context: String,
 ) -> Result<Vec<String>> {
-   let mut builder = OCIBuilder::new(context, tag.clone(), version.clone());
-    builder.add_label(format!("com.fyralabs.anda.version={}", env!("CARGO_PKG_VERSION")));
+    let mut builder = OCIBuilder::new(context, tag.clone(), version.clone());
+    builder.add_label(format!(
+        "com.fyralabs.anda.version={}",
+        env!("CARGO_PKG_VERSION")
+    ));
 
     builder.build(dockerfile, backend, latest).unwrap();
 

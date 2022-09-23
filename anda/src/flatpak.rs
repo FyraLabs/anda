@@ -1,14 +1,15 @@
 use anyhow::{anyhow, Result};
 use std::{
+    fmt::Display,
     path::{Path, PathBuf},
-    process::Command, fmt::Display,
+    process::Command,
 };
 
 use flatpak::{application::FlatpakApplication, format::FlatpakManifestFormat};
 
 pub enum FlatpakArtifact {
     Ref(String),
-    Bundle(PathBuf)
+    Bundle(PathBuf),
 }
 
 impl Display for FlatpakArtifact {
@@ -25,7 +26,7 @@ pub struct FlatpakBuilder {
     output_dir: PathBuf,
     /// The output flatpak repository
     output_repo: PathBuf,
-    
+
     /// The bundles directory
     bundles_dir: PathBuf,
     /// Extra sources as paths
@@ -97,7 +98,6 @@ impl FlatpakBuilder {
     }
 
     pub fn bundle(&self, app_id: &str) -> Result<PathBuf> {
-
         std::fs::create_dir_all(&self.bundles_dir).map_err(|e| anyhow!(e))?;
         let bundle_path = self.bundles_dir.join(format!("{}.flatpak", app_id));
 

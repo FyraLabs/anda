@@ -1,7 +1,6 @@
+use std::{collections::BTreeMap, str::FromStr};
 
-use std::{str::FromStr, collections::BTreeMap};
-
-use clap::{AppSettings, ArgEnum, Parser, Subcommand, ValueEnum};
+use clap::{ValueEnum};
 
 #[derive(Copy, Clone, ValueEnum, Debug)]
 pub enum PackageType {

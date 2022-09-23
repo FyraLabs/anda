@@ -1,16 +1,16 @@
 #![deny(rust_2018_idioms)]
 mod artifacts;
+mod builder;
 mod cmd;
-mod rpm_spec;
 mod flatpak;
 mod oci;
-mod builder;
+mod rpm_spec;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result};
 
-use crate::{builder::build_rpm};
-use clap::{AppSettings, ArgEnum, Parser, Subcommand, ValueEnum};
-use std::{path::PathBuf, str::FromStr};
+
+use clap::{AppSettings, Parser, Subcommand};
+use std::{path::PathBuf};
 
 use self::artifacts::PackageType;
 
@@ -28,7 +28,6 @@ pub struct Cli {
     /// Output directory for built packages
     #[clap(short, long, env = "TARGET_DIR", default_value = "anda-build")]
     target_dir: PathBuf,
-
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -84,9 +83,16 @@ fn main() -> Result<()> {
             rpm_builder,
             mock_config,
         } => {
-
-            builder::builder(&cli, all, project, package, no_mirrors, rpm_builder, mock_config)?;
-        },
+            builder::builder(
+                &cli,
+                all,
+                project,
+                package,
+                no_mirrors,
+                rpm_builder,
+                mock_config,
+            )?;
+        }
         Command::Clean => {
             println!("Cleaning up build directory");
             let clean = std::fs::remove_dir_all(&cli.target_dir);

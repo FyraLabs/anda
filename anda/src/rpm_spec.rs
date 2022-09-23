@@ -4,7 +4,7 @@
 use clap::clap_derive::ArgEnum;
 use tempfile::TempDir;
 
-use crate::artifacts::PackageType;
+
 use anyhow::{anyhow, Result};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

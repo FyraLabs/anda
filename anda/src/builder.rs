@@ -5,7 +5,7 @@ use crate::{
     rpm_spec::{RPMBuilder, RPMExtraOptions, RPMOptions},
     Cli,
 };
-use anda_config::{AndaConfig, Project};
+use anda_config::{Project};
 use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
 
