@@ -9,7 +9,8 @@ pub enum PackageType {
     Docker,
     Podman,
     Flatpak,
-    RpmOstree
+    RpmOstree,
+    All,
 }
 
 impl FromStr for PackageType {
@@ -22,7 +23,9 @@ impl FromStr for PackageType {
             "podman" => Ok(PackageType::Podman),
             "flatpak" => Ok(PackageType::Flatpak),
             "rpm-ostree" => Ok(PackageType::RpmOstree),
+            "all" => Ok(PackageType::All),
             _ => Err(format!("Invalid package type: {}", s)),
         }
     }
 }
+
