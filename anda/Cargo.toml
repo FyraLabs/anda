@@ -14,3 +14,4 @@ toml = "0.5.9"
 walkdir = "2.3.2"
 tempfile = "3.3.0"
 anda-config = { path = "../anda-config" }
+flatpak = "0.18.1"

@@ -14,4 +14,7 @@ project "test" {
             ]
         }
     }
+    flatpak {
+        manifest = "tests/org.flatpak.Hello.yml"
+    }
 }

@@ -2,6 +2,7 @@
 mod artifacts;
 mod cmd;
 mod rpm_spec;
+mod flatpak;
 mod builder;
 
 use anyhow::{anyhow, Result};

@@ -79,6 +79,7 @@ pub struct DockerImage {
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
 pub struct Flatpak {
     pub manifest: Option<PathBuf>,
+    pub build_dir: Option<PathBuf>,
     pub pre_script: Option<PreScript>,
     pub post_script: Option<PostScript>,
 }
