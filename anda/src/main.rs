@@ -2,6 +2,7 @@
 mod artifacts;
 mod cmd;
 mod rpm_spec;
+mod builder;
 
 use anyhow::{anyhow, Result};
 
@@ -25,6 +26,7 @@ struct Cli {
     /// Output directory for built packages
     #[clap(short, long, env = "TARGET_DIR", default_value = "anda-build")]
     target_dir: PathBuf,
+
 }
 
 #[derive(Subcommand, Debug)]
@@ -43,6 +45,20 @@ enum Command {
         /// possible values: rpm, docker, podman, flatpak, rpm-ostree
         #[clap(short, long, arg_enum, default_value = "all")]
         package: PackageType,
+
+        //TODO: Move this to an argument group (clap 4.0 feature(?))
+        /// Mock: Do not mirror repositories
+        /// This is useful for quickly building test repositories
+        /// without having to wait for the mirror to finish
+        /// This argument is ignored if the build is not RPM Mock
+        #[clap(long, action)]
+        no_mirrors: bool,
+
+        /// RPM: Builder backend
+        /// possible values: rpmbuild, mock
+        /// default: mock
+        #[clap(long, arg_enum, default_value = "mock")]
+        rpm_builder: rpm_spec::RPMBuilder,
     },
 }
 
@@ -57,6 +73,8 @@ fn main() {
             all,
             project,
             package,
+            no_mirrors,
+            rpm_builder,
         } => {
             println!("Build command");
             println!("all: {}", all);
@@ -67,9 +85,11 @@ fn main() {
 
             match package {
                 PackageType::Rpm => {
-                    let backend =
-                        rpm_spec::MockBackend::new(None, cwd.clone(), cli.target_dir.clone());
-                    let result = backend.build(&cwd.join("tests/umpkg.spec")).unwrap();
+                    let opts =
+                        rpm_spec::RPMOptions::new(None, cwd, cli.target_dir.clone());
+                    //let result = backend.build(&cwd.join("tests/umpkg.spec")).unwrap();
+
+                    let result = rpm_builder.build(&PathBuf::from("tests/umpkg.spec"), &opts).unwrap();
 
                     for path in result {
                         println!("Built: {}", path.display());

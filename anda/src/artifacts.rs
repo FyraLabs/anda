@@ -1,5 +1,5 @@
 
-use std::str::FromStr;
+use std::{str::FromStr, collections::BTreeMap};
 
 use clap::{AppSettings, ArgEnum, Parser, Subcommand, ValueEnum};
 
@@ -29,3 +29,17 @@ impl FromStr for PackageType {
     }
 }
 
+pub struct Artifacts {
+    pub packages: BTreeMap<String, PackageType>,
+}
+
+impl Artifacts {
+    pub fn new() -> Self {
+        Artifacts {
+            packages: BTreeMap::new(),
+        }
+    }
+    pub fn add(&mut self, name: String, package_type: PackageType) {
+        self.packages.insert(name, package_type);
+    }
+}

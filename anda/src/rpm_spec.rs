@@ -1,12 +1,122 @@
-//! Builder backends for Anda
+//! RPM spec building backend for Andaman
+//! This modules provides the RPM spec builder backend, which builds RPMs
+//! from a spec file.
+use clap::clap_derive::ArgEnum;
 use tempfile::TempDir;
 
-use std::collections::BTreeMap;
-use std::process::Command;
-
-use std::path::{Path, PathBuf};
-
+use crate::artifacts::PackageType;
 use anyhow::{anyhow, Result};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::str::FromStr;
+
+pub struct RPMOptions {
+    /// Mock config, only used if backend is mock
+    pub mock_config: Option<String>,
+    /// With flags
+    pub with: Vec<String>,
+    /// Without flags
+    pub without: Vec<String>,
+    /// Path to sources
+    pub sources: PathBuf,
+    /// Output directory
+    pub resultdir: PathBuf,
+    /// Extra repos
+    /// Only used if backend is mock
+    pub extra_repos: Option<Vec<String>>,
+    /// Do not use mirrors
+    /// Only used if backend is mock
+    pub no_mirror: bool,
+    /// Custom RPM macros to define
+    pub macros: BTreeMap<String, String>,
+}
+
+impl RPMOptions {
+    pub fn new(mock_config: Option<String>, sources: PathBuf, resultdir: PathBuf) -> Self {
+        Self {
+            mock_config,
+            with: Vec::new(),
+            without: Vec::new(),
+            sources,
+            resultdir,
+            extra_repos: None,
+            no_mirror: false,
+            macros: BTreeMap::new(),
+        }
+    }
+    pub fn add_extra_repo(&mut self, repo: String) {
+        if let Some(ref mut repos) = self.extra_repos {
+            repos.push(repo);
+        } else {
+            self.extra_repos = Some(vec![repo]);
+        }
+    }
+
+    pub fn no_mirror(&mut self, no_mirror: bool) {
+        self.no_mirror = no_mirror;
+    }
+}
+
+impl RPMExtraOptions for RPMOptions {
+    fn with_flags(&self) -> Vec<String> {
+        self.with.clone()
+    }
+    fn with_flags_mut(&mut self) -> &mut Vec<String> {
+        &mut self.with
+    }
+    fn without_flags(&self) -> Vec<String> {
+        self.without.clone()
+    }
+    fn without_flags_mut(&mut self) -> &mut Vec<String> {
+        &mut self.without
+    }
+    fn macros(&self) -> BTreeMap<String, String> {
+        self.macros.clone()
+    }
+    fn macros_mut(&mut self) -> &mut BTreeMap<String, String> {
+        &mut self.macros
+    }
+}
+
+#[derive(ArgEnum, Debug, Clone, Copy)]
+pub enum RPMBuilder {
+    Mock,
+    RpmBuild,
+}
+
+impl FromStr for RPMBuilder {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "mock" => Ok(RPMBuilder::Mock),
+            "rpmbuild" => Ok(RPMBuilder::RpmBuild),
+            _ => Err(anyhow!("Invalid RPM builder: {}", s)),
+        }
+    }
+}
+
+impl RPMBuilder {
+    pub fn build(&self, spec: &Path, options: &RPMOptions) -> Result<Vec<PathBuf>> {
+        match self {
+            RPMBuilder::Mock => {
+                let mock = MockBackend::new(
+                    options.mock_config.clone(),
+                    options.sources.clone(),
+                    options.resultdir.clone(),
+                );
+
+                mock.build(spec)
+            }
+            RPMBuilder::RpmBuild => {
+                let rpmbuild =
+                    RPMBuildBackend::new(options.sources.clone(), options.resultdir.clone());
+
+                rpmbuild.build(spec)
+            }
+        }
+    }
+}
 
 pub trait RPMSpecBackend {
     fn build_srpm(&self, spec: &Path) -> Result<PathBuf>;
@@ -34,14 +144,13 @@ pub trait RPMExtraOptions {
 
     /// Defines a macro
     fn def_macro(&mut self, name: &str, value: &str) {
-        self.macros_mut().insert(name.to_string(), value.to_string());
+        self.macros_mut()
+            .insert(name.to_string(), value.to_string());
     }
     /// Undefines a macro
     fn undef_macro(&mut self, name: &str) {
         self.macros_mut().remove(name);
     }
-
-
 
     // Configuration flags
     // === with flags ===
@@ -51,7 +160,6 @@ pub trait RPMExtraOptions {
     /// Returns a mutable reference to the `with` flags
     fn with_flags_mut(&mut self) -> &mut Vec<String>;
 
-
     /// Sets a `with` flag for the build from an iterator
     fn with_flags_iter<I>(&mut self, iter: I)
     where
@@ -59,7 +167,6 @@ pub trait RPMExtraOptions {
     {
         self.with_flags_mut().extend(iter);
     }
-
 
     // === without flags ===
     /// Returns a list of `without` flags
@@ -75,7 +182,6 @@ pub trait RPMExtraOptions {
     {
         self.without_flags_mut().extend(iter);
     }
-
 }
 
 /// An RPM spec backend that uses Mock to build RPMs
@@ -89,7 +195,6 @@ pub struct MockBackend {
     no_mirror: bool,
     macros: BTreeMap<String, String>,
 }
-
 
 impl RPMExtraOptions for MockBackend {
     fn with_flags(&self) -> Vec<String> {
@@ -112,13 +217,8 @@ impl RPMExtraOptions for MockBackend {
     }
 }
 
-
 impl MockBackend {
-    pub fn new(
-        mock_config: Option<String>,
-        sources: PathBuf,
-        resultdir: PathBuf,
-    ) -> Self {
+    pub fn new(mock_config: Option<String>, sources: PathBuf, resultdir: PathBuf) -> Self {
         Self {
             mock_config,
             with: Vec::new(),
@@ -207,7 +307,6 @@ impl RPMSpecBackend for MockBackend {
         Err(anyhow!("Failed to find srpm"))
     }
     fn build_rpm(&self, spec: &Path) -> Result<Vec<PathBuf>> {
-
         let mut cmd = self.mock();
         let tmp = TempDir::new()?;
         cmd.arg("--rebuild")
@@ -240,7 +339,6 @@ impl RPMSpecBackend for MockBackend {
     }
 }
 
-
 /// Pure rpmbuild backend for building inside host
 ///
 /// This is faster than mock due to not having to spin up a chroot, but
@@ -252,7 +350,7 @@ impl RPMSpecBackend for MockBackend {
 /// be reflected for every package.
 pub struct RPMBuildBackend {
     sources: PathBuf,
-    srpm_dir: PathBuf,
+    resultdir: PathBuf,
     with: Vec<String>,
     without: Vec<String>,
     macros: BTreeMap<String, String>,
@@ -280,10 +378,10 @@ impl RPMExtraOptions for RPMBuildBackend {
 }
 
 impl RPMBuildBackend {
-    pub fn new(sources: PathBuf, srpm_dir: PathBuf) -> Self {
+    pub fn new(sources: PathBuf, resultdir: PathBuf) -> Self {
         Self {
             sources,
-            srpm_dir,
+            resultdir,
             with: Vec::new(),
             without: Vec::new(),
             macros: BTreeMap::new(),
@@ -323,6 +421,25 @@ impl RPMSpecBackend for RPMBuildBackend {
 
         cmd.status()?;
 
+        // find srpm in resultdir using walkdir
+
+        for entry in walkdir::WalkDir::new(tmp.path()) {
+            let entry = entry?;
+            eprintln!("entry: {:?}", entry.file_name());
+            if entry.file_name().to_string_lossy().ends_with(".src.rpm") {
+                // srpm = Some(entry.path().to_path_buf());
+                // eprintln!("found srpm: {:?}", srpm);
+
+                println!("Moving srpm to resultdir...");
+                // create srpm dir if it doesnt exist
+                let srpm_dir = self.resultdir.join("rpm/srpm");
+                std::fs::create_dir_all(&srpm_dir)?;
+                let dest = srpm_dir.join(entry.file_name());
+                std::fs::copy(entry.path(), &dest)?;
+                return Ok(dest);
+            }
+        }
+
         todo!()
     }
 
@@ -339,7 +456,27 @@ impl RPMSpecBackend for RPMBuildBackend {
 
         cmd.status()?;
 
-        todo!()
+        let mut rpms = Vec::new();
+
+        // find rpms in resultdir using walkdir
+
+        for entry in walkdir::WalkDir::new(tmp.path()) {
+            let entry = entry?;
+            //eprintln!("entry: {:?}", entry.file_name());
+            if entry.file_name().to_string_lossy().ends_with(".rpm") {
+                //rpms.push(entry.path().to_path_buf());
+                eprintln!("found rpm: {:?}", rpms);
+
+                let rpms_dir = self.resultdir.join("rpm/rpms");
+                std::fs::create_dir_all(&rpms_dir)?;
+                let dest = rpms_dir.join(entry.file_name());
+                std::fs::copy(entry.path(), &dest)?;
+                rpms.push(rpms_dir.join(entry.file_name()));
+            }
+        }
+
+        println!("rpms: {:?}", rpms);
+        Ok(rpms)
     }
 
     fn build(&self, spec: &Path) -> Result<Vec<PathBuf>> {
@@ -354,6 +491,37 @@ impl RPMSpecBackend for RPMBuildBackend {
             .arg("--define")
             .arg(format!("_rpmdir {}", tmp.path().display()));
         cmd.status()?;
-        todo!()
+
+        let mut rpms = Vec::new();
+
+        // find rpms in resultdir using walkdir
+
+        for entry in walkdir::WalkDir::new(tmp.path()) {
+            let entry = entry?;
+            //eprintln!("entry: {:?}", entry.file_name());
+
+            if entry.file_name().to_string_lossy().ends_with(".src.rpm") {
+                //rpms.push(entry.path().to_path_buf());
+                eprintln!("found srpm: {:?}", rpms);
+
+                let srpm_dir = self.resultdir.join("rpm/srpm");
+                std::fs::create_dir_all(&srpm_dir)?;
+                let dest = srpm_dir.join(entry.file_name());
+                std::fs::copy(entry.path(), &dest)?;
+                //rpms.push(srpm_dir.join(entry.file_name()));
+            } else if entry.file_name().to_string_lossy().ends_with(".rpm") {
+                //rpms.push(entry.path().to_path_buf());
+                eprintln!("found rpm: {:?}", rpms);
+
+                let rpms_dir = self.resultdir.join("rpm/rpms");
+                std::fs::create_dir_all(&rpms_dir)?;
+                let dest = rpms_dir.join(entry.file_name());
+                std::fs::copy(entry.path(), &dest)?;
+                rpms.push(rpms_dir.join(entry.file_name()));
+            }
+        }
+
+        println!("rpms: {:?}", rpms);
+        Ok(rpms)
     }
 }
