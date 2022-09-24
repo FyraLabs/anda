@@ -4,14 +4,13 @@
 use clap::clap_derive::ArgEnum;
 use tempfile::TempDir;
 
-
 use anyhow::{anyhow, Result};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RPMOptions {
     /// Mock config, only used if backend is mock
     pub mock_config: Option<String>,
@@ -99,22 +98,49 @@ impl FromStr for RPMBuilder {
 
 impl RPMBuilder {
     pub fn build(&self, spec: &Path, options: &RPMOptions) -> Result<Vec<PathBuf>> {
-        match self {
-            RPMBuilder::Mock => {
-                let mock = MockBackend::new(
-                    options.mock_config.clone(),
-                    options.sources.clone(),
-                    options.resultdir.clone(),
-                );
+        if let RPMBuilder::Mock = self {
+            let mut mock = MockBackend::new(
+                options.mock_config.clone(),
+                options.sources.clone(),
+                options.resultdir.clone(),
+            );
 
-                mock.build(spec)
+            for extra_repo in options.extra_repos.iter().flatten() {
+                mock.add_extra_repo(extra_repo.clone());
             }
-            RPMBuilder::Rpmbuild => {
-                let rpmbuild =
-                    RPMBuildBackend::new(options.sources.clone(), options.resultdir.clone());
 
-                rpmbuild.build(spec)
+            for (k, v) in options.macros.iter() {
+                mock.def_macro(k, v);
             }
+
+            for with_flags in options.with.iter() {
+                mock.with_flags_mut().push(with_flags.clone());
+            }
+
+            for without_flags in options.without.iter() {
+                mock.without_flags_mut().push(without_flags.clone());
+            }
+
+            mock.no_mirror(options.no_mirror);
+
+            mock.build(spec)
+        } else {
+            let mut rpmbuild =
+                RPMBuildBackend::new(options.sources.clone(), options.resultdir.clone());
+
+            for (k, v) in options.macros.iter() {
+                rpmbuild.def_macro(k, v);
+            }
+
+            for with_flags in options.with.iter() {
+                rpmbuild.with_flags_mut().push(with_flags.clone());
+            }
+
+            for without_flags in options.without.iter() {
+                rpmbuild.without_flags_mut().push(without_flags.clone());
+            }
+
+            rpmbuild.build(spec)
         }
     }
 }
