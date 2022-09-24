@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 
+#[derive(Clone)]
 pub struct RPMOptions {
     /// Mock config, only used if backend is mock
     pub mock_config: Option<String>,
@@ -279,7 +280,8 @@ impl RPMSpecBackend for MockBackend {
             .arg("--sources")
             .arg(&self.sources)
             .arg("--resultdir")
-            .arg(tmp.path());
+            .arg(tmp.path())
+            .arg("--enable-network");
 
         cmd.status()?;
 
