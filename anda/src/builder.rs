@@ -126,8 +126,7 @@ pub fn build_project(
                             .unwrap_or(&"latest".to_string())
                             .to_string(),
                         image.context.clone(),
-                    )
-                    .unwrap();
+                    );
                     for artifact in art {
                         artifacts.add(artifact.to_string(), PackageType::Podman);
                     }
@@ -148,8 +147,7 @@ pub fn build_project(
                             .unwrap_or(&"latest".to_string())
                             .to_string(),
                         image.context.clone(),
-                    )
-                    .unwrap();
+                    );
                     for artifact in art {
                         artifacts.add(artifact.to_string(), PackageType::Podman);
                     }
@@ -183,8 +181,7 @@ pub fn build_project(
                             .unwrap_or(&"latest".to_string())
                             .to_string(),
                         image.context.clone(),
-                    )
-                    .unwrap();
+                    );
                     for artifact in art {
                         artifacts.add(artifact.to_string(), PackageType::Docker);
                     }
@@ -208,8 +205,7 @@ pub fn build_project(
                             .unwrap_or(&"latest".to_string())
                             .to_string(),
                         image.context.clone(),
-                    )
-                    .unwrap();
+                    );
                     for artifact in art {
                         artifacts.add(artifact.to_string(), PackageType::Podman);
                     }

@@ -1,7 +1,6 @@
 #![deny(rust_2018_idioms)]
 mod artifacts;
 mod builder;
-mod cmd;
 mod flatpak;
 mod oci;
 mod rpm_spec;
@@ -107,6 +106,5 @@ fn main() -> Result<()> {
             }
         }
     }
-
     Ok(())
 }

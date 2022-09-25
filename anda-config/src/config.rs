@@ -52,11 +52,8 @@ pub struct PostScript {
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
 pub struct RpmBuild {
     pub spec: PathBuf,
-
     pub sources: Option<PathBuf>,
-
     pub package: Option<String>,
-
     pub pre_script: Option<PreScript>,
     pub post_script: Option<PostScript>,
 }
