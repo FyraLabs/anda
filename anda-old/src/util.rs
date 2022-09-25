@@ -17,7 +17,7 @@ use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 use indicatif::{ProgressBar, ProgressStyle};
 
-/// Returns the current commit hash of the given repository located at the given path.
+// Returns the current commit hash of the given repository located at the given path.
 pub fn current_commit(path: &Path) -> Option<String> {
     let repo = Repository::open(path).ok()?;
     let head = repo.head().ok()?;
@@ -31,8 +31,8 @@ pub fn branch_name(path: &Path) -> Option<String> {
     let name = head.shorthand()?;
     Some(name.to_string())
 }
-/// Project packer object.
-/// Deals with `andasrc.zip` files.
+// Project packer object.
+// Deals with `andasrc.zip` files.
 pub struct ProjectPacker;
 
 impl ProjectPacker {
@@ -159,7 +159,9 @@ impl ProjectPacker {
     ) -> Result<(), PackerError> {
         let tmp_dir = tempfile::tempdir().unwrap();
         // download file using reqwest
-        let resp = reqwest::get(url).await.map_err(|e|PackerError::Other(format!("Unable to download file: {}", e)))?;
+        let resp = reqwest::get(url)
+            .await
+            .map_err(|e| PackerError::Other(format!("Unable to download file: {}", e)))?;
         //let mut buf = vec![];
         let filename = resp
             .url()
@@ -271,7 +273,7 @@ impl ProjectPacker {
     }
 }
 
-// /// Packs the project and pushes it to the server
+// // Packs the project and pushes it to the server
 // pub async fn push_build(root: &PathBuf) -> Result<crate::api::Build, PackerError> {
 //     let packfile = ProjectPacker::pack(root, None).await?;
 

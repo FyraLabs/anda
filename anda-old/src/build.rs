@@ -159,7 +159,7 @@ impl ProjectBuilder {
 
         Ok(())
     }
-    /// Prepares environment variables for the build process.
+    // Prepares environment variables for the build process.
     pub fn _prepare_env(
         &self,
         project: &Project,
@@ -231,7 +231,15 @@ impl ProjectBuilder {
         match mode {
             anda_types::config::RpmBuildMode::Standard => {
                 b.build_rpm(
-                    project.rpmbuild.as_ref().unwrap().spec.as_ref().unwrap().to_str().unwrap(),
+                    project
+                        .rpmbuild
+                        .as_ref()
+                        .unwrap()
+                        .spec
+                        .as_ref()
+                        .unwrap()
+                        .to_str()
+                        .unwrap(),
                     anda_types::config::RpmBuildMode::Standard,
                     project.rpmbuild.as_ref().unwrap().build_deps.as_ref(),
                     project.rpmbuild.as_ref().unwrap(),
@@ -769,7 +777,7 @@ impl ProjectBuilder {
                 println!("anda-build folder exists");
             } else {
                 println!("anda-build folder doesn't exist");
-                std::fs::create_dir("anda-build").unwrap();
+    //         std::fs::create_dir("anda-build").unwrap();
             }
             eprintln!("uploading artifacts...");
             self.push_folder(PathBuf::from(output_path.clone())).await?;
@@ -777,7 +785,7 @@ impl ProjectBuilder {
         Ok(())
     }
 
-    ///  Builds an Andaman project.
+    //  Builds an Andaman project.
     pub async fn build(
         &self,
         projects: Vec<String>,

@@ -467,9 +467,9 @@ impl Buildkit {
         self
     }
 
-    /// Merge artifact outputs into one single artifact cache
-    /// This is useful if you want to generate one big LLB that fetches the artifact cache from all the other builds
-    /// To use this, call it for each output you recieve.
+    // Merge artifact outputs into one single artifact cache
+    // This is useful if you want to generate one big LLB that fetches the artifact cache from all the other builds
+    // To use this, call it for each output you recieve.
     // TODO: Implement this for the builds
     pub fn merge_artifact_output(
         &mut self,

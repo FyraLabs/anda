@@ -10,7 +10,7 @@ use tabwriter::TabWriter;
 
 #[derive(Subcommand)]
 pub enum BackendCommand {
-    /// List Andaman Artifacts
+    // List Andaman Artifacts
     ListArtifacts,
     ListBuilds,
 }

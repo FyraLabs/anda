@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, str::FromStr};
 
-use clap::{ValueEnum};
+use clap::ValueEnum;
 
 #[derive(Copy, Clone, ValueEnum, Debug)]
 pub enum PackageType {

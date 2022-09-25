@@ -97,7 +97,7 @@ pub fn load_from_string(config: &str) -> Result<AndaConfig, ProjectError> {
     check_config(config)
 }
 
-/// Lints and checks the config for errors.
+// Lints and checks the config for errors.
 pub fn check_config(config: AndaConfig) -> Result<AndaConfig, ProjectError> {
     // do nothing for now
     Ok(config)

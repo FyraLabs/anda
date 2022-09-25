@@ -22,16 +22,16 @@ impl Display for FlatpakArtifact {
 }
 
 pub struct FlatpakBuilder {
-    /// The output directory for the flatpak build
+    // The output directory for the flatpak build
     output_dir: PathBuf,
-    /// The output flatpak repository
+    // The output flatpak repository
     output_repo: PathBuf,
 
-    /// The bundles directory
+    // The bundles directory
     bundles_dir: PathBuf,
-    /// Extra sources as paths
+    // Extra sources as paths
     extra_sources: Vec<PathBuf>,
-    /// Extra sources as URLs
+    // Extra sources as URLs
     extra_sources_urls: Vec<String>,
 }
 
@@ -49,7 +49,7 @@ impl FlatpakBuilder {
     pub fn add_extra_source(&mut self, source: PathBuf) {
         self.extra_sources.push(source);
     }
-    /// Add extra sources from an iterator
+    // Add extra sources from an iterator
     pub fn extra_sources_iter<I: IntoIterator<Item = PathBuf>>(&mut self, iter: I) {
         self.extra_sources.extend(iter);
     }
@@ -58,7 +58,7 @@ impl FlatpakBuilder {
         self.extra_sources_urls.push(source);
     }
 
-    /// Add extra sources from an iterator
+    // Add extra sources from an iterator
     pub fn extra_sources_urls_iter<I: IntoIterator<Item = String>>(&mut self, iter: I) {
         self.extra_sources_urls.extend(iter);
     }

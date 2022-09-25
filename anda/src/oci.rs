@@ -1,7 +1,7 @@
 //! OCI Builder backend
 //! Supports Docker and Podman
 
-use anyhow::{Result};
+use anyhow::Result;
 
 use std::process::Command;
 
