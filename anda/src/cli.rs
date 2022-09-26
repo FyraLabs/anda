@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 
-use clap::{AppSettings, CommandFactory, Parser, ValueEnum, Args, ArgEnum, Subcommand};
+use clap::{AppSettings, ArgEnum, Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use std::{path::PathBuf, str::FromStr};
 
 #[derive(ArgEnum, Debug, Clone, Copy)]
@@ -37,7 +37,6 @@ impl FromStr for PackageType {
         }
     }
 }
-
 
 /// Andaman is a package building toolchain that can automate building packages in various formats,
 /// such as RPM, Flatpak, Docker, etc.
@@ -120,7 +119,6 @@ pub struct RpmOpts {
     /// default: mock
     #[clap(long, arg_enum, default_value = "mock")]
     pub rpm_builder: RPMBuilder,
-
 
     /// RPM: Define a custom macro
     /// can be defined multiple times

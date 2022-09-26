@@ -1,17 +1,15 @@
 #![deny(rust_2018_idioms)]
 mod artifacts;
 mod builder;
+mod cli;
 mod flatpak;
 mod oci;
 mod rpm_spec;
-mod cli;
-
 
 use anyhow::Result;
 
-use clap::{AppSettings, CommandFactory, Parser, Subcommand, Args};
+use clap::{AppSettings, Args, CommandFactory, Parser, Subcommand};
 use cli::{Cli, Command};
-
 
 fn main() -> Result<()> {
     //println!("Hello, world!");
@@ -43,8 +41,13 @@ fn main() -> Result<()> {
             if project.is_none() && !all {
                 // print help
                 let mut app = Cli::command();
-                let a = app.find_subcommand_mut("build").unwrap().clone().display_name("anda-b");
-                println!("{:#?}", a);
+                let mut a = app
+                    .find_subcommand_mut("build")
+                    .unwrap()
+                    .clone()
+                    .display_name("anda-build")
+                    .name("anda-build");
+                a.print_help().unwrap();
                 // print help for build subcommand
                 return Err(anyhow::anyhow!(
                     "No project specified, and --all not specified."

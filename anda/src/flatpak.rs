@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 use anyhow::{anyhow, Result};
+use flatpak::application::FlatpakApplication;
 use std::{
     fmt::Display,
     path::{Path, PathBuf},
     process::Command,
 };
-use flatpak::{application::FlatpakApplication};
 
 pub enum FlatpakArtifact {
     Ref(String),
@@ -128,7 +128,5 @@ impl FlatpakBuilder {
     }
 }
 
-
 #[cfg(test)]
-mod test_super {
-}
+mod test_super {}

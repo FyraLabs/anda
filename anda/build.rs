@@ -14,13 +14,14 @@ fn main() {
     fn gen_manpage(cmd: &clap::Command, man_dir: &Path) {
         let name = cmd.get_display_name().unwrap_or_else(|| cmd.get_name());
         let mut out = File::create(man_dir.join(format!("{name}.1"))).unwrap();
-        clap_mangen::Man::new(cmd.clone().display_name(name)).render(&mut out).unwrap();
+        clap_mangen::Man::new(cmd.clone().display_name(name).name(name))
+            .render(&mut out)
+            .unwrap();
         out.flush().unwrap();
 
         for sub in cmd.get_subcommands() {
-
             // let sub = sub.clone().display_name("anda-b");
-            gen_manpage(&sub, man_dir)
+            gen_manpage(sub, man_dir)
         }
     }
 

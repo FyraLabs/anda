@@ -4,7 +4,6 @@ use clap::ValueEnum;
 
 use crate::cli::PackageType;
 
-
 pub struct Artifacts {
     pub packages: BTreeMap<String, PackageType>,
 }
