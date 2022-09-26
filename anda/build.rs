@@ -7,7 +7,7 @@ use std::path::Path;
 fn main() {
     let mut app = Cli::command();
     let out_dir = std::env::var("OUT_DIR").unwrap();
-    let man_dir = PathBuf::from(out_dir).join("man_pages");
+    let man_dir = PathBuf::from(&out_dir).join("man_pages");
 
     create_dir_all(&man_dir).unwrap();
 
@@ -27,5 +27,15 @@ fn main() {
 
     app.build();
 
+    gen_manpage(&app, &man_dir);
+
+    let path = PathBuf::from(&out_dir)
+        .ancestors()
+        .nth(4)
+        .unwrap()
+        .join("assets");
+
+    let man_dir = path.join("man_pages");
+    std::fs::create_dir_all(&man_dir).unwrap();
     gen_manpage(&app, &man_dir);
 }
