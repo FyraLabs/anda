@@ -3,20 +3,23 @@ use crate::{
     flatpak::{FlatpakArtifact, FlatpakBuilder},
     oci::{build_oci, OCIBackend},
     rpm_spec::{RPMBuilder, RPMExtraOptions, RPMOptions},
-    Cli, RpmOpts,
+    Cli, RpmOpts, OciOpts, FlatpakOpts,
 };
-use anda_config::{Project, RpmBuild, Flatpak};
+use anda_config::{Project, RpmBuild, Flatpak, Docker};
 use anyhow::{anyhow, Result, Context};
 use std::{
     path::{Path, PathBuf},
     process::Command,
 };
 
+use cmd_lib::{run_cmd, run_fun};
+
 pub fn build_rpm(
     opts: RPMOptions,
     spec: &Path,
     builder: RPMBuilder,
     output_dir: &Path,
+    rpmb_opts: RpmOpts,
 ) -> Result<Vec<PathBuf>> {
     let repo_path = output_dir.join("rpm");
     println!("Building RPMs in {}", repo_path.display());
@@ -37,21 +40,33 @@ pub fn build_rpm(
         println!("No repodata found, skipping");
     }
 
+    for rpmmacro in rpmb_opts.rpm_macro {
+        let split = rpmmacro.split_once(' ');
+        if let Some((key, value)) = split {
+            opts2.def_macro(key, value);
+        } else {
+            return Err(anyhow!("Invalid rpm macro: {}", rpmmacro));
+        }
+    }
+
     println!("Building RPMs with {:?}", opts2);
 
     let builder = builder.build(spec, &opts2);
     // createrepo at the end builder
-    let mut createrepo = Command::new("createrepo_c");
-    createrepo.arg(&repo_path).arg("--quiet").arg("--update");
+    // let mut createrepo = Command::new("createrepo_c");
+    // createrepo.arg(&repo_path).arg("--quiet").arg("--update");
 
-    createrepo.status().map_err(|e| anyhow!(e))?;
+    let a = run_cmd!(createrepo_c --quiet --update ${repo_path});
+
+    a.map_err(|e| anyhow!(e))?;
+    // createrepo.status().map_err(|e| anyhow!(e))?;
 
     //println!("builder: {:?}", builder);
 
     builder
 }
 
-pub fn build_flatpak(output_dir: &Path, manifest: &Path) -> Result<Vec<FlatpakArtifact>> {
+pub fn build_flatpak(output_dir: &Path, manifest: &Path, flatpak_opts: FlatpakOpts) -> Result<Vec<FlatpakArtifact>> {
     let mut artifacts = Vec::new();
 
     let out = output_dir.join("flatpak");
@@ -60,7 +75,20 @@ pub fn build_flatpak(output_dir: &Path, manifest: &Path) -> Result<Vec<FlatpakAr
     let flat_repo = out.join("repo");
     let flat_bundles = out.join("bundles");
 
-    let builder = FlatpakBuilder::new(flat_out, flat_repo, flat_bundles);
+    let mut builder = FlatpakBuilder::new(flat_out, flat_repo, flat_bundles);
+
+    for extra_source in flatpak_opts.flatpak_extra_sources {
+        builder.add_extra_source(PathBuf::from(extra_source));
+    }
+
+    for extra_source_url in flatpak_opts.flatpak_extra_sources_url {
+        builder.add_extra_source_url(extra_source_url);
+    }
+
+    if !flatpak_opts.flatpak_dont_delete_build_dir {
+        builder.add_extra_args("--delete-build-dirs".to_string());
+    }
+
 
     let flatpak = builder.build(manifest)?;
     artifacts.push(FlatpakArtifact::Ref(flatpak.clone()));
@@ -78,6 +106,7 @@ pub fn build_rpm_call(
     rpmbuild: &RpmBuild,
     rpm_builder: RPMBuilder,
     artifact_store: &mut Artifacts,
+    rpmb_opts: RpmOpts,
 ) -> Result<()> {
     // run pre-build script
     if let Some(pre_script) = &rpmbuild.pre_script {
@@ -88,7 +117,7 @@ pub fn build_rpm_call(
         }
     }
 
-    let art = build_rpm(opts, &rpmbuild.spec, rpm_builder, &cli.target_dir)?;
+    let art = build_rpm(opts, &rpmbuild.spec, rpm_builder, &cli.target_dir, rpmb_opts)?;
 
 
     // run post-build script
@@ -111,6 +140,7 @@ pub fn build_flatpak_call(
     cli: &Cli,
     flatpak: &Flatpak,
     artifact_store: &mut Artifacts,
+    flatpak_opts: FlatpakOpts,
 ) -> Result<()> {
     if let Some(pre_script) = &flatpak.pre_script {
         for script in pre_script.commands.iter() {
@@ -120,7 +150,7 @@ pub fn build_flatpak_call(
         }
     }
 
-    let art = build_flatpak(&cli.target_dir, &flatpak.manifest).unwrap();
+    let art = build_flatpak(&cli.target_dir, &flatpak.manifest, flatpak_opts).unwrap();
 
     for artifact in art {
         artifact_store.add(artifact.to_string(), PackageType::Flatpak);
@@ -138,6 +168,40 @@ pub fn build_flatpak_call(
 }
 
 
+pub fn build_oci_call(
+    backend: OCIBackend,
+    cli: &Cli,
+    manifest: &Docker,
+    artifact_store: &mut Artifacts,
+) -> Result<()> {
+
+    let art_type = match backend {
+        OCIBackend::Docker => PackageType::Docker,
+        OCIBackend::Podman => PackageType::Podman,
+    };
+
+    for (tag,image) in &manifest.image {
+        let art = build_oci(
+            backend,
+            image.dockerfile.as_ref().unwrap().to_string(),
+            image.tag_latest.unwrap_or(false),
+            tag.to_string(),
+            image
+                .version
+                .as_ref()
+                .unwrap_or(&"latest".to_string())
+                .to_string(),
+            image.context.clone(),
+        );
+
+        for artifact in art {
+            artifact_store.add(artifact.to_string(), art_type);
+        }
+    }
+
+    Ok(())
+}
+
 
 // project parser
 
@@ -146,13 +210,12 @@ pub fn build_project(
     project: Project,
     package: PackageType,
     rpmb_opts: RpmOpts,
-    // no_mirrors: bool,
-    // rpm_builder: RPMBuilder,
-    // mock_config: Option<String>,
+    flatpak_opts: FlatpakOpts,
+    oci_opts: OciOpts,
 ) {
     let cwd = std::env::current_dir().unwrap();
 
-    let mut rpm_opts = RPMOptions::new(rpmb_opts.mock_config, cwd, cli.target_dir.clone());
+    let mut rpm_opts = RPMOptions::new(rpmb_opts.clone().mock_config, cwd, cli.target_dir.clone());
 
     if let Some(rpmbuild) = &project.rpm {
         if let Some(srcdir) = &rpmbuild.sources {
@@ -169,112 +232,44 @@ pub fn build_project(
         PackageType::All => {
             // build all packages
             if let Some(rpmbuild) = &project.rpm {
-                build_rpm_call(cli, rpm_opts, rpmbuild, rpmb_opts.rpm_builder, &mut artifacts).with_context(|| "Failed to build RPMs".to_string()).unwrap();
+                build_rpm_call(cli, rpm_opts, rpmbuild, rpmb_opts.rpm_builder, &mut artifacts, rpmb_opts).with_context(|| "Failed to build RPMs".to_string()).unwrap();
             }
             if let Some(flatpak) = &project.flatpak {
-                build_flatpak_call(cli, flatpak, &mut artifacts).with_context(|| "Failed to build Flatpaks".to_string()).unwrap();
+                build_flatpak_call(cli, flatpak, &mut artifacts, flatpak_opts).with_context(|| "Failed to build Flatpaks".to_string()).unwrap();
             }
 
             if let Some(podman) = &project.podman {
-                let oci_backend = OCIBackend::Podman;
-                for (tag, image) in &podman.image {
-                    let art = build_oci(
-                        oci_backend,
-                        image.dockerfile.as_ref().unwrap().to_string(),
-                        image.tag_latest.unwrap_or(false),
-                        tag.to_string(),
-                        image
-                            .version
-                            .as_ref()
-                            .unwrap_or(&"latest".to_string())
-                            .to_string(),
-                        image.context.clone(),
-                    );
-                    for artifact in art {
-                        artifacts.add(artifact.to_string(), PackageType::Podman);
-                    }
-                }
+                build_oci_call(OCIBackend::Podman, cli, podman, &mut artifacts).with_context(|| "Failed to build Podman images".to_string()).unwrap();
             }
 
             if let Some(docker) = &project.docker {
-                let oci_backend = OCIBackend::Docker;
-                for (tag, image) in &docker.image {
-                    let art = build_oci(
-                        oci_backend,
-                        image.dockerfile.as_ref().unwrap().to_string(),
-                        image.tag_latest.unwrap_or(false),
-                        tag.to_string(),
-                        image
-                            .version
-                            .as_ref()
-                            .unwrap_or(&"latest".to_string())
-                            .to_string(),
-                        image.context.clone(),
-                    );
-                    for artifact in art {
-                        artifacts.add(artifact.to_string(), PackageType::Podman);
-                    }
-                }
+                build_oci_call(OCIBackend::Docker, cli, docker, &mut artifacts).with_context(|| "Failed to build Docker images".to_string()).unwrap();
             }
         }
         PackageType::Rpm => {
             if let Some(rpmbuild) = &project.rpm {
-                build_rpm_call(cli, rpm_opts, rpmbuild, rpmb_opts.rpm_builder, &mut artifacts).with_context(|| "Failed to build RPMs".to_string()).unwrap();
+                build_rpm_call(cli, rpm_opts, rpmbuild, rpmb_opts.rpm_builder, &mut artifacts, rpmb_opts).with_context(|| "Failed to build RPMs".to_string()).unwrap();
             } else {
                 println!("No RPM build defined for project");
             }
         }
         PackageType::Docker => {
             if let Some(docker) = &project.docker {
-                let oci_backend = OCIBackend::Podman;
-                for (tag, image) in &docker.image {
-                    let art = build_oci(
-                        oci_backend,
-                        image.dockerfile.as_ref().unwrap().to_string(),
-                        image.tag_latest.unwrap_or(false),
-                        tag.to_string(),
-                        image
-                            .version
-                            .as_ref()
-                            .unwrap_or(&"latest".to_string())
-                            .to_string(),
-                        image.context.clone(),
-                    );
-                    for artifact in art {
-                        artifacts.add(artifact.to_string(), PackageType::Docker);
-                    }
-                }
+                build_oci_call(OCIBackend::Docker, cli, docker, &mut artifacts).with_context(|| "Failed to build Docker images".to_string()).unwrap();
             } else {
                 println!("No Docker build defined for project");
             }
         }
         PackageType::Podman => {
             if let Some(podman) = &project.podman {
-                let oci_backend = OCIBackend::Podman;
-                for (tag, image) in &podman.image {
-                    let art = build_oci(
-                        oci_backend,
-                        image.dockerfile.as_ref().unwrap().to_string(),
-                        image.tag_latest.unwrap_or(false),
-                        tag.to_string(),
-                        image
-                            .version
-                            .as_ref()
-                            .unwrap_or(&"latest".to_string())
-                            .to_string(),
-                        image.context.clone(),
-                    );
-                    for artifact in art {
-                        artifacts.add(artifact.to_string(), PackageType::Podman);
-                    }
-                }
+                build_oci_call(OCIBackend::Podman, cli, podman, &mut artifacts).with_context(|| "Failed to build Podman images".to_string()).unwrap();
             } else {
                 println!("No Podman build defined for project");
             }
         }
         PackageType::Flatpak => {
             if let Some(flatpak) = &project.flatpak {
-                build_flatpak_call(cli, flatpak, &mut artifacts).with_context(|| "Failed to build Flatpaks".to_string()).unwrap();
+                build_flatpak_call(cli, flatpak, &mut artifacts, flatpak_opts).with_context(|| "Failed to build Flatpaks".to_string()).unwrap();
             } else {
                 println!("No Flatpak build defined for project");
             }
@@ -302,9 +297,8 @@ pub fn builder(
     all: bool,
     project: Option<String>,
     package: PackageType,
-    // no_mirrors: bool,
-    // rpm_builder: RPMBuilder,
-    // mock_config: Option<String>,
+    flatpak_opts: FlatpakOpts,
+    oci_opts: OciOpts,
 ) -> Result<()> {
     // Parse the project manifest
     let config = anda_config::load_from_file(&cli.config.clone()).map_err(|e| anyhow!(e))?;
@@ -320,6 +314,8 @@ pub fn builder(
                 project,
                 package,
                 rpm_opts.clone(),
+                flatpak_opts.clone(),
+                oci_opts.clone(),
             );
         }
     } else {
@@ -331,6 +327,8 @@ pub fn builder(
                     project.clone(),
                     package,
                     rpm_opts,
+                    flatpak_opts,
+                    oci_opts,
                 );
             } else {
                 return Err(anyhow!("Project not found: {}", name));

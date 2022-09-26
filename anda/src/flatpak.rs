@@ -33,6 +33,8 @@ pub struct FlatpakBuilder {
     extra_sources: Vec<PathBuf>,
     // Extra sources as URLs
     extra_sources_urls: Vec<String>,
+    // extra arguments to pass to flatpak-builder
+    extra_args: Vec<String>,
 }
 
 impl FlatpakBuilder {
@@ -43,6 +45,7 @@ impl FlatpakBuilder {
             bundles_dir,
             extra_sources: Vec::new(),
             extra_sources_urls: Vec::new(),
+            extra_args: Vec::new(),
         }
     }
 
@@ -52,6 +55,14 @@ impl FlatpakBuilder {
     // Add extra sources from an iterator
     pub fn extra_sources_iter<I: IntoIterator<Item = PathBuf>>(&mut self, iter: I) {
         self.extra_sources.extend(iter);
+    }
+
+    pub fn extra_args_iter<I: IntoIterator<Item = String>>(&mut self, iter: I) {
+        self.extra_args.extend(iter);
+    }
+
+    pub fn add_extra_args(&mut self, arg: String) {
+        self.extra_args.push(arg);
     }
 
     pub fn add_extra_source_url(&mut self, source: String) {
@@ -91,6 +102,8 @@ impl FlatpakBuilder {
         for source in &self.extra_sources_urls {
             flatpak.arg("--extra-sources-url").arg(source);
         }
+
+        flatpak.args(&self.extra_args);
 
         // run the command
         flatpak.status().map_err(|e| anyhow!(e))?;

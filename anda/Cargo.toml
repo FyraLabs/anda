@@ -15,3 +15,13 @@ walkdir = "2.3.2"
 tempfile = "3.3.0"
 anda-config = { path = "../anda-config" }
 flatpak = "0.18.1"
+clap_mangen = "0.1.11"
+clap-verbosity-flag = "1.0.1"
+cmd_lib = "1.3.0"
+
+
+[build-dependencies]
+clap = { version = "3.2", features = ["derive", "env"] }
+clap_mangen = "0.1.11"
+clap-verbosity-flag = "1.0.1"
+anyhow = "1.0.59"

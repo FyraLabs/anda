@@ -7,11 +7,10 @@ mod rpm_spec;
 
 use anyhow::Result;
 
-use clap::{AppSettings, Parser, Subcommand, ArgAction};
+use clap::{AppSettings, CommandFactory, Parser, Subcommand, Args};
 use std::path::PathBuf;
 
 use self::artifacts::PackageType;
-
 
 /// Andaman is a package building toolchain that can automate building packages in various formats,
 /// such as RPM, Flatpak, Docker, etc.
@@ -24,6 +23,7 @@ use self::artifacts::PackageType;
 #[derive(Parser, Debug)]
 #[clap(about, version)]
 #[clap(global_setting = AppSettings::DeriveDisplayOrder)]
+#[clap(help_heading = "Global Options")]
 pub struct Cli {
     #[clap(subcommand)]
     command: Command,
@@ -32,17 +32,20 @@ pub struct Cli {
     #[clap(default_value = "anda.hcl", short, long, env = "ANDA_CONFIG")]
     config: PathBuf,
 
+    #[clap(flatten)]
+    verbose: clap_verbosity_flag::Verbosity,
+
     /// Output directory for built packages
     #[clap(short, long, env = "TARGET_DIR", default_value = "anda-build")]
     target_dir: PathBuf,
 }
 
-
-#[derive(Parser, Debug, Clone)]
+#[derive(Args, Debug, Clone)]
+#[clap(help_heading = "Flatpak Builder Options")]
 pub struct FlatpakOpts {
     /// Flatpak: Extra source directory
     /// can be defined multiple times
-    #[clap(long)]
+    #[clap(long, group = "extra-source")]
     flatpak_extra_sources: Vec<String>,
 
     /// Flatpak: Extra source URL
@@ -55,26 +58,26 @@ pub struct FlatpakOpts {
     flatpak_dont_delete_build_dir: bool,
 }
 
-#[derive(Parser, Debug, Clone)]
+#[derive(Args, Debug, Clone)]
+#[clap(help_heading = "OCI Builder Options")]
 pub struct OciOpts {
     /// OCI: Labels to add to the image
-    /// can be defined multiple times
     #[clap(long)]
     label: Vec<String>,
 
     /// OCI: Build Arguments to pass to the build
-    /// can be defined multiple times
     #[clap(long)]
     build_arg: Vec<String>,
 
     /// OCI: compress the context with gzip
     #[clap(long, action)]
-    gzip: bool,
+    compress: bool,
 }
 
-#[derive(Parser, Debug, Clone)]
+#[derive(Args, Debug, Clone)]
+#[clap(help_heading = "RPM Options")]
 pub struct RpmOpts {
-    /// Mock: Do not mirror repositories.
+    /// RPM: Do not mirror repositories.
     ///
     /// This flag sets the `mirror` config opt in your mock config to `false`, which most mock configs use to enable
     /// usage of the test repo in Fedora.
@@ -92,12 +95,18 @@ pub struct RpmOpts {
     #[clap(long, arg_enum, default_value = "mock")]
     rpm_builder: rpm_spec::RPMBuilder,
 
-    /// Mock: Mock configuration
+
+    /// RPM: Define a custom macro
+    /// can be defined multiple times
+    #[clap(short = 'D', long)]
+    rpm_macro: Vec<String>,
+
+    /// RPM: Mock configuration
     #[clap(long, short = 'c')]
     mock_config: Option<String>,
 }
 
-#[derive(Subcommand, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
 enum Command {
     /// Build a project
     ///
@@ -137,6 +146,18 @@ fn main() -> Result<()> {
     //println!("Hello, world!");
     let cli = Cli::parse();
 
+    let mut app = Cli::command();
+
+    app.build();
+
+    let sub = app.get_subcommands();
+
+    // for s in sub {
+    //     println!("{:?}", s);
+    // }
+
+    // let app = Command::command().find_subcommand("build").unwrap().clone();
+    // clap_mangen::Man::new(app).render(&mut std::io::stdout()).unwrap();
     // println!("{:?}", &cli);
 
     match cli.command.clone() {
@@ -148,10 +169,16 @@ fn main() -> Result<()> {
             flatpak_opts,
             oci_opts,
         } => {
-
             if project.is_none() && !all {
                 // print help
-                return Err(anyhow::anyhow!("No project specified, and --all not specified. Please run `anda build --help` for more information. This program will now exit."));
+                let mut app = Cli::command();
+
+
+                app.find_subcommand_mut("build").unwrap().print_help().unwrap();
+                // print help for build subcommand
+                return Err(anyhow::anyhow!(
+                    "No project specified, and --all not specified."
+                ));
             }
 
             eprintln!("{:?}", &all);
@@ -161,6 +188,8 @@ fn main() -> Result<()> {
                 all,
                 project,
                 package,
+                flatpak_opts,
+                oci_opts,
             )?;
         }
         Command::Clean => {
