@@ -2,31 +2,8 @@ use std::{collections::BTreeMap, str::FromStr};
 
 use clap::ValueEnum;
 
-#[derive(Copy, Clone, ValueEnum, Debug)]
-pub enum PackageType {
-    Rpm,
-    Docker,
-    Podman,
-    Flatpak,
-    RpmOstree,
-    All,
-}
+use crate::cli::PackageType;
 
-impl FromStr for PackageType {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "rpm" => Ok(PackageType::Rpm),
-            "docker" => Ok(PackageType::Docker),
-            "podman" => Ok(PackageType::Podman),
-            "flatpak" => Ok(PackageType::Flatpak),
-            "rpm-ostree" => Ok(PackageType::RpmOstree),
-            "all" => Ok(PackageType::All),
-            _ => Err(format!("Invalid package type: {}", s)),
-        }
-    }
-}
 
 pub struct Artifacts {
     pub packages: BTreeMap<String, PackageType>,

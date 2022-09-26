@@ -99,6 +99,15 @@ impl FromStr for RPMBuilder {
     }
 }
 
+impl From<crate::cli::RPMBuilder> for RPMBuilder {
+    fn from(builder: crate::cli::RPMBuilder) -> Self {
+        match builder {
+            crate::cli::RPMBuilder::Mock => RPMBuilder::Mock,
+            crate::cli::RPMBuilder::Rpmbuild => RPMBuilder::Rpmbuild,
+        }
+    }
+}
+
 impl RPMBuilder {
     pub fn build(&self, spec: &Path, options: &RPMOptions) -> Result<Vec<PathBuf>> {
         if let RPMBuilder::Mock = self {

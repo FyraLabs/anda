@@ -1,9 +1,9 @@
 use crate::{
-    artifacts::{Artifacts, PackageType},
+    artifacts::{Artifacts},
     flatpak::{FlatpakArtifact, FlatpakBuilder},
     oci::{build_oci, OCIBackend},
     rpm_spec::{RPMBuilder, RPMExtraOptions, RPMOptions},
-    Cli, RpmOpts, OciOpts, FlatpakOpts,
+    cli::{RpmOpts, OciOpts, FlatpakOpts, PackageType, Cli},
 };
 use anda_config::{Project, RpmBuild, Flatpak, Docker};
 use anyhow::{anyhow, Result, Context};
@@ -232,7 +232,7 @@ pub fn build_project(
         PackageType::All => {
             // build all packages
             if let Some(rpmbuild) = &project.rpm {
-                build_rpm_call(cli, rpm_opts, rpmbuild, rpmb_opts.rpm_builder, &mut artifacts, rpmb_opts).with_context(|| "Failed to build RPMs".to_string()).unwrap();
+                build_rpm_call(cli, rpm_opts, rpmbuild, rpmb_opts.rpm_builder.into(), &mut artifacts, rpmb_opts).with_context(|| "Failed to build RPMs".to_string()).unwrap();
             }
             if let Some(flatpak) = &project.flatpak {
                 build_flatpak_call(cli, flatpak, &mut artifacts, flatpak_opts).with_context(|| "Failed to build Flatpaks".to_string()).unwrap();
@@ -248,7 +248,7 @@ pub fn build_project(
         }
         PackageType::Rpm => {
             if let Some(rpmbuild) = &project.rpm {
-                build_rpm_call(cli, rpm_opts, rpmbuild, rpmb_opts.rpm_builder, &mut artifacts, rpmb_opts).with_context(|| "Failed to build RPMs".to_string()).unwrap();
+                build_rpm_call(cli, rpm_opts, rpmbuild, rpmb_opts.rpm_builder.into(), &mut artifacts, rpmb_opts).with_context(|| "Failed to build RPMs".to_string()).unwrap();
             } else {
                 println!("No RPM build defined for project");
             }
