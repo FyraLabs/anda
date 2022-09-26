@@ -3,10 +3,10 @@ use crate::{
     flatpak::{FlatpakArtifact, FlatpakBuilder},
     oci::{build_oci, OCIBackend},
     rpm_spec::{RPMBuilder, RPMExtraOptions, RPMOptions},
-    Cli,
+    Cli, RpmOpts,
 };
-use anda_config::Project;
-use anyhow::{anyhow, Result};
+use anda_config::{Project, RpmBuild, Flatpak};
+use anyhow::{anyhow, Result, Context};
 use std::{
     path::{Path, PathBuf},
     process::Command,
@@ -69,25 +69,96 @@ pub fn build_flatpak(output_dir: &Path, manifest: &Path) -> Result<Vec<FlatpakAr
     Ok(artifacts)
 }
 
+// Functions to actually call the builds
+// yeah this is ugly and relies on side effects, but it reduces code duplication
+// to anyone working on this, please rewrite this call to make it more readable
+pub fn build_rpm_call(
+    cli: &Cli,
+    opts: RPMOptions,
+    rpmbuild: &RpmBuild,
+    rpm_builder: RPMBuilder,
+    artifact_store: &mut Artifacts,
+) -> Result<()> {
+    // run pre-build script
+    if let Some(pre_script) = &rpmbuild.pre_script {
+        for script in pre_script.commands.iter() {
+            let mut cmd = Command::new("sh");
+            cmd.arg("-x").arg("-c").arg(script);
+            cmd.status().map_err(|e| anyhow!(e))?;
+        }
+    }
+
+    let art = build_rpm(opts, &rpmbuild.spec, rpm_builder, &cli.target_dir)?;
+
+
+    // run post-build script
+    if let Some(post_script) = &rpmbuild.post_script {
+        for script in post_script.commands.iter() {
+            let mut cmd = Command::new("sh");
+            cmd.arg("-x").arg("-c").arg(script);
+            cmd.status().map_err(|e| anyhow!(e))?;
+        }
+    }
+
+    for artifact in art {
+        artifact_store.add(artifact.to_string_lossy().to_string(), PackageType::Rpm);
+    }
+
+    Ok(())
+}
+
+pub fn build_flatpak_call(
+    cli: &Cli,
+    flatpak: &Flatpak,
+    artifact_store: &mut Artifacts,
+) -> Result<()> {
+    if let Some(pre_script) = &flatpak.pre_script {
+        for script in pre_script.commands.iter() {
+            let mut cmd = Command::new("sh");
+            cmd.arg("-x").arg("-c").arg(script);
+            cmd.status().map_err(|e| anyhow!(e))?;
+        }
+    }
+
+    let art = build_flatpak(&cli.target_dir, &flatpak.manifest).unwrap();
+
+    for artifact in art {
+        artifact_store.add(artifact.to_string(), PackageType::Flatpak);
+    }
+
+    if let Some(post_script) = &flatpak.post_script {
+        for script in post_script.commands.iter() {
+            let mut cmd = Command::new("sh");
+            cmd.arg("-x").arg("-c").arg(script);
+            cmd.status().map_err(|e| anyhow!(e))?;
+        }
+    }
+
+    Ok(())
+}
+
+
+
 // project parser
 
 pub fn build_project(
     cli: &Cli,
     project: Project,
     package: PackageType,
-    no_mirrors: bool,
-    rpm_builder: RPMBuilder,
-    mock_config: Option<String>,
+    rpmb_opts: RpmOpts,
+    // no_mirrors: bool,
+    // rpm_builder: RPMBuilder,
+    // mock_config: Option<String>,
 ) {
     let cwd = std::env::current_dir().unwrap();
 
-    let mut rpm_opts = RPMOptions::new(mock_config, cwd, cli.target_dir.clone());
+    let mut rpm_opts = RPMOptions::new(rpmb_opts.mock_config, cwd, cli.target_dir.clone());
 
     if let Some(rpmbuild) = &project.rpm {
         if let Some(srcdir) = &rpmbuild.sources {
             rpm_opts.sources = srcdir.to_path_buf();
         }
-        rpm_opts.no_mirror = no_mirrors;
+        rpm_opts.no_mirror = rpmb_opts.no_mirrors;
         rpm_opts.def_macro("_disable_source_fetch", "0");
     }
 
@@ -98,18 +169,10 @@ pub fn build_project(
         PackageType::All => {
             // build all packages
             if let Some(rpmbuild) = &project.rpm {
-                let art =
-                    build_rpm(rpm_opts, &rpmbuild.spec, rpm_builder, &cli.target_dir).unwrap();
-
-                for artifact in art {
-                    artifacts.add(artifact.to_string_lossy().to_string(), PackageType::Rpm);
-                }
+                build_rpm_call(cli, rpm_opts, rpmbuild, rpmb_opts.rpm_builder, &mut artifacts).with_context(|| "Failed to build RPMs".to_string()).unwrap();
             }
             if let Some(flatpak) = &project.flatpak {
-                let art = build_flatpak(&cli.target_dir, &flatpak.manifest).unwrap();
-                for artifact in art {
-                    artifacts.add(artifact.to_string(), PackageType::Flatpak);
-                }
+                build_flatpak_call(cli, flatpak, &mut artifacts).with_context(|| "Failed to build Flatpaks".to_string()).unwrap();
             }
 
             if let Some(podman) = &project.podman {
@@ -156,12 +219,7 @@ pub fn build_project(
         }
         PackageType::Rpm => {
             if let Some(rpmbuild) = &project.rpm {
-                let art =
-                    build_rpm(rpm_opts, &rpmbuild.spec, rpm_builder, &cli.target_dir).unwrap();
-
-                for artifact in art {
-                    artifacts.add(artifact.to_string_lossy().to_string(), PackageType::Rpm);
-                }
+                build_rpm_call(cli, rpm_opts, rpmbuild, rpmb_opts.rpm_builder, &mut artifacts).with_context(|| "Failed to build RPMs".to_string()).unwrap();
             } else {
                 println!("No RPM build defined for project");
             }
@@ -216,10 +274,7 @@ pub fn build_project(
         }
         PackageType::Flatpak => {
             if let Some(flatpak) = &project.flatpak {
-                let art = build_flatpak(&cli.target_dir, &flatpak.manifest).unwrap();
-                for artifact in art {
-                    artifacts.add(artifact.to_string(), PackageType::Flatpak);
-                }
+                build_flatpak_call(cli, flatpak, &mut artifacts).with_context(|| "Failed to build Flatpaks".to_string()).unwrap();
             } else {
                 println!("No Flatpak build defined for project");
             }
@@ -243,12 +298,13 @@ pub fn build_project(
 
 pub fn builder(
     cli: &Cli,
+    rpm_opts: RpmOpts,
     all: bool,
     project: Option<String>,
     package: PackageType,
-    no_mirrors: bool,
-    rpm_builder: RPMBuilder,
-    mock_config: Option<String>,
+    // no_mirrors: bool,
+    // rpm_builder: RPMBuilder,
+    // mock_config: Option<String>,
 ) -> Result<()> {
     // Parse the project manifest
     let config = anda_config::load_from_file(&cli.config.clone()).map_err(|e| anyhow!(e))?;
@@ -263,9 +319,7 @@ pub fn builder(
                 cli,
                 project,
                 package,
-                no_mirrors,
-                rpm_builder,
-                mock_config.clone(),
+                rpm_opts.clone(),
             );
         }
     } else {
@@ -276,9 +330,7 @@ pub fn builder(
                     cli,
                     project.clone(),
                     package,
-                    no_mirrors,
-                    rpm_builder,
-                    mock_config,
+                    rpm_opts,
                 );
             } else {
                 return Err(anyhow!("Project not found: {}", name));

@@ -1,6 +1,9 @@
 //! RPM spec building backend for Andaman
 //! This modules provides the RPM spec builder backend, which builds RPMs
 //! from a spec file.
+
+#![allow(dead_code)]
+
 use clap::clap_derive::ArgEnum;
 use tempfile::TempDir;
 

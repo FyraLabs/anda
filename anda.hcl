@@ -5,12 +5,11 @@ project "test" {
     rpm {
         spec = "tests/umpkg.spec"
         pre_script = {
-            commands = ["ls -la /dev"]
+            commands = ["echo \"test\""]
         }
         post_script = {
             commands = [
-                "ls -la",
-                "tail anda-build/rpm/src/*.log"
+                "ls",
             ]
         }
     }
