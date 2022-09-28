@@ -2,7 +2,5 @@
 [workspace]
 members = [
     "anda",
-    "anda-server",
-    "migration",
-    "anda-types",
+    "anda-config",
 ]

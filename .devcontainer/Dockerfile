@@ -9,7 +9,8 @@ COPY scripts/postinstall.sh /usr/share/scripts/
 
 RUN dnf groupinstall -y "Development Tools"
 RUN dnf groupinstall -y "RPM Development Tools"
-RUN dnf install -y openssl-devel
+RUN dnf install -y openssl-devel flatpak flatpak-builder
+RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 ENTRYPOINT ["/usr/local/share/docker-init.sh"]
 VOLUME [ "/var/lib/docker" ]
 CMD ["sleep", "infinity"]
