@@ -17,3 +17,9 @@ project "test" {
         manifest = "tests/org.flatpak.Hello.yml"
     }
 }
+
+project "anda" {
+    rpm {
+        spec = "rust-anda.spec"
+    }
+}
