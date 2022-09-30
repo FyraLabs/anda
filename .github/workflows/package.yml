@@ -1,0 +1,13 @@
+name: Package
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  anda:
+    uses: tau-OS/github-actions/.github/workflows/anda-rpm.yml@main
+    with:
+      name: "anda"
+      
