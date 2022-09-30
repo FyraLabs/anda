@@ -41,6 +41,14 @@ pub fn build_rpm(
         debug!("No repodata found, skipping");
     }
 
+    for repo in rpmb_opts.extra_repos {
+        if opts2.extra_repos.is_none() {
+            opts2.extra_repos = Some(vec![repo]);
+        } else {
+            opts2.extra_repos.as_mut().unwrap().push(repo);
+        }
+    }
+
     for rpmmacro in rpmb_opts.rpm_macro {
         let split = rpmmacro.split_once(' ');
         if let Some((key, value)) = split {

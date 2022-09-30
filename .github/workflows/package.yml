@@ -2,6 +2,9 @@ name: Package
 
 on:
   push:
+    paths:
+      - rust-anda.spec
+      - anda.hcl
     branches: [main]
   workflow_dispatch:
 
@@ -10,4 +13,8 @@ jobs:
     uses: tau-OS/github-actions/.github/workflows/anda-rpm.yml@main
     with:
       name: "anda"
-      
+      subatomicServer: "https://subatomic.fyralabs.com"
+      subatomicRepo: fe37
+      upload: true
+    secrets:
+      subatomicToken: ${{ secrets.SUBATOMIC_TOKEN }}

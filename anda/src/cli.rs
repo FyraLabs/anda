@@ -127,6 +127,10 @@ pub struct RpmOpts {
     /// RPM: Mock configuration
     #[clap(long, short = 'c')]
     pub mock_config: Option<String>,
+
+    /// RPM: Extra repositories to pass to mock
+    #[clap(long, short = 'R')]
+    pub extra_repos: Vec<String>,
 }
 
 #[derive(Subcommand, Debug, Clone)]
