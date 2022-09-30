@@ -8,6 +8,7 @@ use clap::clap_derive::ArgEnum;
 use tempfile::TempDir;
 
 use anyhow::{anyhow, Result};
+use log::{debug, info};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -33,6 +34,7 @@ pub struct RPMOptions {
     pub no_mirror: bool,
     /// Custom RPM macros to define
     pub macros: BTreeMap<String, String>,
+    pub config_opts: Vec<String>,
 }
 
 impl RPMOptions {
@@ -46,6 +48,7 @@ impl RPMOptions {
             extra_repos: None,
             no_mirror: false,
             macros: BTreeMap::new(),
+            config_opts: Vec::new(),
         }
     }
     pub fn add_extra_repo(&mut self, repo: String) {
@@ -131,6 +134,10 @@ impl RPMBuilder {
 
             for without_flags in options.without.iter() {
                 mock.without_flags_mut().push(without_flags.clone());
+            }
+
+            for config_opt in options.config_opts.iter() {
+                mock.add_config_opt(config_opt.clone());
             }
 
             mock.no_mirror(options.no_mirror);
@@ -233,6 +240,7 @@ pub struct MockBackend {
     extra_repos: Vec<String>,
     no_mirror: bool,
     macros: BTreeMap<String, String>,
+    config_opts: Vec<String>,
 }
 
 impl RPMExtraOptions for MockBackend {
@@ -267,7 +275,16 @@ impl MockBackend {
             extra_repos: Vec::new(),
             no_mirror: false,
             macros: BTreeMap::new(),
+            config_opts: Vec::new(),
         }
+    }
+
+    pub fn extend_config_opts(&mut self, opts: Vec<String>) {
+        self.config_opts.extend(opts);
+    }
+
+    pub fn add_config_opt(&mut self, opt: String) {
+        self.config_opts.push(opt);
     }
 
     pub fn add_extra_repo(&mut self, repo: String) {
@@ -303,6 +320,10 @@ impl MockBackend {
         if self.no_mirror {
             cmd.arg("--config-opts").arg("mirrored=False");
         }
+
+        for opt in self.config_opts.iter() {
+            cmd.arg("--config-opts").arg(opt);
+        }
         cmd
     }
 }
@@ -329,12 +350,12 @@ impl RPMSpecBackend for MockBackend {
 
         for entry in walkdir::WalkDir::new(tmp.path()) {
             let entry = entry?;
-            eprintln!("entry: {:?}", entry.file_name());
+            debug!("entry: {:?}", entry.file_name());
             if entry.file_name().to_string_lossy().ends_with(".src.rpm") {
                 // srpm = Some(entry.path().to_path_buf());
                 // eprintln!("found srpm: {:?}", srpm);
 
-                println!("Moving srpm to resultdir...");
+                info!("Moving srpm to resultdir...");
                 // create srpm dir if it doesnt exist
                 let srpm_dir = self.resultdir.join("rpm/srpm");
                 std::fs::create_dir_all(&srpm_dir)?;
@@ -351,6 +372,7 @@ impl RPMSpecBackend for MockBackend {
         let tmp = TempDir::new()?;
         cmd.arg("--rebuild")
             .arg(spec)
+            .arg("--enable-network")
             .arg("--resultdir")
             .arg(tmp.path());
 
@@ -467,12 +489,12 @@ impl RPMSpecBackend for RPMBuildBackend {
 
         for entry in walkdir::WalkDir::new(tmp.path()) {
             let entry = entry?;
-            eprintln!("entry: {:?}", entry.file_name());
+            debug!("entry: {:?}", entry.file_name());
             if entry.file_name().to_string_lossy().ends_with(".src.rpm") {
                 // srpm = Some(entry.path().to_path_buf());
                 // eprintln!("found srpm: {:?}", srpm);
 
-                println!("Moving srpm to resultdir...");
+                info!("Moving srpm to resultdir...");
                 // create srpm dir if it doesnt exist
                 let srpm_dir = self.resultdir.join("rpm/srpm");
                 std::fs::create_dir_all(&srpm_dir)?;
@@ -544,7 +566,7 @@ impl RPMSpecBackend for RPMBuildBackend {
 
             if entry.file_name().to_string_lossy().ends_with(".src.rpm") {
                 //rpms.push(entry.path().to_path_buf());
-                eprintln!("found srpm: {:?}", rpms);
+                debug!("found srpm: {:?}", rpms);
 
                 let srpm_dir = self.resultdir.join("rpm/srpm");
                 std::fs::create_dir_all(&srpm_dir)?;

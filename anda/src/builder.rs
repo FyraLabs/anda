@@ -13,6 +13,7 @@ use std::{
 };
 
 use cmd_lib::{run_cmd, run_fun};
+use log::debug;
 
 pub fn build_rpm(
     opts: RPMOptions,
@@ -37,7 +38,7 @@ pub fn build_rpm(
             opts2.extra_repos.as_mut().unwrap().push(repo_path);
         }
     } else {
-        println!("No repodata found, skipping");
+        debug!("No repodata found, skipping");
     }
 
     for rpmmacro in rpmb_opts.rpm_macro {
@@ -49,7 +50,7 @@ pub fn build_rpm(
         }
     }
 
-    println!("Building RPMs with {:?}", opts2);
+    debug!("Building RPMs with {:?}", opts2);
 
     let builder = builder.build(spec, &opts2);
     // createrepo at the end builder
@@ -228,6 +229,7 @@ pub fn build_project(
         }
         rpm_opts.no_mirror = rpmb_opts.no_mirrors;
         rpm_opts.def_macro("_disable_source_fetch", "0");
+        rpm_opts.config_opts.push("external_buildrequires=True".to_string());
     }
 
     let mut artifacts = Artifacts::new();
@@ -337,10 +339,9 @@ pub fn builder(
 ) -> Result<()> {
     // Parse the project manifest
     let config = anda_config::load_from_file(&cli.config.clone()).map_err(|e| anyhow!(e))?;
-    println!("Build command");
-    println!("all: {}", all);
-    println!("project: {:?}", project);
-    println!("package: {:?}", package);
+    debug!("all: {}", all);
+    debug!("project: {:?}", project);
+    debug!("package: {:?}", package);
     if all {
         for (name, project) in config.project {
             println!("Building project: {}", name);

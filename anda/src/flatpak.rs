@@ -4,7 +4,7 @@ use flatpak::application::FlatpakApplication;
 use std::{
     fmt::Display,
     path::{Path, PathBuf},
-    process::Command,
+    process::Command, env,
 };
 
 pub enum FlatpakArtifact {
@@ -80,7 +80,7 @@ impl FlatpakBuilder {
             .map_err(|e| anyhow!(e))?;
 
         // create the flatpak output folders
-        let output_dir = self.output_dir.join(&flatpak_meta.app_id);
+        let output_dir = env::current_dir()?.join(".flatpak-builder/build").join(&flatpak_meta.app_id);
         std::fs::create_dir_all(&output_dir).map_err(|e| anyhow!(e))?;
         std::fs::create_dir_all(&self.output_repo).map_err(|e| anyhow!(e))?;
 

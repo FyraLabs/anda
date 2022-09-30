@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 
 use crate::error::ProjectError;
@@ -80,7 +81,12 @@ pub struct Flatpak {
 }
 
 pub fn load_from_file(path: &PathBuf) -> Result<AndaConfig, ProjectError> {
-    let file = fs::read_to_string(path).context("Failed to read config file")?;
+    let file = fs::read_to_string(path).map_err(|e| {
+        match e.kind() {
+            ErrorKind::NotFound => ProjectError::NoManifest,
+            _ => ProjectError::InvalidManifest(e.to_string()),
+        }
+    })?;
 
     let config = hcl::from_str(&file).context("Failed to parse config file")?;
 

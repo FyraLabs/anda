@@ -10,6 +10,7 @@ use anyhow::Result;
 
 use clap::{AppSettings, Args, CommandFactory, Parser, Subcommand};
 use cli::{Cli, Command};
+use log::debug;
 
 fn main() -> Result<()> {
     //println!("Hello, world!");
@@ -28,6 +29,11 @@ fn main() -> Result<()> {
     // let app = Command::command().find_subcommand("build").unwrap().clone();
     // clap_mangen::Man::new(app).render(&mut std::io::stdout()).unwrap();
     // println!("{:?}", &cli);
+
+    // set up logging according to verbosity level
+    pretty_env_logger::formatted_builder()
+        .filter_level(cli.verbose.log_level_filter())
+        .init();
 
     match cli.command.clone() {
         Command::Build {
@@ -54,7 +60,7 @@ fn main() -> Result<()> {
                 ));
             }
 
-            eprintln!("{:?}", &all);
+            debug!("{:?}", &all);
             builder::builder(
                 &cli,
                 rpm_opts,
