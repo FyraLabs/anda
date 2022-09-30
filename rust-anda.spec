@@ -18,6 +18,10 @@ ExclusiveArch:  %{rust_arches}
 BuildRequires:  rust-packaging >= 21
 BuildRequires:  fyra-srpm-macros
 
+Requires:       mock
+Requires:       rpm-build
+Requires:       createrepo-c
+
 %global _description %{expand:
 Andaman Build toolchain.}
 
