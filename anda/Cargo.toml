@@ -13,7 +13,7 @@ anyhow = "1.0.59"
 toml = "0.5.9"
 walkdir = "2.3.2"
 tempfile = "3.3.0"
-anda-config = { path = "../anda-config", version = "*"}
+anda-config = { path = "../anda-config", version = "0.1.0"}
 flatpak = "0.18.1"
 clap_mangen = "0.1.11"
 clap-verbosity-flag = "1.0.1"
