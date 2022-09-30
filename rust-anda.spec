@@ -20,7 +20,7 @@ BuildRequires:  fyra-srpm-macros
 
 Requires:       mock
 Requires:       rpm-build
-Requires:       createrepo-c
+Requires:       createrepo_c
 
 %global _description %{expand:
 Andaman Build toolchain.}
