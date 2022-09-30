@@ -178,7 +178,7 @@ pub fn build_flatpak_call(
 
 pub fn build_oci_call(
     backend: OCIBackend,
-    cli: &Cli,
+    _cli: &Cli,
     manifest: &Docker,
     artifact_store: &mut Artifacts,
 ) -> Result<()> {
@@ -217,7 +217,7 @@ pub fn build_project(
     package: PackageType,
     rpmb_opts: RpmOpts,
     flatpak_opts: FlatpakOpts,
-    oci_opts: OciOpts,
+    _oci_opts: OciOpts,
 ) {
     let cwd = std::env::current_dir().unwrap();
 

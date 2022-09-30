@@ -2,7 +2,6 @@
 // If you want to add a crate in here, also add it to build-dependencies
 
 use anyhow::Result;
-
 use clap::{AppSettings, ArgEnum, Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use std::{path::PathBuf, str::FromStr};
 

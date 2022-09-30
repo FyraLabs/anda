@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 // we include the CLI module so we can generate
 include!("src/cli.rs");
 use std::fs::create_dir_all;

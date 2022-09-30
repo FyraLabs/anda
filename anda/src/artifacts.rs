@@ -1,6 +1,4 @@
-use std::{collections::BTreeMap, str::FromStr};
-
-use clap::ValueEnum;
+use std::collections::BTreeMap;
 
 use crate::cli::PackageType;
 

@@ -1,4 +1,5 @@
 #![deny(rust_2018_idioms)]
+#![allow(unused_imports)]
 mod artifacts;
 mod builder;
 mod cli;
@@ -20,7 +21,7 @@ fn main() -> Result<()> {
 
     app.build();
 
-    let sub = app.get_subcommands();
+    // let sub = app.get_subcommands();
 
     // for s in sub {
     //     println!("{:?}", s);
