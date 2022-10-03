@@ -12,7 +12,7 @@ use std::{
     process::Command,
 };
 
-use cmd_lib::{run_cmd, run_fun};
+use cmd_lib::{run_cmd};
 use log::debug;
 
 pub async fn build_rpm(
@@ -229,7 +229,7 @@ pub async fn build_project(
     rpmb_opts: RpmOpts,
     flatpak_opts: FlatpakOpts,
     _oci_opts: OciOpts,
-) {
+) -> Result<()> {
     let cwd = std::env::current_dir().unwrap();
 
     let mut rpm_opts = RPMOptions::new(rpmb_opts.clone().mock_config, cwd, cli.target_dir.clone());
@@ -261,26 +261,22 @@ pub async fn build_project(
                     rpmb_opts,
                 )
                 .await
-                .with_context(|| "Failed to build RPMs".to_string())
-                .unwrap();
+                .with_context(|| "Failed to build RPMs".to_string())?;
             }
             if let Some(flatpak) = &project.flatpak {
                 build_flatpak_call(cli, flatpak, &mut artifacts, flatpak_opts)
                     .await
-                    .with_context(|| "Failed to build Flatpaks".to_string())
-                    .unwrap();
+                    .with_context(|| "Failed to build Flatpaks".to_string())?;
             }
 
             if let Some(podman) = &project.podman {
                 build_oci_call(OCIBackend::Podman, cli, podman, &mut artifacts)
-                    .with_context(|| "Failed to build Podman images".to_string())
-                    .unwrap();
+                    .with_context(|| "Failed to build Podman images".to_string())?;
             }
 
             if let Some(docker) = &project.docker {
                 build_oci_call(OCIBackend::Docker, cli, docker, &mut artifacts)
-                    .with_context(|| "Failed to build Docker images".to_string())
-                    .unwrap();
+                    .with_context(|| "Failed to build Docker images".to_string())?;
             }
         }
         PackageType::Rpm => {
@@ -294,8 +290,7 @@ pub async fn build_project(
                     rpmb_opts,
                 )
                 .await
-                .with_context(|| "Failed to build RPMs".to_string())
-                .unwrap();
+                .with_context(|| "Failed to build RPMs".to_string())?;
             } else {
                 println!("No RPM build defined for project");
             }
@@ -303,8 +298,7 @@ pub async fn build_project(
         PackageType::Docker => {
             if let Some(docker) = &project.docker {
                 build_oci_call(OCIBackend::Docker, cli, docker, &mut artifacts)
-                    .with_context(|| "Failed to build Docker images".to_string())
-                    .unwrap();
+                    .with_context(|| "Failed to build Docker images".to_string())?;
             } else {
                 println!("No Docker build defined for project");
             }
@@ -312,8 +306,7 @@ pub async fn build_project(
         PackageType::Podman => {
             if let Some(podman) = &project.podman {
                 build_oci_call(OCIBackend::Podman, cli, podman, &mut artifacts)
-                    .with_context(|| "Failed to build Podman images".to_string())
-                    .unwrap();
+                    .with_context(|| "Failed to build Podman images".to_string())?;
             } else {
                 println!("No Podman build defined for project");
             }
@@ -322,8 +315,7 @@ pub async fn build_project(
             if let Some(flatpak) = &project.flatpak {
                 build_flatpak_call(cli, flatpak, &mut artifacts, flatpak_opts)
                     .await
-                    .with_context(|| "Failed to build Flatpaks".to_string())
-                    .unwrap();
+                    .with_context(|| "Failed to build Flatpaks".to_string())?;
             } else {
                 println!("No Flatpak build defined for project");
             }
@@ -343,6 +335,8 @@ pub async fn build_project(
 
         println!("Built {}: {}", type_string, path);
     }
+
+    Ok(())
 }
 
 pub async fn builder(
@@ -370,7 +364,7 @@ pub async fn builder(
                 flatpak_opts.clone(),
                 oci_opts.clone(),
             )
-            .await;
+            .await?;
         }
     } else {
         // find project named project
@@ -384,7 +378,7 @@ pub async fn builder(
                     flatpak_opts,
                     oci_opts,
                 )
-                .await;
+                .await?;
             } else {
                 return Err(anyhow!("Project not found: {}", name));
             }

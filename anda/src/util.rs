@@ -1,16 +1,24 @@
+//! Utility functions and types
+
 use async_trait::async_trait;
 use log::{debug, info};
-use std::ffi::{OsStr, OsString};
+use nix::sys::signal;
+use nix::unistd::Pid;
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
+use anyhow::{anyhow, Result};
 
+/// Command Logging
+///
+/// This trait implements custom logging for commands in a format of `{command} | {line}`
+/// It also implements Ctrl-C handling for the command, and will send a SIGINT to the command
 #[async_trait]
 pub trait CommandLog {
-    async fn log(&mut self);
+    async fn log(&mut self) -> Result<()>;
 }
 #[async_trait]
 impl CommandLog for Command {
-    async fn log(&mut self) {
+    async fn log(&mut self) -> Result<()> {
         // let cmd_name = self;
         // make process name a constant string that we can reuse every time we call print_log
         let process = self
@@ -73,12 +81,37 @@ impl CommandLog for Command {
             }
         });
 
+        // send sigint to child process when we ctrl-c
         tasks.push(stderr_handle);
 
+        // sigint handle
+
+        let sigint_handle = tokio::spawn(async move {
+            // wait for ctrl-c or child process to finish
+
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    info!("Received ctrl-c, sending sigint to child process");
+                    signal::kill(Pid::from_raw(output.id().unwrap() as i32), signal::Signal::SIGINT).unwrap();
+
+                    // exit program
+                    eprintln!("Received ctrl-c, exiting");
+                    std::process::exit(127);
+                }
+                _ = output.wait() => {
+                    info!("Child process finished");
+                }
+            }
+        });
+
+        tasks.push(sigint_handle);
+
         for task in tasks {
-            task.await.unwrap();
+            task.await?;
         }
 
-        output.wait().await.unwrap();
+        Ok(())
+
+        // output.wait().await.unwrap();
     }
 }

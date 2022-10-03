@@ -1,5 +1,5 @@
 #![deny(rust_2018_idioms)]
-#![allow(unused_imports)]
+
 mod artifacts;
 mod builder;
 mod cli;
@@ -10,7 +10,7 @@ mod util;
 
 use anyhow::Result;
 
-use clap::{AppSettings, Args, CommandFactory, Parser, Subcommand};
+use clap::{CommandFactory, Parser};
 use cli::{Cli, Command};
 use log::debug;
 

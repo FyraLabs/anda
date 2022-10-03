@@ -11,10 +11,8 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use log::{debug, info};
 use std::collections::BTreeMap;
-use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
 use crate::util::CommandLog;
 
@@ -353,7 +351,7 @@ impl RPMSpecBackend for MockBackend {
 
         // cmd.status()?;
 
-        cmd.log().await;
+        cmd.log().await?;
 
         // find srpm in resultdir using walkdir
 
@@ -387,7 +385,7 @@ impl RPMSpecBackend for MockBackend {
             .arg("--resultdir")
             .arg(tmp.path());
 
-        cmd.log().await;
+        cmd.log().await?;
 
         // find rpms in resultdir using walkdir
 
@@ -495,7 +493,7 @@ impl RPMSpecBackend for RPMBuildBackend {
             .arg("--define")
             .arg(format!("_srcrpmdir {}", tmp.path().display()));
 
-        cmd.log().await;
+        cmd.log().await?;
 
         // find srpm in resultdir using walkdir
 
@@ -530,7 +528,7 @@ impl RPMSpecBackend for RPMBuildBackend {
             .arg("--define")
             .arg(format!("_rpmdir {}", tmp.path().display()));
 
-        cmd.log().await;
+        cmd.log().await?;
 
         let mut rpms = Vec::new();
 
@@ -566,7 +564,7 @@ impl RPMSpecBackend for RPMBuildBackend {
             .arg(format!("_srcrpmdir {}", tmp.path().display()))
             .arg("--define")
             .arg(format!("_rpmdir {}", tmp.path().display()));
-        cmd.log().await;
+        cmd.log().await?;
 
         let mut rpms = Vec::new();
 
