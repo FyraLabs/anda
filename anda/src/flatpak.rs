@@ -4,8 +4,12 @@ use flatpak::application::FlatpakApplication;
 use std::{
     fmt::Display,
     path::{Path, PathBuf},
-    process::Command, env,
+    env,
 };
+
+use tokio::process::Command;
+
+use crate::util::CommandLog;
 
 pub enum FlatpakArtifact {
     Ref(String),
@@ -74,7 +78,7 @@ impl FlatpakBuilder {
         self.extra_sources_urls.extend(iter);
     }
 
-    pub fn build(&self, manifest: &Path) -> Result<String> {
+    pub async fn build(&self, manifest: &Path) -> Result<String> {
         // we parse the flatpak metadata file
         let flatpak_meta = FlatpakApplication::load_from_file(manifest.display().to_string())
             .map_err(|e| anyhow!(e))?;
@@ -106,11 +110,11 @@ impl FlatpakBuilder {
         flatpak.args(&self.extra_args);
 
         // run the command
-        flatpak.status().map_err(|e| anyhow!(e))?;
+        flatpak.log().await;
         Ok(flatpak_meta.app_id)
     }
 
-    pub fn bundle(&self, app_id: &str) -> Result<PathBuf> {
+    pub async fn bundle(&self, app_id: &str) -> Result<PathBuf> {
         std::fs::create_dir_all(&self.bundles_dir).map_err(|e| anyhow!(e))?;
         let bundle_path = self.bundles_dir.join(format!("{}.flatpak", app_id));
 
@@ -122,7 +126,7 @@ impl FlatpakBuilder {
             .arg(&bundle_path)
             .arg(app_id);
 
-        flatpak.status().map_err(|e| anyhow!(e))?;
+        flatpak.log().await;
 
         Ok(bundle_path)
     }

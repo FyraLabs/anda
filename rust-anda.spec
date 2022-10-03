@@ -5,7 +5,7 @@
 %global crate anda
 
 Name:           rust-anda
-Version:        0.1.1
+Version:        0.1.2
 Release:        1%{?dist}
 Summary:        Andaman Build toolchain
 
@@ -16,7 +16,7 @@ Source:         %{crates_source}
 ExclusiveArch:  %{rust_arches}
 
 BuildRequires:  rust-packaging >= 21
-BuildRequires:  fedora-extras-srpm-macros
+BuildRequires:  anda-srpm-macros
 
 Requires:       mock
 Requires:       rpm-build

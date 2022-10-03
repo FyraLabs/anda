@@ -6,6 +6,7 @@ mod cli;
 mod flatpak;
 mod oci;
 mod rpm_spec;
+mod util;
 
 use anyhow::Result;
 

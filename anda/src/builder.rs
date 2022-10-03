@@ -75,7 +75,7 @@ pub async fn build_rpm(
     builder
 }
 
-pub fn build_flatpak(
+pub async fn build_flatpak(
     output_dir: &Path,
     manifest: &Path,
     flatpak_opts: FlatpakOpts,
@@ -102,9 +102,9 @@ pub fn build_flatpak(
         builder.add_extra_args("--delete-build-dirs".to_string());
     }
 
-    let flatpak = builder.build(manifest)?;
+    let flatpak = builder.build(manifest).await?;
     artifacts.push(FlatpakArtifact::Ref(flatpak.clone()));
-    artifacts.push(FlatpakArtifact::Bundle(builder.bundle(&flatpak)?));
+    artifacts.push(FlatpakArtifact::Bundle(builder.bundle(&flatpak).await?));
 
     Ok(artifacts)
 }
@@ -135,7 +135,8 @@ pub async fn build_rpm_call(
         rpm_builder,
         &cli.target_dir,
         rpmb_opts,
-    ).await?;
+    )
+    .await?;
 
     // run post-build script
     if let Some(post_script) = &rpmbuild.post_script {
@@ -153,7 +154,7 @@ pub async fn build_rpm_call(
     Ok(())
 }
 
-pub fn build_flatpak_call(
+pub async fn build_flatpak_call(
     cli: &Cli,
     flatpak: &Flatpak,
     artifact_store: &mut Artifacts,
@@ -167,7 +168,9 @@ pub fn build_flatpak_call(
         }
     }
 
-    let art = build_flatpak(&cli.target_dir, &flatpak.manifest, flatpak_opts).unwrap();
+    let art = build_flatpak(&cli.target_dir, &flatpak.manifest, flatpak_opts)
+        .await
+        .unwrap();
 
     for artifact in art {
         artifact_store.add(artifact.to_string(), PackageType::Flatpak);
@@ -237,7 +240,9 @@ pub async fn build_project(
         }
         rpm_opts.no_mirror = rpmb_opts.no_mirrors;
         rpm_opts.def_macro("_disable_source_fetch", "0");
-        rpm_opts.config_opts.push("external_buildrequires=True".to_string());
+        rpm_opts
+            .config_opts
+            .push("external_buildrequires=True".to_string());
     }
 
     let mut artifacts = Artifacts::new();
@@ -254,12 +259,14 @@ pub async fn build_project(
                     rpmb_opts.rpm_builder.into(),
                     &mut artifacts,
                     rpmb_opts,
-                ).await
+                )
+                .await
                 .with_context(|| "Failed to build RPMs".to_string())
                 .unwrap();
             }
             if let Some(flatpak) = &project.flatpak {
                 build_flatpak_call(cli, flatpak, &mut artifacts, flatpak_opts)
+                    .await
                     .with_context(|| "Failed to build Flatpaks".to_string())
                     .unwrap();
             }
@@ -285,7 +292,8 @@ pub async fn build_project(
                     rpmb_opts.rpm_builder.into(),
                     &mut artifacts,
                     rpmb_opts,
-                ).await
+                )
+                .await
                 .with_context(|| "Failed to build RPMs".to_string())
                 .unwrap();
             } else {
@@ -313,6 +321,7 @@ pub async fn build_project(
         PackageType::Flatpak => {
             if let Some(flatpak) = &project.flatpak {
                 build_flatpak_call(cli, flatpak, &mut artifacts, flatpak_opts)
+                    .await
                     .with_context(|| "Failed to build Flatpaks".to_string())
                     .unwrap();
             } else {
@@ -360,7 +369,8 @@ pub async fn builder(
                 rpm_opts.clone(),
                 flatpak_opts.clone(),
                 oci_opts.clone(),
-            ).await;
+            )
+            .await;
         }
     } else {
         // find project named project
@@ -373,7 +383,8 @@ pub async fn builder(
                     rpm_opts,
                     flatpak_opts,
                     oci_opts,
-                ).await;
+                )
+                .await;
             } else {
                 return Err(anyhow!("Project not found: {}", name));
             }

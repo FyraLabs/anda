@@ -10,13 +10,13 @@ on:
 
 jobs:
   anda:
-    uses: tau-OS/github-actions/.github/workflows/anda-rpm.yml@main
+    uses: andaman-common-pkgs/github-actions/.github/workflows/anda-rpm.yml@main
     with:
       name: "anda"
       subatomicServer: "https://subatomic.fyralabs.com"
-      subatomicRepo: fe37
-      mockConfig: fedora-extras-37-x86_64
-      mockConfigPackage: fedora-extras-mock-configs
+      subatomicRepo: ad37
+      mockConfig: anda-37-x86_64
+      mockConfigPackage: anda-mock-configs
       upload: true
     secrets:
       subatomicToken: ${{ secrets.SUBATOMIC_TOKEN }}
