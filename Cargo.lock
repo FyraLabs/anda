@@ -306,8 +306,9 @@ checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 
 [[package]]
 name = "hcl-rs"
-version = "0.7.0"
-source = "git+https://github.com/martinohmann/hcl-rs.git?branch=main#e39496c09c6aa884c6d64b785d63372a611d1d1f"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "272ad46b769b0324075f481ab60545757452b03d4203730b593e866eff61e08a"
 dependencies = [
  "indexmap",
  "itoa",
