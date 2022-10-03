@@ -6,7 +6,7 @@
 
 Name:           rust-anda
 Version:        0.1.1
-Release:        %autorelease
+Release:        1%{?dist}
 Summary:        Andaman Build toolchain
 
 License:        MIT
@@ -16,7 +16,7 @@ Source:         %{crates_source}
 ExclusiveArch:  %{rust_arches}
 
 BuildRequires:  rust-packaging >= 21
-BuildRequires:  fyra-srpm-macros
+BuildRequires:  fedora-extras-srpm-macros
 
 Requires:       mock
 Requires:       rpm-build
