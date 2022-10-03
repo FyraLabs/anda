@@ -6,7 +6,7 @@
 
 Name:           rust-anda
 Version:        0.1.2
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Andaman Build toolchain
 
 License:        MIT
@@ -33,9 +33,8 @@ Summary:        %{summary}
 %description -n %{crate} %{_description}
 
 %files       -n %{crate}
-# FIXME: no license files detected
 %{_bindir}/anda
-
+%{_mandir}/man1/anda*.1*
 %prep
 %autosetup -n %{crate}-%{version_no_tilde} -p1
 %cargo_prep_online
@@ -45,6 +44,11 @@ Summary:        %{summary}
 
 %install
 %cargo_install
+
+mkdir -p %{buildroot}%{_mandir}/man1/
+
+# install man pages
+cp -v target/assets/man_pages/* %{buildroot}%{_mandir}/man1/
 
 %changelog
 %autochangelog
