@@ -15,7 +15,7 @@ use std::{
 use cmd_lib::{run_cmd, run_fun};
 use log::debug;
 
-pub fn build_rpm(
+pub async fn build_rpm(
     opts: RPMOptions,
     spec: &Path,
     builder: RPMBuilder,
@@ -60,7 +60,7 @@ pub fn build_rpm(
 
     debug!("Building RPMs with {:?}", opts2);
 
-    let builder = builder.build(spec, &opts2);
+    let builder = builder.build(spec, &opts2).await;
     // createrepo at the end builder
     // let mut createrepo = Command::new("createrepo_c");
     // createrepo.arg(&repo_path).arg("--quiet").arg("--update");
@@ -112,7 +112,7 @@ pub fn build_flatpak(
 // Functions to actually call the builds
 // yeah this is ugly and relies on side effects, but it reduces code duplication
 // to anyone working on this, please rewrite this call to make it more readable
-pub fn build_rpm_call(
+pub async fn build_rpm_call(
     cli: &Cli,
     opts: RPMOptions,
     rpmbuild: &RpmBuild,
@@ -135,7 +135,7 @@ pub fn build_rpm_call(
         rpm_builder,
         &cli.target_dir,
         rpmb_opts,
-    )?;
+    ).await?;
 
     // run post-build script
     if let Some(post_script) = &rpmbuild.post_script {
@@ -219,7 +219,7 @@ pub fn build_oci_call(
 
 // project parser
 
-pub fn build_project(
+pub async fn build_project(
     cli: &Cli,
     project: Project,
     package: PackageType,
@@ -254,7 +254,7 @@ pub fn build_project(
                     rpmb_opts.rpm_builder.into(),
                     &mut artifacts,
                     rpmb_opts,
-                )
+                ).await
                 .with_context(|| "Failed to build RPMs".to_string())
                 .unwrap();
             }
@@ -285,7 +285,7 @@ pub fn build_project(
                     rpmb_opts.rpm_builder.into(),
                     &mut artifacts,
                     rpmb_opts,
-                )
+                ).await
                 .with_context(|| "Failed to build RPMs".to_string())
                 .unwrap();
             } else {
@@ -336,7 +336,7 @@ pub fn build_project(
     }
 }
 
-pub fn builder(
+pub async fn builder(
     cli: &Cli,
     rpm_opts: RpmOpts,
     all: bool,
@@ -360,7 +360,7 @@ pub fn builder(
                 rpm_opts.clone(),
                 flatpak_opts.clone(),
                 oci_opts.clone(),
-            );
+            ).await;
         }
     } else {
         // find project named project
@@ -373,7 +373,7 @@ pub fn builder(
                     rpm_opts,
                     flatpak_opts,
                     oci_opts,
-                );
+                ).await;
             } else {
                 return Err(anyhow!("Project not found: {}", name));
             }

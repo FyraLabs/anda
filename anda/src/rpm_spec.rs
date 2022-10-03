@@ -8,11 +8,93 @@ use clap::clap_derive::ArgEnum;
 use tempfile::TempDir;
 
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use log::{debug, info};
 use std::collections::BTreeMap;
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::str::FromStr;
+use tokio::io::AsyncBufReadExt;
+use tokio::process::Command;
+
+#[async_trait]
+pub trait CommandLog {
+    async fn log(&mut self);
+}
+#[async_trait]
+impl CommandLog for Command {
+    async fn log(&mut self) {
+        // let cmd_name = self;
+        // make process name a constant string that we can reuse every time we call print_log
+        let process = self
+            .as_std()
+            .get_program()
+            .to_owned()
+            .into_string()
+            .unwrap();
+        let args = self
+            .as_std()
+            .get_args()
+            .map(|a| a.to_str().unwrap())
+            .collect::<Vec<&str>>()
+            .join(" ");
+        debug!("Running command: {process} {args}",);
+        let c = self
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        // copy self
+
+        let mut output = c.spawn().unwrap();
+
+        fn print_log(process: &str, output: String) {
+            let formatter = format!("{}\t| {}", process, output);
+            println!("{}", formatter);
+        }
+
+        // handles so we can run both at the same time
+
+        let mut tasks = vec![];
+        // stream stdout
+
+        let stdout = output.stdout.take().unwrap();
+        let stdout_reader = tokio::io::BufReader::new(stdout);
+        let mut stdout_lines = stdout_reader.lines();
+
+        // HACK: Rust ownership is very fun.
+        let t = process.clone();
+        let stdout_handle = tokio::spawn(async move {
+            while let Some(line) = stdout_lines.next_line().await.unwrap() {
+                print_log(&t, line);
+            }
+        });
+
+        tasks.push(stdout_handle);
+
+        // stream stderr
+
+        debug!("Streaming stderr");
+        let stderr = output.stderr.take().unwrap();
+        let stderr_reader = tokio::io::BufReader::new(stderr).lines();
+        let mut stderr_lines = stderr_reader;
+
+        debug!("stderr: {:?}", stderr_lines);
+
+        let stderr_handle = tokio::spawn(async move {
+            while let Some(line) = stderr_lines.next_line().await.unwrap() {
+                print_log(&process, line);
+            }
+        });
+
+        tasks.push(stderr_handle);
+
+        for task in tasks {
+            task.await.unwrap();
+        }
+
+        output.wait().await.unwrap();
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct RPMOptions {
@@ -112,7 +194,7 @@ impl From<crate::cli::RPMBuilder> for RPMBuilder {
 }
 
 impl RPMBuilder {
-    pub fn build(&self, spec: &Path, options: &RPMOptions) -> Result<Vec<PathBuf>> {
+    pub async fn build(&self, spec: &Path, options: &RPMOptions) -> Result<Vec<PathBuf>> {
         if let RPMBuilder::Mock = self {
             let mut mock = MockBackend::new(
                 options.mock_config.clone(),
@@ -142,7 +224,7 @@ impl RPMBuilder {
 
             mock.no_mirror(options.no_mirror);
 
-            mock.build(spec)
+            mock.build(spec).await
         } else {
             let mut rpmbuild =
                 RPMBuildBackend::new(options.sources.clone(), options.resultdir.clone());
@@ -159,17 +241,18 @@ impl RPMBuilder {
                 rpmbuild.without_flags_mut().push(without_flags.clone());
             }
 
-            rpmbuild.build(spec)
+            rpmbuild.build(spec).await
         }
     }
 }
 
+#[async_trait::async_trait]
 pub trait RPMSpecBackend {
-    fn build_srpm(&self, spec: &Path) -> Result<PathBuf>;
-    fn build_rpm(&self, spec: &Path) -> Result<Vec<PathBuf>>;
+    async fn build_srpm(&self, spec: &Path) -> Result<PathBuf>;
+    async fn build_rpm(&self, spec: &Path) -> Result<Vec<PathBuf>>;
 
-    fn build(&self, spec: &Path) -> Result<Vec<PathBuf>> {
-        self.build_rpm(&self.build_srpm(spec)?)
+    async fn build(&self, spec: &Path) -> Result<Vec<PathBuf>> {
+        self.build_rpm(&self.build_srpm(spec).await?).await
     }
 }
 
@@ -301,6 +384,8 @@ impl MockBackend {
             cmd.arg("-r").arg(config);
         }
 
+        cmd.arg("--verbose");
+
         for repo in self.extra_repos.iter() {
             cmd.arg("-a").arg(repo);
         }
@@ -328,8 +413,9 @@ impl MockBackend {
     }
 }
 
+#[async_trait]
 impl RPMSpecBackend for MockBackend {
-    fn build_srpm(&self, spec: &Path) -> Result<PathBuf> {
+    async fn build_srpm(&self, spec: &Path) -> Result<PathBuf> {
         let mut cmd = self.mock();
         let tmp = TempDir::new()?;
 
@@ -342,7 +428,9 @@ impl RPMSpecBackend for MockBackend {
             .arg(tmp.path())
             .arg("--enable-network");
 
-        cmd.status()?;
+        // cmd.status()?;
+
+        cmd.log().await;
 
         // find srpm in resultdir using walkdir
 
@@ -367,7 +455,7 @@ impl RPMSpecBackend for MockBackend {
 
         Err(anyhow!("Failed to find srpm"))
     }
-    fn build_rpm(&self, spec: &Path) -> Result<Vec<PathBuf>> {
+    async fn build_rpm(&self, spec: &Path) -> Result<Vec<PathBuf>> {
         let mut cmd = self.mock();
         let tmp = TempDir::new()?;
         cmd.arg("--rebuild")
@@ -376,7 +464,7 @@ impl RPMSpecBackend for MockBackend {
             .arg("--resultdir")
             .arg(tmp.path());
 
-        cmd.status()?;
+        cmd.log().await;
 
         // find rpms in resultdir using walkdir
 
@@ -471,8 +559,9 @@ impl RPMBuildBackend {
     }
 }
 
+#[async_trait]
 impl RPMSpecBackend for RPMBuildBackend {
-    fn build_srpm(&self, spec: &Path) -> Result<PathBuf> {
+    async fn build_srpm(&self, spec: &Path) -> Result<PathBuf> {
         let mut cmd = self.rpmbuild();
         let tmp = TempDir::new()?;
 
@@ -483,7 +572,7 @@ impl RPMSpecBackend for RPMBuildBackend {
             .arg("--define")
             .arg(format!("_srcrpmdir {}", tmp.path().display()));
 
-        cmd.status()?;
+        cmd.log().await;
 
         // find srpm in resultdir using walkdir
 
@@ -507,7 +596,7 @@ impl RPMSpecBackend for RPMBuildBackend {
         todo!()
     }
 
-    fn build_rpm(&self, spec: &Path) -> Result<Vec<PathBuf>> {
+    async fn build_rpm(&self, spec: &Path) -> Result<Vec<PathBuf>> {
         let mut cmd = self.rpmbuild();
         let tmp = TempDir::new()?;
 
@@ -518,7 +607,7 @@ impl RPMSpecBackend for RPMBuildBackend {
             .arg("--define")
             .arg(format!("_rpmdir {}", tmp.path().display()));
 
-        cmd.status()?;
+        cmd.log().await;
 
         let mut rpms = Vec::new();
 
@@ -543,7 +632,7 @@ impl RPMSpecBackend for RPMBuildBackend {
         Ok(rpms)
     }
 
-    fn build(&self, spec: &Path) -> Result<Vec<PathBuf>> {
+    async fn build(&self, spec: &Path) -> Result<Vec<PathBuf>> {
         let mut cmd = self.rpmbuild();
         let tmp = TempDir::new()?;
         cmd.arg("-ba")
@@ -554,7 +643,7 @@ impl RPMSpecBackend for RPMBuildBackend {
             .arg(format!("_srcrpmdir {}", tmp.path().display()))
             .arg("--define")
             .arg(format!("_rpmdir {}", tmp.path().display()));
-        cmd.status()?;
+        cmd.log().await;
 
         let mut rpms = Vec::new();
 

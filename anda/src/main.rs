@@ -13,7 +13,8 @@ use clap::{AppSettings, Args, CommandFactory, Parser, Subcommand};
 use cli::{Cli, Command};
 use log::debug;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     //println!("Hello, world!");
     let cli = Cli::parse();
 
@@ -70,7 +71,7 @@ fn main() -> Result<()> {
                 package,
                 flatpak_opts,
                 oci_opts,
-            )?;
+            ).await?;
         }
         Command::Clean => {
             println!("Cleaning up build directory");

@@ -134,6 +134,7 @@ pub struct RpmOpts {
 }
 
 #[derive(Subcommand, Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum Command {
     /// Build a project
     ///
