@@ -66,7 +66,7 @@ pub async fn build_rpm(
         let date = get_date();
 
         let autogitversion = if let Some(commit) = commit_id.clone() {
-            let commit = commit.chars().take(16).collect::<String>();
+            let commit = commit.chars().take(8).collect::<String>();
             format!("{}.{}", &date, commit)
         } else {
             date.clone()
