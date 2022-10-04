@@ -7,6 +7,7 @@
 use clap::clap_derive::ArgEnum;
 use tempfile::TempDir;
 
+use crate::util::CommandLog;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use log::{debug, info};
@@ -14,8 +15,6 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use tokio::process::Command;
-use crate::util::CommandLog;
-
 
 #[derive(Clone, Debug)]
 pub struct RPMOptions {
@@ -37,7 +36,14 @@ pub struct RPMOptions {
     pub no_mirror: bool,
     /// Custom RPM macros to define
     pub macros: BTreeMap<String, String>,
+    /// Config options for Mock
     pub config_opts: Vec<String>,
+    /// Enable SCM support
+    pub scm_enable: bool,
+    /// SCM Options (mock)
+    pub scm_opts: Vec<String>,
+    /// Plugin Options (mock)
+    pub plugin_opts: Vec<String>,
 }
 
 impl RPMOptions {
@@ -52,6 +58,9 @@ impl RPMOptions {
             no_mirror: false,
             macros: BTreeMap::new(),
             config_opts: Vec::new(),
+            scm_enable: false,
+            scm_opts: Vec::new(),
+            plugin_opts: Vec::new(),
         }
     }
     pub fn add_extra_repo(&mut self, repo: String) {
@@ -144,6 +153,12 @@ impl RPMBuilder {
             }
 
             mock.no_mirror(options.no_mirror);
+
+            mock.enable_scm(options.scm_enable);
+
+            mock.extend_scm_opts(options.scm_opts.clone());
+
+            mock.plugin_opts(options.plugin_opts.clone());
 
             mock.build(spec).await
         } else {
@@ -245,6 +260,9 @@ pub struct MockBackend {
     no_mirror: bool,
     macros: BTreeMap<String, String>,
     config_opts: Vec<String>,
+    scm_enable: bool,
+    scm_opts: Vec<String>,
+    plugin_opts: Vec<String>,
 }
 
 impl RPMExtraOptions for MockBackend {
@@ -280,6 +298,9 @@ impl MockBackend {
             no_mirror: false,
             macros: BTreeMap::new(),
             config_opts: Vec::new(),
+            scm_enable: false,
+            scm_opts: Vec::new(),
+            plugin_opts: Vec::new(),
         }
     }
 
@@ -296,6 +317,22 @@ impl MockBackend {
     }
     pub fn no_mirror(&mut self, no_mirror: bool) {
         self.no_mirror = no_mirror;
+    }
+
+    pub fn enable_scm(&mut self, enable: bool) {
+        self.scm_enable = enable;
+    }
+
+    pub fn extend_scm_opts(&mut self, opts: Vec<String>) {
+        self.scm_opts.extend(opts);
+    }
+
+    pub fn add_scm_opt(&mut self, opt: String) {
+        self.scm_opts.push(opt);
+    }
+
+    pub fn plugin_opts(&mut self, opts: Vec<String>) {
+        self.plugin_opts.extend(opts);
     }
 
     pub fn mock(&self) -> Command {
@@ -330,6 +367,14 @@ impl MockBackend {
         for opt in self.config_opts.iter() {
             cmd.arg("--config-opts").arg(opt);
         }
+
+        if self.scm_enable {
+            cmd.arg("--scm-enable");
+        }
+
+        for scm in self.scm_opts.iter() {
+            cmd.arg("--scm-option").arg(scm);
+        }
         cmd
     }
 }
@@ -338,7 +383,7 @@ impl MockBackend {
 impl RPMSpecBackend for MockBackend {
     async fn build_srpm(&self, spec: &Path) -> Result<PathBuf> {
         let mut cmd = self.mock();
-        let tmp = TempDir::new()?;
+        let tmp = tempfile::Builder::new().prefix("anda-srpm").tempdir()?;
 
         cmd.arg("--buildsrpm")
             .arg("--spec")
@@ -378,7 +423,7 @@ impl RPMSpecBackend for MockBackend {
     }
     async fn build_rpm(&self, spec: &Path) -> Result<Vec<PathBuf>> {
         let mut cmd = self.mock();
-        let tmp = TempDir::new()?;
+        let tmp = tempfile::Builder::new().prefix("anda-rpm").tempdir()?;
         cmd.arg("--rebuild")
             .arg(spec)
             .arg("--enable-network")
@@ -484,7 +529,7 @@ impl RPMBuildBackend {
 impl RPMSpecBackend for RPMBuildBackend {
     async fn build_srpm(&self, spec: &Path) -> Result<PathBuf> {
         let mut cmd = self.rpmbuild();
-        let tmp = TempDir::new()?;
+        let tmp = tempfile::Builder::new().prefix("anda-srpm").tempdir()?;
 
         cmd.arg("-br")
             .arg(spec)
@@ -519,7 +564,7 @@ impl RPMSpecBackend for RPMBuildBackend {
 
     async fn build_rpm(&self, spec: &Path) -> Result<Vec<PathBuf>> {
         let mut cmd = self.rpmbuild();
-        let tmp = TempDir::new()?;
+        let tmp = tempfile::Builder::new().prefix("anda-rpm").tempdir()?;
 
         cmd.arg("-bb")
             .arg(spec)

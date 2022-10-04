@@ -14,7 +14,7 @@ use std::{
 };
 
 use cmd_lib::run_cmd;
-use log::debug;
+use log::{debug, trace};
 
 pub async fn build_rpm(
     opts: RPMOptions,
@@ -85,19 +85,13 @@ pub async fn build_rpm(
         opts2.def_macro("autogitdate", &date);
     }
 
-    debug!("Building RPMs with {:?}", opts2);
+    trace!("Building RPMs with {:?}", opts2);
 
     let builder = builder.build(spec, &opts2).await;
-    // createrepo at the end builder
-    // let mut createrepo = Command::new("createrepo_c");
-    // createrepo.arg(&repo_path).arg("--quiet").arg("--update");
 
     let a = run_cmd!(createrepo_c --quiet --update ${repo_path});
 
     a.map_err(|e| anyhow!(e))?;
-    // createrepo.status().map_err(|e| anyhow!(e))?;
-
-    //println!("builder: {:?}", builder);
 
     builder
 }
@@ -270,8 +264,44 @@ pub async fn build_project(
         rpm_opts
             .config_opts
             .push("external_buildrequires=True".to_string());
-    }
 
+
+        // Enable SCM sources
+        if let Some(bool) = rpmbuild.enable_scm {
+            rpm_opts.scm_enable = bool;
+        }
+
+        // load SCM options
+        if let Some(scm_opt) = &rpmbuild.scm_opts {
+            rpm_opts.scm_opts = scm_opt
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<String>>();
+            }   
+
+        // load extra config options
+
+        if let Some(cfg) = &rpmbuild.config {
+            rpm_opts.config_opts.extend(
+                cfg.iter()
+                    .map(|(k, v)| format!("{}={}", k, v))
+                    .collect::<Vec<String>>(),
+            );
+        }
+
+        // Plugin opts for RPM, contains some extra plugin options, with some special
+        // characters like `:`
+        if let Some(plugin_opt) = &rpmbuild.plugin_opts {
+            rpm_opts.plugin_opts = plugin_opt.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>();
+        }
+
+        if rpmb_opts.mock_config.is_none() {
+            if let Some(mockcfg) = &rpmbuild.mock_config {
+                rpm_opts.mock_config = Some(mockcfg.to_string());
+            }
+            // TODO: Implement global settings
+        }
+    }
     let mut artifacts = Artifacts::new();
 
     // get project
@@ -377,9 +407,9 @@ pub async fn builder(
 ) -> Result<()> {
     // Parse the project manifest
     let config = anda_config::load_from_file(&cli.config.clone()).map_err(|e| anyhow!(e))?;
-    debug!("all: {}", all);
-    debug!("project: {:?}", project);
-    debug!("package: {:?}", package);
+    trace!("all: {}", all);
+    trace!("project: {:?}", project);
+    trace!("package: {:?}", package);
     if all {
         for (name, project) in config.project {
             println!("Building project: {}", name);

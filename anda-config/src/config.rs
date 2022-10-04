@@ -57,6 +57,11 @@ pub struct RpmBuild {
     pub package: Option<String>,
     pub pre_script: Option<PreScript>,
     pub post_script: Option<PostScript>,
+    pub enable_scm: Option<bool>,
+    pub scm_opts: Option<BTreeMap<String,String>>,
+    pub config: Option<BTreeMap<String, String>>,
+    pub mock_config: Option<String>,
+    pub plugin_opts: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
