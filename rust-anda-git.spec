@@ -27,7 +27,7 @@ BuildRequires:  git-core
 Requires:       mock
 Requires:       rpm-build
 Requires:       createrepo_c
-
+Requires:       git-core
 %global _description %{expand:
 Andaman Build toolchain.}
 
