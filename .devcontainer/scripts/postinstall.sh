@@ -20,6 +20,9 @@ sudo dnf install -y just nodejs dotnet-runtime-3.1 htop
 #sudo /usr/local/share/docker-init.sh
 sudo ln -sf /usr/libexec/docker/docker-proxy /usr/bin/docker-proxy
 
+sudo usermod -aG docker vscode
+sudo usermod -aG mock vscode
+
 # cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
 # [kubernetes]
 # name=Kubernetes
