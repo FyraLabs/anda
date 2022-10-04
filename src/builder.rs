@@ -67,9 +67,9 @@ pub async fn build_rpm(
 
         let autogitversion = if let Some(commit) = commit_id.clone() {
             let commit = commit.chars().take(16).collect::<String>();
-            format!("{}.{}", date, commit)
+            format!("{}.{}", &date, commit)
         } else {
-            date
+            date.clone()
         };
 
         // limit to 16 chars
@@ -78,7 +78,11 @@ pub async fn build_rpm(
 
         if let Some(commit) = commit_id {
             opts2.def_macro("autogitcommit", &commit);
+        } else {
+            opts2.def_macro("autogitcommit", "unknown");
         }
+
+        opts2.def_macro("autogitdate", &date);
     }
 
     debug!("Building RPMs with {:?}", opts2);
