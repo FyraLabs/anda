@@ -1,12 +1,12 @@
 //! Utility functions and types
 
+use anyhow::Result;
 use async_trait::async_trait;
 use log::{debug, info};
 use nix::sys::signal;
 use nix::unistd::Pid;
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
-use anyhow::{anyhow, Result};
 
 /// Command Logging
 ///
@@ -62,6 +62,7 @@ impl CommandLog for Command {
             while let Some(line) = stdout_lines.next_line().await.unwrap() {
                 print_log(&t, line);
             }
+            Ok(())
         });
 
         tasks.push(stdout_handle);
@@ -79,6 +80,7 @@ impl CommandLog for Command {
             while let Some(line) = stderr_lines.next_line().await.unwrap() {
                 print_log(&process, line);
             }
+            Ok(())
         });
 
         // send sigint to child process when we ctrl-c
@@ -96,10 +98,21 @@ impl CommandLog for Command {
 
                     // exit program
                     eprintln!("Received ctrl-c, exiting");
-                    std::process::exit(127);
+                    // std::process::exit(127);
+                    Err(anyhow::anyhow!("Received ctrl-c, exiting"))
                 }
-                _ = output.wait() => {
-                    info!("Child process finished");
+                w = output.wait() => {
+
+                    // check exit status
+                    let status = w.unwrap();
+                    if status.success() {
+                        info!("Command exited successfully");
+                        Ok(())
+                    } else {
+                        info!("Command exited with status: {}", status);
+                        Err(anyhow::anyhow!("Command exited with status: {}", status))
+                    }
+                    // info!("Child process finished");
                 }
             }
         });
@@ -107,11 +120,40 @@ impl CommandLog for Command {
         tasks.push(sigint_handle);
 
         for task in tasks {
-            task.await?;
+            task.await??;
         }
 
         Ok(())
 
         // output.wait().await.unwrap();
     }
+}
+
+// utility functions for spec templating
+
+use git2::Repository;
+/// Get the current commit id from the current git repository (cwd)
+pub fn get_commit_id_cwd() -> Option<String> {
+    let repo = Repository::open(".").ok()?;
+    let head = repo.head().ok()?;
+    let commit = head.peel_to_commit().ok()?;
+    let id = commit.id();
+    Some(id.to_string())
+}
+
+/// Get the current commit id from a git repository
+pub fn _get_commit_id(path: &str) -> Option<String> {
+    let repo = Repository::open(path).ok()?;
+    let head = repo.head().ok()?;
+    let commit = head.peel_to_commit().ok()?;
+    let id = commit.id();
+    Some(id.to_string())
+}
+
+
+/// Formats the current time in the format of YYYYMMDD
+use chrono::prelude::*;
+pub fn get_date() -> String {
+    let now: DateTime<Utc> = Utc::now();
+    now.format("%Y%m%d").to_string()
 }

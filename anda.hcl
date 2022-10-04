@@ -23,3 +23,9 @@ project "anda" {
         spec = "rust-anda.spec"
     }
 }
+
+project "anda-git" {
+    rpm {
+        spec = "rust-anda-git.spec"
+    }
+}

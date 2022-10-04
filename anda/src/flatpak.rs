@@ -110,7 +110,7 @@ impl FlatpakBuilder {
         flatpak.args(&self.extra_args);
 
         // run the command
-        flatpak.log().await;
+        flatpak.log().await?;
         Ok(flatpak_meta.app_id)
     }
 
@@ -126,7 +126,7 @@ impl FlatpakBuilder {
             .arg(&bundle_path)
             .arg(app_id);
 
-        flatpak.log().await;
+        flatpak.log().await?;
 
         Ok(bundle_path)
     }

@@ -1,10 +1,9 @@
-name: Package
+name: Package Release
 
 on:
   push:
     paths:
       - rust-anda.spec
-      - anda.hcl
     branches: [main]
   workflow_dispatch:
 

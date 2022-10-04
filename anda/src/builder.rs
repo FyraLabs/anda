@@ -4,6 +4,7 @@ use crate::{
     flatpak::{FlatpakArtifact, FlatpakBuilder},
     oci::{build_oci, OCIBackend},
     rpm_spec::{RPMBuilder, RPMExtraOptions, RPMOptions},
+    util::{get_commit_id_cwd, get_date},
 };
 use anda_config::{Docker, Flatpak, Project, RpmBuild};
 use anyhow::{anyhow, Context, Result};
@@ -12,7 +13,7 @@ use std::{
     process::Command,
 };
 
-use cmd_lib::{run_cmd};
+use cmd_lib::run_cmd;
 use log::debug;
 
 pub async fn build_rpm(
@@ -55,6 +56,28 @@ pub async fn build_rpm(
             opts2.def_macro(key, value);
         } else {
             return Err(anyhow!("Invalid rpm macro: {}", rpmmacro));
+        }
+    }
+    {
+        // HACK: Define macro for autogitversion
+        // get git version
+        let commit_id = get_commit_id_cwd();
+
+        let date = get_date();
+
+        let autogitversion = if let Some(commit) = commit_id.clone() {
+            let commit = commit.chars().take(16).collect::<String>();
+            format!("{}.{}", date, commit)
+        } else {
+            date
+        };
+
+        // limit to 16 chars
+
+        opts2.def_macro("autogitversion", &autogitversion);
+
+        if let Some(commit) = commit_id {
+            opts2.def_macro("autogitcommit", &commit);
         }
     }
 
