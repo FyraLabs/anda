@@ -49,9 +49,7 @@ Summary:        %{summary}
 %cargo_build
 
 %install
-pushd anda
 %cargo_install
-popd
 
 mkdir -p %{buildroot}%{_mandir}/man1/
 
