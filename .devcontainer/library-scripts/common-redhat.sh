@@ -305,6 +305,9 @@ if [ "${INSTALL_ZSH}" = "true" ]; then
             cp -rf "${user_rc_file}" "${oh_my_install_dir}" /root
             chown -R ${USERNAME}:${group_name} "${user_rc_path}"
         fi
+
+        # set shell
+        sudo chsh ${USERNAME} -s $(which zsh)
     fi
 fi
 
