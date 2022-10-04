@@ -19,5 +19,6 @@
   "files.watcherExclude": {
     "**/.flatpak-builder/**": true
   },
-  "dotenv.enableAutocloaking": false
+  "dotenv.enableAutocloaking": false,
+  "rust-analyzer.files.excludeDirs": [".flatpak-builder"]
 }

@@ -5,6 +5,13 @@ version = "0.1.4"
 edition = "2021"
 description = "Andaman Build toolchain"
 license = "MIT"
+exclude = [
+    "anda-build",
+    "anda-config",
+    ".devcontainer",
+    ".github",
+    ".flatpak-builder/*"
+]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
