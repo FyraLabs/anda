@@ -103,6 +103,11 @@ async fn main() -> Result<()> {
 
             // println!("Listing projects");
         }
+        Command::Init { path, yes } => {
+            // create a new project
+            debug!("Creating new project in {}", path.display());
+            util::init(path.as_path(), yes)?;
+        }
     }
     Ok(())
 }

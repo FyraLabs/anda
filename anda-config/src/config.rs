@@ -31,7 +31,7 @@ impl AndaConfig {
     }
 }
 
-#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
 pub struct Project {
     pub rpm: Option<RpmBuild>,
     pub podman: Option<Docker>,
@@ -51,7 +51,7 @@ pub struct PostScript {
     pub commands: Vec<String>,
 }
 
-#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
 pub struct RpmBuild {
     pub spec: PathBuf,
     pub sources: Option<PathBuf>,
@@ -65,12 +65,12 @@ pub struct RpmBuild {
     pub plugin_opts: Option<BTreeMap<String, String>>,
 }
 
-#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
 pub struct Docker {
     pub image: BTreeMap<String, DockerImage>, // tag, file
 }
 
-#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
+#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
 pub struct DockerImage {
     pub dockerfile: Option<String>,
     pub import: Option<PathBuf>,
@@ -84,6 +84,11 @@ pub struct Flatpak {
     pub manifest: PathBuf,
     pub pre_script: Option<PreScript>,
     pub post_script: Option<PostScript>,
+}
+
+pub fn to_string(config: AndaConfig) -> Result<String> {
+    let config = hcl::to_string(&config)?;
+    Ok(config)
 }
 
 pub fn load_from_file(path: &PathBuf) -> Result<AndaConfig, ProjectError> {

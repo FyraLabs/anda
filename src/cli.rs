@@ -170,4 +170,15 @@ pub enum Command {
 
     /// Lists all projects in the manifest
     List,
+
+    /// Initializes a new project manifest
+    Init {
+        /// Path to the project manifest
+        #[clap(default_value = ".")]
+        path: PathBuf,
+
+        /// Assume yes to all questions
+        #[clap(short, long, action)]
+        yes: bool,
+    },
 }

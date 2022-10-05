@@ -1,5 +1,8 @@
 //! Utility functions and types
 
+use std::{collections::BTreeMap, path::Path};
+
+use anda_config::{AndaConfig, Docker, DockerImage, Project, RpmBuild};
 use anyhow::Result;
 use async_trait::async_trait;
 use log::{debug, info};
@@ -150,10 +153,110 @@ pub fn _get_commit_id(path: &str) -> Option<String> {
     Some(id.to_string())
 }
 
-
 /// Formats the current time in the format of YYYYMMDD
 use chrono::prelude::*;
 pub fn get_date() -> String {
     let now: DateTime<Utc> = Utc::now();
     now.format("%Y%m%d").to_string()
+}
+
+use promptly::prompt_default;
+
+/// Initializes a new anda project
+pub fn init(path: &Path, yes: bool) -> Result<()> {
+    // create the directory if not exists
+    if !path.exists() {
+        std::fs::create_dir(path)?;
+    }
+
+    let mut config = AndaConfig {
+        project: BTreeMap::new(),
+    };
+
+    // use ignore to scan for files
+    let walk = ignore::WalkBuilder::new(path).build();
+
+    for entry in walk {
+        let entry = entry?;
+        let path = entry.path().strip_prefix("./").unwrap();
+
+        if path.is_file() {
+            if path.extension().unwrap_or_default().eq("spec") {
+                {
+                    debug!("Found spec file: {}", path.display());
+                    // ask if we want to add spec to project
+                    let add_spec: bool = {
+                        if yes {
+                            true
+                        } else {
+                            prompt_default(
+                                &format!("Add spec file `{}` to manifest?", path.display()),
+                                true,
+                            )?
+                        }
+                    };
+
+                    if add_spec {
+                        let project_name = path.file_stem().unwrap().to_str().unwrap();
+                        let project = Project {
+                            rpm: Some(RpmBuild {
+                                spec: path.to_path_buf(),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        };
+                        config.project.insert(project_name.to_string(), project);
+                    }
+                }
+            }
+
+            let mut counter = 0;
+            if path.extension().unwrap_or_default().eq("dockerfile")
+                || path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_str()
+                    .unwrap()
+                    .eq("Dockerfile")
+            {
+                let add_oci: bool = {
+                    if yes {
+                        true
+                    } else {
+                        prompt_default(
+                            &format!("Add Dockerfile `{}` to manifest?", path.display()),
+                            true,
+                        )?
+                    }
+                };
+
+                if add_oci {
+                    // create a new project called docker
+
+                    let mut docker = Docker {
+                        ..Default::default()
+                    };
+
+                    let image = DockerImage {
+                        dockerfile: Some(path.display().to_string()),
+                        ..Default::default()
+                    };
+                    counter += 1;
+                    let image_name = format!("docker-{}", counter);
+                    docker.image.insert(image_name, image);
+
+                    let project = Project {
+                        docker: Some(docker),
+                        ..Default::default()
+                    };
+
+                    // increment counter
+                    config.project.insert("docker".to_string(), project);
+                }
+            }
+        }
+    }
+    println!("{}", anda_config::config::to_string(config)?);
+
+    Ok(())
 }
