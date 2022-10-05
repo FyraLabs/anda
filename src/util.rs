@@ -10,6 +10,12 @@ use nix::sys::signal;
 use nix::unistd::Pid;
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
+use console::style;
+
+enum ConsoleOut {
+    Stdout,
+    Stderr,
+}
 
 /// Command Logging
 ///
@@ -45,7 +51,21 @@ impl CommandLog for Command {
 
         let mut output = c.spawn().unwrap();
 
-        fn print_log(process: &str, output: String) {
+        fn print_log(process: &str, output: String, out: ConsoleOut) {
+            // check if no_color is set
+            let no_color = std::env::var("NO_COLOR").is_ok();
+
+            let process = {
+                if no_color {
+                    style(process)
+                } else {
+                    match out {
+                        ConsoleOut::Stdout => style(process).cyan(),
+                        ConsoleOut::Stderr => style(process).yellow(),
+                    }
+                }
+            };
+
             let formatter = format!("{}\t| {}", process, output);
             println!("{}", formatter);
         }
@@ -63,7 +83,7 @@ impl CommandLog for Command {
         let t = process.clone();
         let stdout_handle = tokio::spawn(async move {
             while let Some(line) = stdout_lines.next_line().await.unwrap() {
-                print_log(&t, line);
+                print_log(&t, line, ConsoleOut::Stdout);
             }
             Ok(())
         });
@@ -81,7 +101,7 @@ impl CommandLog for Command {
 
         let stderr_handle = tokio::spawn(async move {
             while let Some(line) = stderr_lines.next_line().await.unwrap() {
-                print_log(&process, line);
+                print_log(&process, line, ConsoleOut::Stderr);
             }
             Ok(())
         });
