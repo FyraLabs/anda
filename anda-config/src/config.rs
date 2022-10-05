@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 
+use log::debug;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -58,7 +59,7 @@ pub struct RpmBuild {
     pub pre_script: Option<PreScript>,
     pub post_script: Option<PostScript>,
     pub enable_scm: Option<bool>,
-    pub scm_opts: Option<BTreeMap<String,String>>,
+    pub scm_opts: Option<BTreeMap<String, String>>,
     pub config: Option<BTreeMap<String, String>>,
     pub mock_config: Option<String>,
     pub plugin_opts: Option<BTreeMap<String, String>>,
@@ -86,18 +87,81 @@ pub struct Flatpak {
 }
 
 pub fn load_from_file(path: &PathBuf) -> Result<AndaConfig, ProjectError> {
-    let file = fs::read_to_string(path).map_err(|e| {
-        match e.kind() {
-            ErrorKind::NotFound => ProjectError::NoManifest,
-            _ => ProjectError::InvalidManifest(e.to_string()),
-        }
+    let file = fs::read_to_string(path).map_err(|e| match e.kind() {
+        ErrorKind::NotFound => ProjectError::NoManifest,
+        _ => ProjectError::InvalidManifest(e.to_string()),
     })?;
 
-    let config = hcl::from_str(&file).context("Failed to parse config file")?;
+    let mut config = load_from_string(&file)?;
+    debug!("Loading config from {}", path.display());
 
+    // recursively merge configs
+
+    // get parent path of config file
+    let parent = if path.parent().unwrap().to_str().unwrap() == "" {
+        PathBuf::from(".")
+    } else {
+        path.parent().unwrap().to_path_buf()
+    };
+
+    let walk = ignore::Walk::new(parent);
+
+    for entry in walk {
+        // debug!("Loading config from {:?}", entry);
+        let entry = entry.unwrap();
+
+        // check if path is same path as config file
+        if entry.path().strip_prefix("./").unwrap() == path {
+            continue;
+        }
+
+        if entry.file_type().unwrap().is_file() && entry.path().file_name().unwrap() == "anda.hcl" {
+            let readfile = fs::read_to_string(entry.path())
+                .map_err(|e| ProjectError::InvalidManifest(e.to_string()))?;
+
+            let nested_config = prefix_config(
+                load_from_string(&readfile)?,
+                &entry
+                    .path()
+                    .parent()
+                    .unwrap()
+                    .strip_prefix("./")
+                    .unwrap()
+                    .display()
+                    .to_string(),
+            );
+            // merge the btreemap
+            config.project.extend(nested_config.project);
+        }
+    }
+
+    debug!("Loaded config: {:#?}", config);
     //let config = config.map_err(ProjectError::HclError);
 
     check_config(config)
+}
+
+pub fn prefix_config(config: AndaConfig, prefix: &str) -> AndaConfig {
+    let mut new_config = config.clone();
+
+    for (project_name, project) in config.project.iter() {
+        // set project name to prefix
+        let new_project_name = format!("{}/{}", prefix, project_name);
+        // modify project data
+        let mut new_project = project.clone();
+
+        if let Some(rpm) = &mut new_project.rpm {
+            rpm.spec = PathBuf::from(format!("{}/{}", prefix, rpm.spec.display()));
+            if let Some(sources) = &mut rpm.sources {
+                *sources = PathBuf::from(format!("{}/{}", prefix, sources.display()));
+            }
+        }
+
+        new_config.project.remove(project_name);
+        new_config.project.insert(new_project_name, new_project);
+    }
+
+    new_config
 }
 
 pub fn load_from_string(config: &str) -> Result<AndaConfig, ProjectError> {

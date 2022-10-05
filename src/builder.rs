@@ -277,7 +277,7 @@ pub async fn build_project(
                 .iter()
                 .map(|(k, v)| format!("{}={}", k, v))
                 .collect::<Vec<String>>();
-            }   
+            }
 
         // load extra config options
 

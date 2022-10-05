@@ -115,8 +115,6 @@ pub struct RpmOpts {
     pub no_mirrors: bool,
 
     /// RPM: Builder backend
-    /// possible values: rpmbuild, mock
-    /// default: mock
     #[clap(long, arg_enum, default_value = "mock")]
     pub rpm_builder: RPMBuilder,
 
@@ -169,4 +167,7 @@ pub enum Command {
     },
     /// Cleans up the build directory
     Clean,
+
+    /// Lists all projects in the manifest
+    List,
 }

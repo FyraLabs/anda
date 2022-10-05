@@ -534,7 +534,7 @@ impl RPMSpecBackend for RPMBuildBackend {
         cmd.arg("-br")
             .arg(spec)
             .arg("--define")
-            .arg(format!("_sourcedir {}", self.sources.display()))
+            .arg(format!("_sourcedir {}", self.sources.canonicalize()?.display()))
             .arg("--define")
             .arg(format!("_srcrpmdir {}", tmp.path().display()));
 
@@ -569,7 +569,7 @@ impl RPMSpecBackend for RPMBuildBackend {
         cmd.arg("-bb")
             .arg(spec)
             .arg("--define")
-            .arg(format!("_sourcedir {}", self.sources.display()))
+            .arg(format!("_sourcedir {}", self.sources.canonicalize()?.display()))
             .arg("--define")
             .arg(format!("_rpmdir {}", tmp.path().display()));
 
@@ -604,7 +604,7 @@ impl RPMSpecBackend for RPMBuildBackend {
         cmd.arg("-ba")
             .arg(spec)
             .arg("--define")
-            .arg(format!("_sourcedir {}", self.sources.display()))
+            .arg(format!("_sourcedir {}", self.sources.canonicalize()?.display()))
             .arg("--define")
             .arg(format!("_srcrpmdir {}", tmp.path().display()))
             .arg("--define")

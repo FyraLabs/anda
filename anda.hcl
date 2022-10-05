@@ -12,6 +12,8 @@ project "test" {
                 "ls",
             ]
         }
+
+        sources = "tests/"
     }
     flatpak {
         manifest = "tests/org.flatpak.Hello.yml"

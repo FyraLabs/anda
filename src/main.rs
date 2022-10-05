@@ -87,6 +87,22 @@ async fn main() -> Result<()> {
                 }
             }
         }
+
+        Command::List => {
+
+            // load config
+            let config = anda_config::load_from_file(&cli.config).unwrap();
+
+            // list projects
+
+            for (project_name, _project) in config.project.iter() {
+                println!("{}", project_name);
+            }
+
+            debug!("{:#?}", &config);
+
+            // println!("Listing projects");
+        }
     }
     Ok(())
 }
