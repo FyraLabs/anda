@@ -1,0 +1,33 @@
+name: Bootstrap build from anda
+
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  bootstrap:
+    runs-on: ARM64
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "recursive"
+      - uses: actions/setup-go@v3
+        with:
+          go-version: "^1.19"
+      - run: dnf install -y mock createrepo_c rpm-build
+      - name: Install Anda
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: anda
+
+      - name: Install Subatomic
+        run: go install github.com/FyraLabs/subatomic/subatomic-cli@latest
+
+      - name: Build
+        run: anda build anda -p rpm
+
+
+

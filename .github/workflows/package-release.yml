@@ -10,7 +10,7 @@ on:
 jobs:
   anda:
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         arch: ["x86_64", "aarch64"]
     uses: andaman-common-pkgs/github-actions/.github/workflows/anda-rpm.yml@main
