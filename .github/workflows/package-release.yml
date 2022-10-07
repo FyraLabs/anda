@@ -19,7 +19,7 @@ jobs:
       subatomicServer: "https://subatomic.fyralabs.com"
       subatomicRepo: ad37
       mockConfig: anda-37-${{ matrix.arch }}
-      mockConfigPackage: anda-mock-configs
+      mockConfigPackage: anda-mock-configs qemu-user-static
       upload: false
     secrets:
       subatomicToken: ${{ secrets.SUBATOMIC_TOKEN }}
