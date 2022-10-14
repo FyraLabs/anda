@@ -12,7 +12,7 @@ RUN dnf install -y openssl-devel flatpak flatpak-builder dnf-plugins-core
 RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
 # Add Andaman repo
-RUN dnf config-manager --add-repo https://raw.githubusercontent.com/andaman-common-pkgs/subatomic-repos/main/andaman.repo
+RUN dnf config-manager --add-repo https://raw.githubusercontent.com/terrapkg/subatomic-repos/main/terra.repo
 
 RUN dnf install -y anda-mock-configs anda-srpm-macros
 
