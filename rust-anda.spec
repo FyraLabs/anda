@@ -11,7 +11,7 @@ Summary:        Andaman Build toolchain
 
 License:        MIT
 URL:            https://crates.io/crates/anda
-Source:         %{crates_source}
+Source:         https://github.com/FyraLabs/anda/archive/refs/tags/%{version}.tar.gz
 
 ExclusiveArch:  %{rust_arches}
 
