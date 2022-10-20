@@ -54,7 +54,7 @@ mkdir -p %{buildroot}%{_mandir}/man1/
 
 # Install shell completions
 
-local COMPDIR="target/assets/completion"
+COMPDIR="target/assets/completion"
 
 mkdir -p %{buildroot}%{_sysconfdir}/bash_completion.d/
 cp -v $COMPDIR/bash/anda.bash %{buildroot}%{_sysconfdir}/bash_completion.d/anda.bash
