@@ -50,7 +50,9 @@ Summary:        %{summary}
 
 %build
 %cargo_build
-cargo xtask manpage
+cargo run -p xtask -- manpage
+cargo run -p xtask -- completion
+
 
 %install
 %cargo_install
