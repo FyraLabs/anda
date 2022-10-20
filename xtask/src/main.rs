@@ -96,6 +96,6 @@ fn completion() -> Result<()> {
         std::fs::create_dir_all(&dir).unwrap();
         generate_to(shell, &mut app, "anda", dir)?;
     }
-    
+
     Ok(())
 }

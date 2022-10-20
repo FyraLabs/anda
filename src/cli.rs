@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use clap_complete::{generate, Generator, Shell};
+use clap_complete::Shell;
 use std::{path::PathBuf, str::FromStr};
 
 #[derive(ValueEnum, Debug, Clone, Copy)]
