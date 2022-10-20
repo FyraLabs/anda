@@ -159,6 +159,8 @@ pub fn prefix_config(config: AndaConfig, prefix: &str) -> AndaConfig {
             rpm.spec = PathBuf::from(format!("{}/{}", prefix, rpm.spec.display()));
             if let Some(sources) = &mut rpm.sources {
                 *sources = PathBuf::from(format!("{}/{}", prefix, sources.display()));
+            } else {
+                rpm.sources = Some(PathBuf::from(prefix.to_string()));
             }
         }
 
