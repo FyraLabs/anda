@@ -5,12 +5,12 @@ use std::{collections::BTreeMap, path::Path};
 use anda_config::{AndaConfig, Docker, DockerImage, Project, RpmBuild};
 use anyhow::Result;
 use async_trait::async_trait;
+use console::style;
 use log::{debug, info};
 use nix::sys::signal;
 use nix::unistd::Pid;
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
-use console::style;
 
 enum ConsoleOut {
     Stdout,

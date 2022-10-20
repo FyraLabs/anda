@@ -265,7 +265,6 @@ pub async fn build_project(
             .config_opts
             .push("external_buildrequires=True".to_string());
 
-
         // Enable SCM sources
         if let Some(bool) = rpmbuild.enable_scm {
             rpm_opts.scm_enable = bool;
@@ -277,7 +276,7 @@ pub async fn build_project(
                 .iter()
                 .map(|(k, v)| format!("{}={}", k, v))
                 .collect::<Vec<String>>();
-            }
+        }
 
         // load extra config options
 
@@ -292,7 +291,10 @@ pub async fn build_project(
         // Plugin opts for RPM, contains some extra plugin options, with some special
         // characters like `:`
         if let Some(plugin_opt) = &rpmbuild.plugin_opts {
-            rpm_opts.plugin_opts = plugin_opt.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>();
+            rpm_opts.plugin_opts = plugin_opt
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<String>>();
         }
 
         if rpmb_opts.mock_config.is_none() {

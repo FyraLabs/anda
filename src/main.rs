@@ -72,7 +72,8 @@ async fn main() -> Result<()> {
                 package,
                 flatpak_opts,
                 oci_opts,
-            ).await?;
+            )
+            .await?;
         }
         Command::Clean => {
             println!("Cleaning up build directory");
@@ -89,7 +90,6 @@ async fn main() -> Result<()> {
         }
 
         Command::List => {
-
             // load config
             let config = anda_config::load_from_file(&cli.config).unwrap();
 

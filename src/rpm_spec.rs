@@ -4,7 +4,7 @@
 
 #![allow(dead_code)]
 
-use clap::clap_derive::ArgEnum;
+use clap::clap_derive::ValueEnum;
 use tempfile::TempDir;
 
 use crate::util::CommandLog;
@@ -97,7 +97,7 @@ impl RPMExtraOptions for RPMOptions {
     }
 }
 
-#[derive(ArgEnum, Debug, Clone, Copy)]
+#[derive(ValueEnum, Debug, Clone, Copy)]
 pub enum RPMBuilder {
     Mock,
     Rpmbuild,
@@ -534,7 +534,10 @@ impl RPMSpecBackend for RPMBuildBackend {
         cmd.arg("-br")
             .arg(spec)
             .arg("--define")
-            .arg(format!("_sourcedir {}", self.sources.canonicalize()?.display()))
+            .arg(format!(
+                "_sourcedir {}",
+                self.sources.canonicalize()?.display()
+            ))
             .arg("--define")
             .arg(format!("_srcrpmdir {}", tmp.path().display()));
 
@@ -569,7 +572,10 @@ impl RPMSpecBackend for RPMBuildBackend {
         cmd.arg("-bb")
             .arg(spec)
             .arg("--define")
-            .arg(format!("_sourcedir {}", self.sources.canonicalize()?.display()))
+            .arg(format!(
+                "_sourcedir {}",
+                self.sources.canonicalize()?.display()
+            ))
             .arg("--define")
             .arg(format!("_rpmdir {}", tmp.path().display()));
 
@@ -604,7 +610,10 @@ impl RPMSpecBackend for RPMBuildBackend {
         cmd.arg("-ba")
             .arg(spec)
             .arg("--define")
-            .arg(format!("_sourcedir {}", self.sources.canonicalize()?.display()))
+            .arg(format!(
+                "_sourcedir {}",
+                self.sources.canonicalize()?.display()
+            ))
             .arg("--define")
             .arg(format!("_srcrpmdir {}", tmp.path().display()))
             .arg("--define")

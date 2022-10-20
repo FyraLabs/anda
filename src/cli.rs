@@ -2,11 +2,10 @@
 // If you want to add a crate in here, also add it to build-dependencies
 
 use anyhow::Result;
-#[allow(unused_imports)]
-use clap::{AppSettings, ArgEnum, Args, CommandFactory, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::{path::PathBuf, str::FromStr};
 
-#[derive(ArgEnum, Debug, Clone, Copy)]
+#[derive(ValueEnum, Debug, Clone, Copy)]
 pub enum RPMBuilder {
     Mock,
     Rpmbuild,
@@ -48,7 +47,7 @@ impl FromStr for PackageType {
 ///
 #[derive(Parser, Debug)]
 #[clap(about, version)]
-#[clap(global_setting = AppSettings::DeriveDisplayOrder)]
+// #[clap(global_setting = AppSettings::DeriveDisplayOrder)]
 pub struct Cli {
     #[clap(subcommand)]
     pub command: Command,
@@ -66,7 +65,7 @@ pub struct Cli {
 }
 
 #[derive(Args, Debug, Clone)]
-#[clap(help_heading = "Flatpak Builder Options")]
+#[clap(help_template = "Flatpak Builder Options")]
 pub struct FlatpakOpts {
     /// Flatpak: Extra source directory
     /// can be defined multiple times
@@ -84,7 +83,7 @@ pub struct FlatpakOpts {
 }
 
 #[derive(Args, Debug, Clone)]
-#[clap(help_heading = "OCI Builder Options")]
+#[clap(help_template = "OCI Builder Options")]
 pub struct OciOpts {
     /// OCI: Labels to add to the image
     #[clap(long)]
@@ -100,7 +99,7 @@ pub struct OciOpts {
 }
 
 #[derive(Args, Debug, Clone)]
-#[clap(help_heading = "RPM Options")]
+#[clap(help_template = "RPM Options")]
 pub struct RpmOpts {
     /// RPM: Do not mirror repositories.
     ///
@@ -115,7 +114,7 @@ pub struct RpmOpts {
     pub no_mirrors: bool,
 
     /// RPM: Builder backend
-    #[clap(long, arg_enum, default_value = "mock")]
+    #[clap(long, value_enum, default_value = "mock")]
     pub rpm_builder: RPMBuilder,
 
     /// RPM: Define a custom macro
@@ -150,7 +149,7 @@ pub enum Command {
         project: Option<String>,
 
         /// Builds a specific artifact format
-        #[clap(short, long, arg_enum, default_value = "all")]
+        #[clap(short, long, value_enum, default_value = "all")]
         package: PackageType,
 
         /// Options for RPM builds
