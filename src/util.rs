@@ -1,9 +1,9 @@
 //! Utility functions and types
 
 use std::{
-    collections::{BTreeMap},
+    collections::BTreeMap,
     fs::read_to_string,
-    path::{Path, PathBuf},
+    path::{Path},
 };
 
 use anda_config::{AndaConfig, Docker, DockerImage, Project, RpmBuild};
@@ -85,12 +85,12 @@ pub fn fetch_build_entries(config: AndaConfig) -> Result<Vec<BuildEntry>> {
     Ok(entries)
 }
 
-#[test]
-fn test_entries() {
-    let config = anda_config::load_from_file(&PathBuf::from("anda.hcl"));
+// #[test]
+// fn test_entries() {
+//     let config = anda_config::load_from_file(&PathBuf::from("anda.hcl"));
 
-    fetch_build_entries(config.unwrap());
-}
+//     fetch_build_entries(config.unwrap());
+// }
 
 /// Command Logging
 ///

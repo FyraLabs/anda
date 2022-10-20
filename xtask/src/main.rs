@@ -1,11 +1,7 @@
 use anda::cli::Cli;
 use anyhow::Result;
 use clap::{Command, CommandFactory};
-use clap_complete::{
-    Generator,
-    generate_to,
-    shells::{Bash, Elvish, Fish, PowerShell, Shell, Zsh},
-};
+use clap_complete::{generate_to, shells::Shell};
 use std::env;
 use std::fs::create_dir_all;
 use std::fs::File;
@@ -83,7 +79,7 @@ fn completion() -> Result<()> {
     let out_dir = "target";
     let completion_dir = PathBuf::from(&out_dir).join("assets/completion");
 
-    let shells: Vec<(Shell, & str)> = vec![
+    let shells: Vec<(Shell, &str)> = vec![
         (Shell::Bash, "bash"),
         (Shell::Fish, "fish"),
         (Shell::Zsh, "zsh"),

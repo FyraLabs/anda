@@ -114,7 +114,7 @@ async fn main() -> Result<()> {
         }
         Command::Completion { shell } => {
             generate(shell, &mut cli::Cli::command(), "anda", &mut io::stdout());
-        },
+        }
         Command::CI => {
             let config = anda_config::load_from_file(&cli.config).unwrap();
             let entries = fetch_build_entries(config)?;

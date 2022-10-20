@@ -5,7 +5,7 @@
 %global crate anda
 
 Name:           rust-anda
-Version:        0.1.5
+Version:        0.1.6
 Release:        2%{?dist}
 Summary:        Andaman Build toolchain
 
@@ -37,6 +37,9 @@ Summary:        %{summary}
 %files       -n %{crate}
 %{_bindir}/anda
 %{_mandir}/man1/anda*.1*
+%{_sysconfdir}/bash_completion.d/anda.bash
+%{_datadir}/zsh/site-functions/_anda
+%{_datadir}/fish/completions/anda.fish
 %prep
 %autosetup -n %{crate}-%{version_no_tilde} -p1
 %cargo_prep_online
@@ -48,6 +51,17 @@ Summary:        %{summary}
 %cargo_install
 
 mkdir -p %{buildroot}%{_mandir}/man1/
+
+# Install shell completions
+
+local COMPDIR="target/assets/completion"
+
+mkdir -p %{buildroot}%{_sysconfdir}/bash_completion.d/
+cp -v $COMPDIR/bash/anda.bash %{buildroot}%{_sysconfdir}/bash_completion.d/anda.bash
+mkdir -p %{buildroot}%{_datadir}/zsh/site-functions/
+cp -v $COMPDIR/zsh/_anda %{buildroot}%{_datadir}/zsh/site-functions/_anda
+mkdir -p %{buildroot}%{_datadir}/fish/completions/
+cp -v $COMPDIR/fish/anda.fish %{buildroot}%{_datadir}/fish/completions/anda.fish
 
 # install man pages
 cp -v target/assets/man_pages/* %{buildroot}%{_mandir}/man1/
