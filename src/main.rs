@@ -16,6 +16,7 @@ use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{Cli, Command};
 use log::debug;
+use util::fetch_build_entries;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -113,6 +114,12 @@ async fn main() -> Result<()> {
         }
         Command::Completion { shell } => {
             generate(shell, &mut cli::Cli::command(), "anda", &mut io::stdout());
+        },
+        Command::CI => {
+            let config = anda_config::load_from_file(&cli.config).unwrap();
+            let entries = fetch_build_entries(config)?;
+
+            println!("build_matrix={}", serde_json::to_string(&entries)?);
         }
     }
     Ok(())

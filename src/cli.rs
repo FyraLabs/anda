@@ -187,4 +187,6 @@ pub enum Command {
         #[clap(value_enum)]
         shell: Shell,
     },
+    /// Get CI output for Github Actions
+    CI,
 }

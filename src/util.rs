@@ -1,20 +1,95 @@
 //! Utility functions and types
 
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::{BTreeMap},
+    fs::read_to_string,
+    path::{Path, PathBuf},
+};
 
 use anda_config::{AndaConfig, Docker, DockerImage, Project, RpmBuild};
 use anyhow::Result;
 use async_trait::async_trait;
 use console::style;
+use lazy_static::lazy_static;
 use log::{debug, info};
 use nix::sys::signal;
 use nix::unistd::Pid;
+use regex::Regex;
+use serde::{Deserialize, Serialize};
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
+
+lazy_static! {
+    static ref ARCH_REGEX: Regex = Regex::new("(BuildArch|ExclusiveArch):\\s(.+)").unwrap();
+}
 
 enum ConsoleOut {
     Stdout,
     Stderr,
+}
+// Build entry for GHA
+#[derive(Debug, Clone, Serialize, Deserialize, Ord, Eq, PartialEq, PartialOrd)]
+pub struct BuildEntry {
+    pub pkg: String,
+    pub arch: String,
+}
+
+pub fn fetch_build_entries(config: AndaConfig) -> Result<Vec<BuildEntry>> {
+    let changed_files = get_changed_files(Path::new(".")).unwrap_or_default();
+
+    let default_arches = vec!["x86_64".to_string(), "aarch64".to_string()];
+
+    let mut entries = Vec::new();
+
+    let regex = Regex::new("(BuildArch|ExclusiveArch):\\s+(.+)")?;
+
+    for (name, project) in config.project {
+        if !changed_files
+            .iter()
+            .filter_map(|file| Path::new(file).parent())
+            .any(|file| name.starts_with(file.to_str().unwrap()))
+        {
+            continue;
+        }
+
+        if let Some(rpm) = project.rpm {
+            let mut arches: Vec<String> = Vec::new();
+            let spec = rpm.spec;
+            let spec_contents = read_to_string(spec)?;
+            for cap in regex.captures_iter(spec_contents.as_str()) {
+                arches.append(
+                    &mut cap[2]
+                        .split(' ')
+                        .map(|arch| arch.to_string())
+                        .collect::<Vec<String>>(),
+                );
+            }
+
+            if arches.is_empty()
+                || arches
+                    .iter()
+                    .any(|arch| arch == "noarch" || arch.starts_with('%'))
+            {
+                arches = default_arches.clone();
+            }
+
+            for arch in arches {
+                entries.push(BuildEntry {
+                    pkg: name.clone(),
+                    arch,
+                });
+            }
+        }
+    }
+
+    Ok(entries)
+}
+
+#[test]
+fn test_entries() {
+    let config = anda_config::load_from_file(&PathBuf::from("anda.hcl"));
+
+    fetch_build_entries(config.unwrap());
 }
 
 /// Command Logging
@@ -174,24 +249,39 @@ pub fn _get_commit_id(path: &str) -> Option<String> {
 }
 
 // git diff --name-only HEAD^
-pub fn get_changed_files_cwd() -> Option<Vec<String>> {
-    let repo = Repository::open(".").ok()?;
+pub fn get_changed_files(path: &Path) -> Option<Vec<String>> {
+    let repo = Repository::open(path).ok()?;
     let head = repo.head().ok()?;
     let commit = head.peel_to_commit().ok()?;
     let parent = commit.parent(0).ok()?;
-    let diff = repo.diff_tree_to_tree(Some(&parent.tree().ok()?), Some(&commit.tree().ok()?), None).ok()?;
+    let diff = repo
+        .diff_tree_to_tree(Some(&parent.tree().ok()?), Some(&commit.tree().ok()?), None)
+        .ok()?;
     let mut changed_files = vec![];
-    diff.foreach(&mut |delta, _| {
-        changed_files.push(delta.new_file().path().unwrap().to_str().unwrap().to_string());
-        true
-    }, None, None, None).ok()?;
+    diff.foreach(
+        &mut |delta, _| {
+            changed_files.push(
+                delta
+                    .new_file()
+                    .path()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+            );
+            true
+        },
+        None,
+        None,
+        None,
+    )
+    .ok()?;
     Some(changed_files)
 }
 
-
 #[test]
 fn test_head() {
-    println!("{:?}", get_changed_files_cwd());
+    println!("{:?}", get_changed_files(Path::new(".")));
 }
 
 /// Formats the current time in the format of YYYYMMDD
