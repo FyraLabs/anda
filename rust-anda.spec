@@ -69,7 +69,7 @@ cp -v $COMPDIR/fish/anda.fish %{buildroot}%{_datadir}/fish/completions/anda.fish
 cp -v target/assets/man_pages/* %{buildroot}%{_mandir}/man1/
 
 
-rm -rf %{cargo_registry}
+rm -rf %{buildroot}%{cargo_registry}
 
 %changelog
 %autochangelog
