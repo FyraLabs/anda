@@ -8,6 +8,8 @@
       <sourceFolder url="file://$MODULE_DIR$/anda-web/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/migration/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/anda-config/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/anda-web/target" />
     </content>
