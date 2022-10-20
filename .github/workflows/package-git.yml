@@ -24,7 +24,7 @@ jobs:
 
       - uses: terrapkg/anda-build@main
         with:
-          name: "anda"
+          name: "anda-git"
           mockConfig: anda-37-${{ matrix.arch }}
           andaRepo: https://github.com/andaman-common-pkgs/subatomic-repos/raw/main/ad37.repo
 

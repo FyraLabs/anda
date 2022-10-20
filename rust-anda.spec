@@ -6,7 +6,7 @@
 
 Name:           rust-anda
 Version:        0.1.6
-Release:        2%{?dist}
+Release:        1%{?dist}
 Summary:        Andaman Build toolchain
 
 License:        MIT
@@ -46,8 +46,8 @@ Summary:        %{summary}
 
 %build
 %cargo_build
-cargo run -p xtask -- manpage
-cargo run -p xtask -- completion
+cargo run --release -p xtask -- manpage
+cargo run --release -p xtask -- completion
 
 %install
 %cargo_install
