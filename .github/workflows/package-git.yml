@@ -27,14 +27,3 @@ jobs:
           name: "anda-git"
           mockConfig: anda-37-${{ matrix.arch }}
           andaRepo: https://github.com/andaman-common-pkgs/subatomic-repos/raw/main/ad37.repo
-
-
-      - name: Install Subatomic client
-        run: sudo dnf install -y subatomic-cli
-
-      - name: Upload packages to subatomic
-        run: |
-          subatomic-cli upload --prune \
-            --server https://subatomic.fyralabs.com \
-            --token ${{ secrets.SUBATOMIC_TOKEN }} \
-            ${{ matrix.version }} anda-build/rpm/rpms/*
