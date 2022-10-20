@@ -46,6 +46,7 @@ Summary:        %{summary}
 
 %build
 %cargo_build
+cargo xtask manpage
 
 %install
 %cargo_install
