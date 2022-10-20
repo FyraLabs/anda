@@ -8,9 +8,12 @@ mod oci;
 mod rpm_spec;
 mod util;
 
+use std::io;
+
 use anyhow::Result;
 
 use clap::{CommandFactory, Parser};
+use clap_complete::generate;
 use cli::{Cli, Command};
 use log::debug;
 
@@ -107,6 +110,9 @@ async fn main() -> Result<()> {
             // create a new project
             debug!("Creating new project in {}", path.display());
             util::init(path.as_path(), yes)?;
+        }
+        Command::Completion { shell } => {
+            generate(shell, &mut cli::Cli::command(), "anda", &mut io::stdout());
         }
     }
     Ok(())

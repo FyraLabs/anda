@@ -173,6 +173,27 @@ pub fn _get_commit_id(path: &str) -> Option<String> {
     Some(id.to_string())
 }
 
+// git diff --name-only HEAD^
+pub fn get_changed_files_cwd() -> Option<Vec<String>> {
+    let repo = Repository::open(".").ok()?;
+    let head = repo.head().ok()?;
+    let commit = head.peel_to_commit().ok()?;
+    let parent = commit.parent(0).ok()?;
+    let diff = repo.diff_tree_to_tree(Some(&parent.tree().ok()?), Some(&commit.tree().ok()?), None).ok()?;
+    let mut changed_files = vec![];
+    diff.foreach(&mut |delta, _| {
+        changed_files.push(delta.new_file().path().unwrap().to_str().unwrap().to_string());
+        true
+    }, None, None, None).ok()?;
+    Some(changed_files)
+}
+
+
+#[test]
+fn test_head() {
+    println!("{:?}", get_changed_files_cwd());
+}
+
 /// Formats the current time in the format of YYYYMMDD
 use chrono::prelude::*;
 pub fn get_date() -> String {

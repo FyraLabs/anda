@@ -3,3 +3,4 @@ opt-level = "s"
 
 [alias]
 anda = "run --bin anda"
+xtask = "run -p xtask --"

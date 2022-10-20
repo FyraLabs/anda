@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap_complete::{generate, Generator, Shell};
 use std::{path::PathBuf, str::FromStr};
 
 #[derive(ValueEnum, Debug, Clone, Copy)]
@@ -179,5 +180,11 @@ pub enum Command {
         /// Assume yes to all questions
         #[clap(short, long, action)]
         yes: bool,
+    },
+    /// Generate shell completions
+    Completion {
+        /// Shell to generate completions for
+        #[clap(value_enum)]
+        shell: Shell,
     },
 }
