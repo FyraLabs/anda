@@ -99,8 +99,14 @@ async fn main() -> Result<()> {
 
             // list projects
 
-            for (project_name, _project) in config.project.iter() {
-                println!("{}", project_name);
+            for (project_name, project) in config.project.iter() {
+                let project_alias = if let Some(alias) = &project.alias {
+                    format!(" ({})", alias.join(", "))
+                } else {
+                    "".to_string()
+                };
+
+                println!("{}{}", project_name, project_alias);
             }
 
             debug!("{:#?}", &config);

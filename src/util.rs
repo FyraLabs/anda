@@ -1,12 +1,8 @@
 //! Utility functions and types
 
-use std::{
-    collections::BTreeMap,
-    fs::read_to_string,
-    path::{Path},
-};
+use std::{collections::BTreeMap, fs::read_to_string, path::Path};
 
-use anda_config::{AndaConfig, Docker, DockerImage, Project, RpmBuild};
+use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
 use anyhow::Result;
 use async_trait::async_trait;
 use console::style;
@@ -34,7 +30,7 @@ pub struct BuildEntry {
     pub arch: String,
 }
 
-pub fn fetch_build_entries(config: AndaConfig) -> Result<Vec<BuildEntry>> {
+pub fn fetch_build_entries(config: Manifest) -> Result<Vec<BuildEntry>> {
     let changed_files = get_changed_files(Path::new(".")).unwrap_or_default();
 
     let default_arches = vec!["x86_64".to_string(), "aarch64".to_string()];
@@ -300,8 +296,9 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
         std::fs::create_dir(path)?;
     }
 
-    let mut config = AndaConfig {
+    let mut config = Manifest {
         project: BTreeMap::new(),
+        config: Default::default(),
     };
 
     // use ignore to scan for files

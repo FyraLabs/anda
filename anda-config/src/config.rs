@@ -15,11 +15,22 @@ pub struct ProjectData {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct AndaConfig {
+pub struct Manifest {
     pub project: BTreeMap<String, Project>,
+    #[serde(default)]
+    pub config: Config,
 }
 
-impl AndaConfig {
+
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
+pub struct Config {
+    pub mock_config: Option<String>,
+    pub strip_prefix: Option<String>,
+    pub strip_suffix: Option<String>,
+    pub project_regex: Option<String>,
+}
+
+impl Manifest {
     pub fn find_key_for_value(&self, value: &Project) -> Option<&String> {
         self.project.iter().find_map(|(key, val)| {
             if val == value {
@@ -28,6 +39,25 @@ impl AndaConfig {
                 None
             }
         })
+    }
+
+    pub fn get_project(&self, key: &str) -> Option<&Project> {
+        if let Some(project) = self.project.get(key) {
+            Some(project)
+        } else {
+            // check for alias
+            self.project.iter().find_map(|(_k, v)| {
+                if let Some(alias) = &v.alias {
+                    if alias.contains(&key.to_string()) {
+                        Some(v)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+        }
     }
 }
 
@@ -40,6 +70,7 @@ pub struct Project {
     pub pre_script: Option<PreScript>,
     pub post_script: Option<PostScript>,
     pub env: Option<BTreeMap<String, String>>,
+    pub alias: Option<Vec<String>>,
 }
 #[derive(Deserialize, Eq, PartialEq, Hash, PartialOrd, Ord, Serialize, Debug, Clone)]
 pub struct PreScript {
@@ -63,6 +94,8 @@ pub struct RpmBuild {
     pub config: Option<BTreeMap<String, String>>,
     pub mock_config: Option<String>,
     pub plugin_opts: Option<BTreeMap<String, String>>,
+    pub macros: Option<BTreeMap<String, String>>,
+    pub opts: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
@@ -86,12 +119,12 @@ pub struct Flatpak {
     pub post_script: Option<PostScript>,
 }
 
-pub fn to_string(config: AndaConfig) -> Result<String> {
+pub fn to_string(config: Manifest) -> Result<String> {
     let config = hcl::to_string(&config)?;
     Ok(config)
 }
 
-pub fn load_from_file(path: &PathBuf) -> Result<AndaConfig, ProjectError> {
+pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
     let file = fs::read_to_string(path).map_err(|e| match e.kind() {
         ErrorKind::NotFound => ProjectError::NoManifest,
         _ => ProjectError::InvalidManifest(e.to_string()),
@@ -142,11 +175,12 @@ pub fn load_from_file(path: &PathBuf) -> Result<AndaConfig, ProjectError> {
 
     debug!("Loaded config: {:#?}", config);
     //let config = config.map_err(ProjectError::HclError);
+    generate_alias(&mut config);
 
     check_config(config)
 }
 
-pub fn prefix_config(config: AndaConfig, prefix: &str) -> AndaConfig {
+pub fn prefix_config(config: Manifest, prefix: &str) -> Manifest {
     let mut new_config = config.clone();
 
     for (project_name, project) in config.project.iter() {
@@ -167,17 +201,53 @@ pub fn prefix_config(config: AndaConfig, prefix: &str) -> AndaConfig {
         new_config.project.remove(project_name);
         new_config.project.insert(new_project_name, new_project);
     }
-
+    generate_alias(&mut new_config);
     new_config
 }
 
-pub fn load_from_string(config: &str) -> Result<AndaConfig, ProjectError> {
-    let config = hcl::from_str(config).context("Failed to parse config file")?;
+pub fn generate_alias(config: &mut Manifest) {
+    fn append_vec(vec: &mut Option<Vec<String>>, value: &str) {
+        if let Some(vec) = vec {
+
+            if vec.contains(&value.to_string()) {
+                return;
+            }
+
+            vec.push(value.to_string());
+        } else {
+            *vec = Some(vec![value.to_string()]);
+        }
+    }
+
+    for (name, project) in config.project.iter_mut() {
+        
+        if config.config.strip_prefix.is_some() || config.config.strip_suffix.is_some() {
+            let mut new_name = name.clone();
+            if let Some(strip_prefix) = &config.config.strip_prefix {
+                new_name = new_name.strip_prefix(strip_prefix).unwrap_or(&new_name).to_string();
+            }
+            if let Some(strip_suffix) = &config.config.strip_suffix {
+                new_name = new_name.strip_suffix(strip_suffix).unwrap_or(&new_name).to_string();
+            }
+
+            
+            if name.clone() != new_name {
+                append_vec(&mut project.alias, &new_name);
+            }
+        }
+    }
+}
+
+pub fn load_from_string(config: &str) -> Result<Manifest, ProjectError> {
+    let mut config: Manifest = hcl::eval::from_str(config, &crate::context::hcl_context())?;
+
+    generate_alias(&mut config);
+
     check_config(config)
 }
 
 // Lints and checks the config for errors.
-pub fn check_config(config: AndaConfig) -> Result<AndaConfig, ProjectError> {
+pub fn check_config(config: Manifest) -> Result<Manifest, ProjectError> {
     // do nothing for now
     Ok(config)
 }
@@ -192,12 +262,10 @@ mod test_parser {
         std::env::set_var("RUST_LOG", "trace");
         env_logger::init();
         let config = r#"
+        hello = "world"
         project "anda" {
             pre_script {
-                commands = ["echo 'hello'"]
-            }
-            env = {
-                TEST = "test"
+                commands = ["echo '${env("RUST_LOG")}'"]
             }
         }
         "#;
@@ -206,7 +274,7 @@ mod test_parser {
 
         print!("{:#?}", body);
 
-        let config: AndaConfig = hcl::from_str(config).unwrap();
+        let config = load_from_string(config);
 
         println!("{:#?}", config);
     }

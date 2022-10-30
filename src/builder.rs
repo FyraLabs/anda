@@ -428,7 +428,7 @@ pub async fn builder(
     } else {
         // find project named project
         if let Some(name) = project {
-            if let Some(project) = config.project.get(&name) {
+            if let Some(project) = config.get_project(&name) {
                 build_project(
                     cli,
                     project.clone(),
