@@ -1067,6 +1067,8 @@ version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dbc7bc69c062e492337d74d59b120c274fd3d261b6bf6d3207d499b4b379c41a"
 dependencies = [
+ "serde",
+ "serde_json",
  "thiserror",
  "ucd-trie",
 ]
@@ -1251,6 +1253,16 @@ name = "roff"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b833d8d034ea094b1ea68aa6d5c740e0d04bad9d16568d08ba6f76823a114316"
+
+[[package]]
+name = "rpmspec-rs"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "pest",
+ "pest_derive",
+ "serde",
+]
 
 [[package]]
 name = "rustix"
