@@ -26,4 +26,4 @@ jobs:
         with:
           name: "anda-git"
           mockConfig: anda-37-${{ matrix.arch }}
-          andaRepo: https://github.com/andaman-common-pkgs/subatomic-repos/raw/main/ad37.repo
+          andaRepo: https://github.com/andaman-common-pkgs/subatomic-repos/raw/main/terra37.repo
