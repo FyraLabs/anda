@@ -1,0 +1,12 @@
+[package]
+name = "rpmspec-rs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = "0.4.22"
+pest = { version = "2.4.0", features = ["serde", "pretty-print"] }
+pest_derive = "2.4.0"
+serde = { version = "1.0.145", features = ["derive"] }
