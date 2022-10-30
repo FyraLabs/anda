@@ -1,4 +1,4 @@
-use pest::{Parser, iterators::Pair};
+use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 use std::collections::BTreeMap;
 
@@ -28,6 +28,7 @@ const SPECIAL_MACROS: &[&str] = &[
     "undefine",
     "global",
 ];
+
 pub struct Spec {
     pub name: String,
     pub epoch: String,
@@ -104,13 +105,14 @@ pub struct Macro(String, String);
 /// RPM Macro definition
 pub struct MacroDef {}
 
+
+#[derive(Debug)]
 pub struct Changelog {
     // parse from Ddd Mmm dd yyyy (Day of week, Month, Day, Year)
     pub date: chrono::NaiveDate,
     pub author: String,
-    pub email: String,
     /// Version-release of the package
-    pub version: String,
+    pub version: Option<String>,
     pub changes: Vec<String>,
 }
 
@@ -120,31 +122,92 @@ impl Changelog {
 
         let string = r#"* Fri Oct 21 2022 John Doe <packager@example.com> - 0.1.6-1.um37
 - local build
+- among us
 * Sat Oct 22 2022 Cappy Ishihara <cappy@cappuchino.xyz>
 - test
-        "#;
+"#
+        .trim_start();
 
-        // separate changelog by lines
-        let lines: Vec<&str> = string.lines().collect();
+        // split by *
+        let change = string.split('*').collect::<Vec<&str>>();
 
-        // separate changelog entries by the line that starts with '*'
-        let mut entries: Vec<Vec<&str>> = Vec::new();
-        let entry: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        let mut entry_lines: Vec<&str> = Vec::new();
-        for line in lines {
-            let mut data: (&str, &str) = ("", "");
-            if line.starts_with('*') {
-                data.0 = line;
+        // variable box so we can redefine it later
 
-                // get the following lines, if they start with '-'
-                let mut next_lines: Vec<&str> = Vec::new();
+        for c in change {
+            let mut chdate = Box::new(chrono::NaiveDate::from_ymd(1970, 1, 1));
+            let mut chauthor = String::new();
+            let mut chversion = None;
+            let mut chchanges = Vec::new();
+
+            // if the line is empty, skip it
+            if c.trim().is_empty() {
+                continue;
             }
-            entry_lines.push(line);
-        }
-        println!("{:?}", entries);
 
-        let date = chrono::NaiveDate::parse_from_str("Fri Mar 15 2019", "%a %b %d %Y");
-        println!("{:?}", date);
+
+            // parse the first line
+            let mut lines = c.lines();
+            if let Some(line) = lines.next() {
+                let line = line.trim_start();
+                println!("line: {}", line);
+
+                // parse date
+
+                // split by the 3rd space (%a %b %d %Y <Author> - <Version>)
+                let split = line.split_whitespace().collect::<Vec<&str>>();
+                let spl = split.split_at(4);
+                let date = spl.0.join(" ");
+                // let date = split.next().unwrap();
+                // println!("date: {}", date);
+
+                let date = chrono::NaiveDate::parse_from_str(&date, "%a %b %d %Y");
+                // println!("date: {:?}", date);
+
+                chdate = Box::new(date.unwrap());
+
+                // parse author
+                let joined = spl.1.join(" ");
+
+                let split2 = joined.split_once(" - ");
+
+                let author = {
+                    if let Some(split2) = split2 {
+                        split2.0.to_string()
+                    } else {
+                        joined.clone()
+                    }
+                };
+
+                chauthor = author;
+
+                let version = { split2.map(|split2| split2.1.to_string()) };
+
+                chversion = version
+            }
+
+            // parse the rest of the lines that start with -
+            for line in lines {
+                let line = line.trim_start();
+                if line.starts_with('-') {
+                    chchanges.push(line.strip_prefix('-').unwrap().trim_start().to_string());
+                }
+            }
+            /* println!("chdate: {:?}", chdate);
+            println!("chauthor: {}", chauthor);
+            println!("chversion: {:?}", chversion);
+            println!("chchanges: {:?}", chchanges); */
+
+            let changelog = Changelog {
+                date: *chdate,
+                author: chauthor,
+                version: chversion,
+                changes: chchanges,
+            };
+
+            println!("changelog: {:#?}", changelog);
+        }
+
+        // println!("change: {:?}", change);
     }
 }
 
@@ -154,6 +217,6 @@ fn test_sadas() {
 
     let specfile = include_str!("../../tests/umpkg.spec");
     let spec = SpecParser::parse(Rule::file, specfile).unwrap();
-    println!("{:?}", spec);
-    let spec = Body::parse(specfile);
+    // println!("{:?}", spec);
+    // let spec = Body::parse(specfile);
 }

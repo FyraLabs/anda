@@ -2,24 +2,12 @@ WHITESPACE = _{ " " }
 COMMENT = _{ "#" ~ (!"\n" ~ ANY)* }
 
 char = { ASCII_ALPHANUMERIC | "_" | "-" }
-
 name = @{ char+ }
-value = { (!"\n" ~ ANY)* }
 
-property = { name ~ ":" ~ value }
-
-macro_name = @{ char+ }
-rpm_macro = { "%" ~ macro_name }
-
-line_macro_body = @{ (!"\n" ~ ANY)* }
-line_macro = { rpm_macro ~ line_macro_body }
-
+property = { name ~ ":" ~ body }
 body = { (!"\n" ~ ANY)* }
 
-spec_statements = { char ~ ":" ~ WHITESPACE ~ statements ~ "\n" }
-statements = { line_macro | spec_statements  | property | body }
-
-// spec statements are basically `Statement:<WHITESPACE><DEF>\n`
+statements = { property | body }
 
 
 file = {
