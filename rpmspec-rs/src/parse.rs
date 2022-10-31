@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, hash::Hash, path::Path, io::BufRead};
+use std::{collections::HashMap, fs, hash::Hash, path::Path, io::{BufRead, BufReader}};
 
 use regex::Regex;
 use anyhow::Result;
@@ -316,16 +316,19 @@ impl RPMSpec {
     }
 }
 
-struct SpecParser<'a> { 
+struct SpecParser<R>
+{ 
     rpm: RPMSpec,
-    bufread: &'a mut dyn BufRead
+    bufread: BufReader<R>,
 }
 
-impl SpecParser<'_> {
+impl<R> SpecParser<R>
+where R: std::io::Read + std::io::BufRead 
+{
     fn parse(&mut self) -> Result<()> {
         let re = Regex::new(r"(\w+):\s*(.+)").unwrap();
-        let mut preambles: HashMap<String, Vec<&str>> = HashMap::new();
-        for line in self.bufread.lines() {
+        let mut preambles: HashMap<String, Vec<String>> = HashMap::new();
+        for line in self.bufread.get_mut().lines() {
             let line = line?;
             if line.starts_with('#') || line.starts_with("%dnl ") {
                 continue;
@@ -335,16 +338,16 @@ impl SpecParser<'_> {
             }
             for cap in re.captures_iter(line.as_str()) {
                 if preambles.contains_key(&cap[1]) {
-                    preambles.get_mut(&cap[1]).unwrap().push(&cap[2]);
+                    preambles.get_mut(&cap[1]).unwrap().push(cap[2].to_string());
                 }
             }
         }
         Ok(())
     }
-    fn set_preamble<'b, 'a>(&mut self, name: &'a str, value: &'b str) -> Result<(), ParserError> {
+    fn set_preamble(&mut self, name: String, value: String) -> Result<(), ParserError> {
         let rpm = &mut self.rpm;
-        match name {
-            "Name" => rpm.name = Some(value.into()),
+        match name.as_str() {
+            "Name" => rpm.name = Some(value),
             "Version" => {},
             "Release" => {},
             "Epoch" => {},
@@ -395,8 +398,8 @@ impl SpecParser<'_> {
         Ok(())
     }
 }
-impl From<&mut dyn BufRead> for SpecParser<'_> {
-    fn from(f: &mut dyn BufRead) -> Self {
+impl<R> From<BufReader<R>> for SpecParser<R> {
+    fn from(f: BufReader<R>) -> Self {
         Self {
             bufread: f,
             rpm: RPMSpec::new()

@@ -1,6 +1,6 @@
 pub enum ParserError {
-    NoPreamble(&'static str),
-    UnknownPreamble(&'static str, &'static str)
+    NoPreamble(String),
+    UnknownPreamble(String, String),
 }
 
 impl std::fmt::Display for ParserError {
