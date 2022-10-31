@@ -265,7 +265,9 @@ mod test_parser {
         hello = "world"
         project "anda" {
             pre_script {
-                commands = ["echo '${env("RUST_LOG")}'"]
+                commands = [
+                    "echo '${env.RUST_LOG}'",
+                ]
             }
         }
         "#;

@@ -56,6 +56,7 @@ dependencies = [
  "num",
  "num-derive",
  "num-traits",
+ "once_cell",
  "regex",
  "serde",
  "serde_json",
