@@ -341,6 +341,9 @@ impl<R> SpecParser<R>
 where
     R: std::io::Read + std::io::BufRead,
 {
+    fn parse_multiline(&mut self, sline: &str) {
+        todo!();
+    }
     fn parse(&mut self) -> Result<()> {
         let re = Regex::new(r"(\w+):\s*(.+)").unwrap();
         let re_dnl = Regex::new(r"^%dnl\b").unwrap();
@@ -357,7 +360,10 @@ where
                 continue;
             }
             if sline.starts_with('%') {
-                todo!()
+                if sline.trim().contains(" ") {
+                    todo!();
+                } else { self.parse_multiline(sline) }
+                continue;
             }
             if let Some(caps) = re_req1.captures(sline) {
                 let spkgs = &caps[caps.len()].trim();
@@ -391,7 +397,7 @@ where
                         _ => bail!("Unknown Modifier '{}' for Requires", modifier),
                     }
                 }
-                todo!()
+                continue;
             }
             for cap in re.captures_iter(sline) {
                 if preambles.contains_key(&cap[1]) {
