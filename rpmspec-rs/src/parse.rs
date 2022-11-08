@@ -1,11 +1,12 @@
+use crate::error::ParserError;
+use anyhow::{anyhow, bail, Result};
+use lazy_static::lazy_static;
+use regex::Regex;
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader},
+    process::Command,
 };
-
-use crate::error::ParserError;
-use anyhow::{bail, Result, anyhow};
-use regex::Regex;
 
 //? https://rpm-software-management.github.io/rpm/manual/spec.html
 const PREAMBLES: &[&str] = &[
@@ -17,8 +18,6 @@ const PREAMBLES: &[&str] = &[
     "SourceLicense",
     "Group",
     "Summary",
-    "Source#",
-    "Patch#",
     "URL",
     "BugURL",
     "ModularityLabel",
@@ -52,6 +51,9 @@ const PREAMBLES: &[&str] = &[
     "Prefix",
     "DocDir",
     "RemovePathPostfixes",
+    // list
+    "Source#",
+    "Patch#",
 ];
 
 #[derive(Clone)]
@@ -332,102 +334,145 @@ impl RPMSpec {
     }
 }
 
-struct SpecParser<R> {
+struct SpecParser {
     rpm: RPMSpec,
-    bufread: BufReader<R>,
+    errors: Vec<Result<(), ParserError>>,
 }
 
-impl<R> SpecParser<R>
-where
-    R: std::io::Read + std::io::BufRead,
-{
-    fn parse_multiline(&mut self, sline: &str) {
+impl SpecParser {
+    fn parse_multiline(&self, sline: &str) {
         todo!();
     }
-    fn parse(&mut self) -> Result<()> {
+    fn parse_macro(&self, sline: &str) {
+        // run rpm --eval
+    }
+
+    // returns true if it passes the check
+    fn preamble_check(&mut self, name: String, ln: usize) -> bool {
+        if !PREAMBLES.contains(&name.as_str()) {
+            self.errors
+                .push(Err(ParserError::UnknownPreamble(ln, name)));
+            return false;
+        }
+        true
+    }
+    fn parse_requires(&mut self, sline: &str, ln: usize) -> bool {
+        lazy_static! {
+            static ref RE1: Regex =
+                Regex::new(r"(?m)^Requires(?:\(([\w,\s]+)\))?:\s*(.+)$").unwrap();
+            static ref RE2: Regex =
+                Regex::new(r"(?m)([\w-]+)(?:\s*([>=<]{1,2})\s*([\d._~^]+))?").unwrap();
+        }
+        if let Some(caps) = RE1.captures(sline) {
+            let spkgs = &caps[caps.len()].trim();
+            let mut pkgs = vec![];
+            for cpkg in RE2.captures_iter(spkgs) {
+                let mut pkg = Package::new(cpkg[cpkg.len() - 1].to_string());
+                if cpkg.len() == 3 {
+                    // get rid of spaces I guess
+                    pkg.condition = Some(format!("{}{}", &cpkg[1], &cpkg[2]));
+                }
+                pkgs.push(pkg);
+            }
+            let modifiers = if caps.len() == 2 {
+                &caps[2]
+            } else {
+                "none"
+            };
+            for modifier in modifiers.split(',') {
+                let modifier = modifier.trim();
+                let pkgs = pkgs.to_vec();
+                match modifier {
+                    "none" => self.rpm.requires.none.extend(pkgs),
+                    "pre" => self.rpm.requires.pre.extend(pkgs),
+                    "post" => self.rpm.requires.post.extend(pkgs),
+                    "preun" => self.rpm.requires.preun.extend(pkgs),
+                    "postun" => self.rpm.requires.postun.extend(pkgs),
+                    "pretrans" => self.rpm.requires.pretrans.extend(pkgs),
+                    "posttrans" => self.rpm.requires.posttrans.extend(pkgs),
+                    "verify" => self.rpm.requires.verify.extend(pkgs),
+                    "interp" => self.rpm.requires.interp.extend(pkgs),
+                    "meta" => self.rpm.requires.meta.extend(pkgs),
+                    // _ => bail!("Unknown Modifier '{}' for Requires", modifier),
+                    _ => {
+                        self.errors
+                            .push(Err(ParserError::UnknownModifier(ln, modifier.to_string())));
+                    }
+                }
+            }
+            true
+        } else {
+            false
+        }
+    }
+    fn load_macros(&mut self) -> Result<()> {
+        // run rpm --showrc | grep "^Macro path"
+        let paths = String::from_utf8(
+            Command::new("sh")
+                .args([
+                    "-c",
+                    "rpm --showrc|grep '^Macro path'|sed 's/Macro path: //'",
+                ])
+                .output()?
+                .stdout,
+            )?
+            .split(':');
+        todo!();
+        // for path in paths, read => regex => hashmap
+        Ok(())
+    }
+    fn parse<R: std::io::Read>(&mut self, bufread: BufReader<R>) -> Result<()> {
         let re = Regex::new(r"(\w+):\s*(.+)").unwrap();
         let re_dnl = Regex::new(r"^%dnl\b").unwrap();
         let re_digit = Regex::new(r"\d+$").unwrap();
-        let re_req1 = Regex::new(r"(?m)^Requires(?:\(([\w,\s]+)\))?:\s*(.+)$").unwrap();
-        let re_req2 = Regex::new(r"(?m)([\w-]+)(?:\s*([>=<]{1,2})\s*([\d._~^]+))?").unwrap();
         let mut preambles: HashMap<String, Vec<String>> = HashMap::new();
         let mut list_preambles: HashMap<String, HashMap<i16, String>> = HashMap::new();
-        let mut errors: Vec<Result<(), ParserError>> = vec![];
-        'll: for (line_number, line) in self.bufread.get_mut().lines().enumerate() {
+        'll: for (line_number, line) in bufread.lines().enumerate() {
             let line = line?;
-            let sline = line.as_str();
-            if sline.trim().is_empty() || sline.starts_with('#') || re_dnl.is_match(sline) {
+            let sline = line.trim();
+            // * we have to parse %macros here (just like rpm)
+            if sline.is_empty() || sline.starts_with('#') || re_dnl.is_match(sline) {
                 continue;
             }
-            if sline.starts_with('%') {
-                if sline.trim().contains(" ") {
-                    todo!();
-                } else { self.parse_multiline(sline) }
+            // Check for Requires special preamble syntax first
+            if self.parse_requires(sline, line_number) {
                 continue;
             }
-            if let Some(caps) = re_req1.captures(sline) {
-                let spkgs = &caps[caps.len()].trim();
-                let mut pkgs = vec![];
-                for cpkg in re_req2.captures_iter(spkgs) {
-                    let mut pkg = Package::new(cpkg[cpkg.len() - 1].to_string());
-                    if cpkg.len() == 3 {
-                        pkg.condition = Some(format!("{}{}", &cpkg[1], &cpkg[2]));
-                    }
-                    pkgs.push(pkg);
-                }
-                let modifiers = if caps.len() == 2 {
-                    &caps[2]
-                } else {
-                    "none"
-                };
-                for modifier in modifiers.split(',') {
-                    let modifier = modifier.trim();
-                    let pkgs = pkgs.to_vec();
-                    match modifier {
-                        "none" => self.rpm.requires.none.extend(pkgs),
-                        "pre" => self.rpm.requires.pre.extend(pkgs),
-                        "post" => self.rpm.requires.post.extend(pkgs),
-                        "preun" => self.rpm.requires.preun.extend(pkgs),
-                        "postun" => self.rpm.requires.postun.extend(pkgs),
-                        "pretrans" => self.rpm.requires.pretrans.extend(pkgs),
-                        "posttrans" => self.rpm.requires.posttrans.extend(pkgs),
-                        "verify" => self.rpm.requires.verify.extend(pkgs),
-                        "interp" => self.rpm.requires.interp.extend(pkgs),
-                        "meta" => self.rpm.requires.meta.extend(pkgs),
-                        _ => bail!("Unknown Modifier '{}' for Requires", modifier),
-                    }
-                }
-                continue;
-            }
+            // only then do we check for other preambles
             for cap in re.captures_iter(sline) {
+                // key already exists
                 if preambles.contains_key(&cap[1]) {
                     if re_digit.is_match(&cap[1]) {
-                        errors.push(Err(ParserError::Duplicate(line_number, cap[1].to_string())));
-                        continue 'll;
-                    }
-                    if !PREAMBLES.contains(&&cap[1]) {
-                        errors.push(Err(ParserError::UnknownPreamble(
-                            line_number,
-                            cap[1].to_string(),
-                        )));
+                        self.errors
+                            .push(Err(ParserError::Duplicate(line_number, cap[1].to_string())));
                         continue 'll;
                     }
                     preambles.get_mut(&cap[1]).unwrap().push(cap[2].to_string());
                     continue 'll;
-                } else {
-                    preambles.insert(cap[1].to_string(), vec![cap[2].to_string()]);
                 }
+                // check for list_preambles
                 if let Some(digitcap) = re_digit.captures(&cap[1]) {
                     let sdigit = &digitcap[0];
                     let digit: i16 = sdigit.parse()?;
                     let name = &cap[1][..cap[1].len() - sdigit.len()];
                     let sname = name.to_string();
+                    if !self.preamble_check(format!("{}#", name), line_number) {
+                        continue 'll;
+                    }
                     if !list_preambles.contains_key(&sname) {
                         list_preambles.insert(name.to_string(), HashMap::new());
                     }
-                    let Some(hm) = &mut list_preambles.get_mut(&sname)
-                    else {bail!("BUG: added HashMap gone")};
-                    hm.insert(digit, cap[2].to_string());
+                    match &mut list_preambles.get_mut(&sname) {
+                        Some(hm) => hm.insert(digit, cap[2].to_string()),
+                        None => bail!("BUG: added HashMap gone"),
+                    };
+                } else {
+                    let name = cap[1].to_string();
+                    if !self.preamble_check(name, line_number) {
+                        continue 'll;
+                    }
+                    // create key with new value (normal preambles)
+                    preambles.insert(cap[1].to_string(), vec![cap[2].to_string()]);
                 }
             }
             // ! error?
@@ -440,8 +485,8 @@ where
             .iter()
             .map(|(k, v)| self.set_list_preamble(k, v))
             .collect::<Result<Vec<_>>>()?;
-        if !errors.is_empty() {
-            return Err(anyhow!("{:#?}", errors));
+        if !self.errors.is_empty() {
+            return Err(anyhow!("{:#?}", self.errors));
         }
         Ok(())
     }
@@ -452,7 +497,7 @@ where
         match name {
             "Source" => rpm.sources = value,
             "Patch" => rpm.patches = value,
-            _ => anyhow::bail!("BUG: failed to match preamble '{}'", name),
+            _ => bail!("BUG: failed to match preamble '{}'", name),
         }
         Ok(())
     }
@@ -501,19 +546,17 @@ where
             "Prefix" => {}
             "DocDir" => {}
             "RemovePathPostfixes" => {}
-            _ => anyhow::bail!("BUG: failed to match preamble '{}'", name),
+            _ => bail!("BUG: failed to match preamble '{}'", name),
         }
         Ok(())
     }
     fn parse_macros(line: &str) -> Result<()> {
         Ok(())
     }
-}
-impl<R> From<BufReader<R>> for SpecParser<R> {
-    fn from(f: BufReader<R>) -> Self {
+    fn new() -> Self {
         Self {
-            bufread: f,
             rpm: RPMSpec::new(),
+            errors: vec![],
         }
     }
 }
@@ -530,9 +573,18 @@ fn _sbin(value: &Vec<String>) -> Result<bool> {
 }
 
 mod tests {
+    use std::fs::File;
+
     use super::*;
     #[test]
-    fn parse_umpkg_spec() -> Result<()> {
+    fn parse_spec() -> Result<()> {
+        let f = File::open("../tests/test.spec")?;
+        let f = BufReader::new(f);
+
+        let mut sp = SpecParser::new();
+        sp.parse(f)?;
+        println!("{}", sp.rpm.name.unwrap_or_default());
+        println!("{}", sp.rpm.summary.unwrap_or_default());
         Ok(())
     }
 }
