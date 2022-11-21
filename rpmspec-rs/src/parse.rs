@@ -1,12 +1,14 @@
 use crate::error::ParserError;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Ok, Result};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader},
-    process::Command,
+    io::{BufRead, BufReader, Read},
+    process::Command, hash::Hash, fs::File,
 };
+
+mod macros;
 
 //? https://rpm-software-management.github.io/rpm/manual/spec.html
 const PREAMBLES: &[&str] = &[
@@ -337,6 +339,7 @@ impl RPMSpec {
 struct SpecParser {
     rpm: RPMSpec,
     errors: Vec<Result<(), ParserError>>,
+    macros: HashMap<String, String>
 }
 
 impl SpecParser {
@@ -405,9 +408,15 @@ impl SpecParser {
             false
         }
     }
+    fn arch() -> Result<String> {
+        let s = String::from_utf8(
+            Command::new("uname").arg("-m").output()?.stdout,
+        )?;
+        Ok(s[..s.len()-1].to_string())  // remove new line
+    }
     fn load_macros(&mut self) -> Result<()> {
         // run rpm --showrc | grep "^Macro path"
-        let paths = String::from_utf8(
+        let binding = String::from_utf8(
             Command::new("sh")
                 .args([
                     "-c",
@@ -415,10 +424,27 @@ impl SpecParser {
                 ])
                 .output()?
                 .stdout,
-            )?
-            .split(':');
-        todo!();
-        // for path in paths, read => regex => hashmap
+        )?;
+        let paths = binding.trim().split(':');
+
+        let re = Regex::new(r"(?m)^%([\w()]+)[\t ]+((\\\n|[^\n])+)$").unwrap();
+        for path in paths {
+            let path = path.replace("%{_target}", Self::arch()?.as_str());
+            println!(": {}", path);
+            for path in glob::glob(path.as_str())? {
+                let path = path?;
+                println!("{}", path.display());
+                let mut buf = vec![];
+                let bytes = BufReader::new(File::open(&path)?).read_to_end(&mut buf)?;
+                assert_ne!(bytes, 0, "Empty macro definition file '{}'", path.display());
+                for cap in re.captures_iter(std::str::from_utf8(&buf)?) {
+                    if self.macros.contains_key(&cap[1]) {
+                        println!("Macro Definition duplicated: {} : '{}' | '{}'", &cap[1], self.macros.get(&cap[1]).unwrap(), &cap[2]);
+                    }
+                    self.macros.insert(cap[1].to_string(), cap[2].to_string());
+                }
+            }
+        }
         Ok(())
     }
     fn parse<R: std::io::Read>(&mut self, bufread: BufReader<R>) -> Result<()> {
@@ -551,12 +577,24 @@ impl SpecParser {
         Ok(())
     }
     fn parse_macros(line: &str) -> Result<()> {
+        // we only handle inline macros here
+        // assume we don't multiline
+        let re = Regex::new(r"%((\{[^}]+\})|([_\w]+))").unwrap();
+        for cap in re.captures_iter(line) {
+            let m = &cap[1];
+            let elements = m.split_ascii_whitespace().collect::<Vec<&str>>();
+            let name = elements[1];
+            if elements.len() > 1 {
+                let args = &elements[1..];
+            }
+        }
         Ok(())
     }
     fn new() -> Self {
         Self {
             rpm: RPMSpec::new(),
             errors: vec![],
+            macros: HashMap::new(),
         }
     }
 }
@@ -585,6 +623,14 @@ mod tests {
         sp.parse(f)?;
         println!("{}", sp.rpm.name.unwrap_or_default());
         println!("{}", sp.rpm.summary.unwrap_or_default());
+        Ok(())
+    }
+    #[test]
+    fn test_load_macros() -> Result<()> {
+        println!("{}", SpecParser::arch()?);
+        let mut sp = SpecParser::new();
+        sp.load_macros()?;
+        println!("{:#?}", sp.macros);
         Ok(())
     }
 }

@@ -20,5 +20,11 @@
     "**/.flatpak-builder/**": true
   },
   "dotenv.enableAutocloaking": false,
-  "rust-analyzer.files.excludeDirs": [".flatpak-builder"]
+  "rust-analyzer.files.excludeDirs": [
+    ".flatpak-builder"
+  ],
+  "files.associations": {
+    "*.tcc": "c",
+    "ostream": "c"
+  }
 }
