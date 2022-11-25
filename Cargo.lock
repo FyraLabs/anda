@@ -1287,6 +1287,7 @@ dependencies = [
  "file-matcher",
  "glob",
  "lazy_static",
+ "log",
  "pest",
  "pest_derive",
  "regex",

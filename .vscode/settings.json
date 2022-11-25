@@ -25,6 +25,7 @@
   ],
   "files.associations": {
     "*.tcc": "c",
-    "ostream": "c"
+    "ostream": "c",
+    "cstdio": "c"
   }
 }

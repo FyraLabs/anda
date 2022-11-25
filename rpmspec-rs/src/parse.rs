@@ -1,6 +1,7 @@
 use crate::error::ParserError;
 use anyhow::{anyhow, bail, Ok, Result};
 use lazy_static::lazy_static;
+use log::debug;
 use regex::Regex;
 use std::{
     collections::HashMap,
@@ -430,16 +431,16 @@ impl SpecParser {
         let re = Regex::new(r"(?m)^%([\w()]+)[\t ]+((\\\n|[^\n])+)$").unwrap();
         for path in paths {
             let path = path.replace("%{_target}", Self::arch()?.as_str());
-            println!(": {}", path);
+            debug!(": {path}");
             for path in glob::glob(path.as_str())? {
                 let path = path?;
-                println!("{}", path.display());
+                debug!("{}", path.display());
                 let mut buf = vec![];
                 let bytes = BufReader::new(File::open(&path)?).read_to_end(&mut buf)?;
                 assert_ne!(bytes, 0, "Empty macro definition file '{}'", path.display());
                 for cap in re.captures_iter(std::str::from_utf8(&buf)?) {
                     if self.macros.contains_key(&cap[1]) {
-                        println!("Macro Definition duplicated: {} : '{}' | '{}'", &cap[1], self.macros.get(&cap[1]).unwrap(), &cap[2]);
+                        debug!("Macro Definition duplicated: {} : '{}' | '{}'", &cap[1], self.macros.get(&cap[1]).unwrap(), &cap[2]);
                     }
                     self.macros.insert(cap[1].to_string(), cap[2].to_string());
                 }
