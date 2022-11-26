@@ -5,7 +5,7 @@ use hcl::eval::{Context, FuncArgs, FuncDef};
 
 
 // once_cell for global context
-use once_cell::sync::{OnceCell};
+use once_cell::sync::OnceCell;
 use std::sync::Mutex;
 
 // todo: let this be mutable
@@ -24,7 +24,6 @@ pub fn env_func(args: FuncArgs)  -> Result<Value, String> {
 
 /// Generate Context for HCL evaluation
 pub fn hcl_context() -> Context<'static> {
-
     let c = GLOBAL_CONTEXT.get_or_init(|| {
         dotenv::dotenv().ok();
         let mut ctx = Context::new();
@@ -32,7 +31,6 @@ pub fn hcl_context() -> Context<'static> {
             .param(hcl::eval::ParamType::String)
             .build(env_func);
         ctx.declare_func("env", env_func);
-    
     
         let env = std::env::vars().collect::<BTreeMap<String, String>>();
         let mut map = hcl::Map::new();
@@ -45,7 +43,5 @@ pub fn hcl_context() -> Context<'static> {
     
         Mutex::new(ctx)
     });
-
     c.lock().unwrap().clone()
-
 }

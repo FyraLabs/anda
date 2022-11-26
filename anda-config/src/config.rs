@@ -96,6 +96,7 @@ pub struct RpmBuild {
     pub plugin_opts: Option<BTreeMap<String, String>>,
     pub macros: Option<BTreeMap<String, String>>,
     pub opts: Option<BTreeMap<String, String>>,
+    pub update: Option<String>,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]

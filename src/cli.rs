@@ -189,4 +189,7 @@ pub enum Command {
     },
     /// Get CI output for Github Actions
     CI,
+
+    /// Update all projects
+    Update,
 }
