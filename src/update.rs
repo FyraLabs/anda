@@ -25,7 +25,11 @@ pub fn update_pkgs(cfg: Manifest) -> Result<()> {
     for (name, proj) in cfg.project {
         if let Some(rpm) = proj.rpm {
             let spec = rpm.spec;
-            let scr = rpm.update.unwrap_or_else(|| "update.rhai".into());
+            if rpm.update.is_none() { continue; }
+            let mut scr = rpm.update.unwrap();
+            if scr.is_empty() {
+                scr = "update.rhai".into();
+            }
             let rpmspec = rpm::RPMSpec::new(name.clone(), &scr, spec)?;
             let (en, mut sc) = gen_en(rpmspec);
 
@@ -80,9 +84,9 @@ mod tests {
     #[test]
     fn run_rhai() -> Result<()> {
         run_update(rpm::RPMSpec::new(
-            "test".into(),
+            "umpkg".into(),
             "tests/test.rhai",
-            "tests/test.spec",
+            "tests/umpkg.spec",
         )?)?;
         Ok(())
     }

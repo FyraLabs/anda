@@ -1,4 +1,4 @@
-use hcl::eval::{Context, Evaluate};
+use hcl::eval::Evaluate;
 use hcl::template::Template;
 use std::str::FromStr;
 use crate::context::hcl_context;

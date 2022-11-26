@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use log::debug;
 use serde::{Deserialize, Serialize};
