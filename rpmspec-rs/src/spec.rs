@@ -105,7 +105,6 @@ pub struct Macro(String, String);
 /// RPM Macro definition
 pub struct MacroDef {}
 
-
 #[derive(Debug)]
 pub struct Changelog {
     // parse from Ddd Mmm dd yyyy (Day of week, Month, Day, Year)
@@ -143,7 +142,6 @@ impl Changelog {
             if c.trim().is_empty() {
                 continue;
             }
-
 
             // parse the first line
             let mut lines = c.lines();

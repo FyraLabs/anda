@@ -5,25 +5,29 @@ use anda_config::Manifest;
 use anyhow::Result;
 use log::warn;
 use rhai::{Engine, Scope};
+use serde_json::Value;
 use std::path::PathBuf;
+use tsunagu::ehdl;
 
 fn gen_en(rpmspec: rpm::RPMSpec) -> (Engine, Scope<'static>) {
     let mut sc = Scope::new();
     sc.push("rpm", rpmspec);
     sc.push("USER_AGENT", tsunagu::USER_AGENT);
     let mut en = Engine::new();
-    en.register_fn("get", tsunagu::get::<String>)
-        .register_fn("get", tsunagu::get::<&str>)
-        .register_fn("gh", tsunagu::gh::<String>)
-        .register_fn("gh", tsunagu::gh::<&str>)
-        .register_fn("json", tsunagu::json::<String>)
-        .register_fn("json", tsunagu::json::<&str>)
-        .register_fn("get_json", tsunagu::get_json::<&str>)
-        .register_fn("get_json", tsunagu::get_json_i)
-        .register_fn("string_json", tsunagu::string_json)
-        .register_fn("i64_json", tsunagu::i64_json)
-        .register_fn("f64_json", tsunagu::f64_json)
-        .register_fn("bool_json", tsunagu::bool_json)
+    en.register_fn("get", |a: String| ehdl(tsunagu::get(a)))
+        .register_fn("get", |a: String| ehdl(tsunagu::get(a)))
+        .register_fn("gh", |a: String| ehdl(tsunagu::gh(a)))
+        .register_fn("json", |a: String| ehdl(tsunagu::json(a)))
+        .register_fn("get_json", |o: Value, i: String| {
+            ehdl(tsunagu::get_json(o, i))
+        })
+        .register_fn("get_json", |o: Value, i: i64| {
+            ehdl(tsunagu::get_json_i(o, i))
+        })
+        .register_fn("string_json", |a: Value| ehdl(tsunagu::string_json(a)))
+        .register_fn("i64_json", |a: Value| ehdl(tsunagu::i64_json(a)))
+        .register_fn("f64_json", |a: Value| ehdl(tsunagu::f64_json(a)))
+        .register_fn("bool_json", |a: Value| ehdl(tsunagu::bool_json(a)))
         .build_type::<tsunagu::Req>()
         .build_type::<rpm::RPMSpec>();
     (en, sc)

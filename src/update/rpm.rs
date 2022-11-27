@@ -31,8 +31,7 @@ impl RPMSpec {
     }
     pub fn version(&mut self, ver: String) -> Result<(), Box<EvalAltResult>> {
         let re = regex::Regex::new(r"Version:(\s+)([\.\d]+)\n").unwrap();
-        let m = re
-            .captures(self.f.as_str());
+        let m = re.captures(self.f.as_str());
         if m.is_none() {
             return Err("Can't find version preamble in spec".into());
         }
@@ -56,8 +55,6 @@ impl RPMSpec {
 
 impl CustomType for RPMSpec {
     fn build(mut builder: rhai::TypeBuilder<'_, Self>) {
-        builder
-            .with_name("Rpm")
-            .with_fn("version", Self::version);
+        builder.with_name("Rpm").with_fn("version", Self::version);
     }
 }

@@ -1,10 +1,10 @@
+use anyhow::{anyhow, Result};
 use log::debug;
 use rhai::{CustomType, EvalAltResult};
 use serde_json::Value;
 
 pub const USER_AGENT: &str = "Anda-update";
-
-fn ehdl<A, B>(o: Result<A, B>) -> Result<A, Box<EvalAltResult>>
+pub fn ehdl<A, B>(o: Result<A, B>) -> Result<A, Box<EvalAltResult>>
 where
     B: std::fmt::Debug + std::fmt::Display,
 {
@@ -13,72 +13,67 @@ where
     }
     Ok(o.unwrap())
 }
-
-pub fn get<T: reqwest::IntoUrl>(url: T) -> Result<String, Box<EvalAltResult>> {
-    let client = ehdl(
-        reqwest::blocking::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .user_agent(USER_AGENT)
-            .build(),
-    )?;
-    let res = ehdl(client.get(url).send())?;
-    ehdl(res.text())
+pub fn get<T: reqwest::IntoUrl>(url: T) -> Result<String> {
+    Ok(reqwest::blocking::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent(USER_AGENT)
+        .build()?
+        .get(url)
+        .send()?
+        .text()?)
 }
 
-pub fn json<T: Into<String>>(txt: T) -> Result<Value, Box<EvalAltResult>> {
-    let s: String = txt.into();
-    ehdl(serde_json::from_str(s.as_str()))
+pub fn json<T: Into<String>>(txt: T) -> Result<Value> {
+    Ok(serde_json::from_str(txt.into().as_str())?)
 }
 
-pub fn get_json<I: serde_json::value::Index>(obj: Value, index: I) -> Result<Value, Box<EvalAltResult>> {
-    ehdl(obj.get(index).ok_or("Invalid index (json)").map(|o| o.to_owned()))
+pub fn get_json<I: serde_json::value::Index>(obj: Value, index: I) -> Result<Value> {
+    obj.get(index)
+        .ok_or_else(|| anyhow!("Invalid index (json)"))
+        .map(|o| o.to_owned())
 }
 
-pub fn get_json_i(obj: Value, index: i64) -> Result<Value, Box<EvalAltResult>> {
-    get_json(obj, ehdl(usize::try_from(index))?)
+pub fn get_json_i(obj: Value, index: i64) -> Result<Value> {
+    get_json(obj, usize::try_from(index)?)
 }
 
-pub fn string_json(obj: Value) -> Result<String, Box<EvalAltResult>> {
-    ehdl(obj.as_str().ok_or("Can't convert json to &str").map(|s| s.to_string()))
+pub fn string_json(obj: Value) -> Result<String> {
+    obj.as_str()
+        .ok_or_else(|| anyhow!("Can't convert json to &str"))
+        .map(|s| s.to_string())
 }
-pub fn i64_json(obj: Value) -> Result<i64, Box<EvalAltResult>> {
-    ehdl(obj.as_i64().ok_or("Can't convert json to i64"))
+pub fn i64_json(obj: Value) -> Result<i64> {
+    obj.as_i64()
+        .ok_or_else(|| anyhow!("Can't convert json to i64"))
 }
-pub fn f64_json(obj: Value) -> Result<f64, Box<EvalAltResult>> {
-    ehdl(obj.as_f64().ok_or("Can't convert json to f64"))
+pub fn f64_json(obj: Value) -> Result<f64> {
+    obj.as_f64()
+        .ok_or_else(|| anyhow!("Can't convert json to f64"))
 }
-pub fn bool_json(obj: Value) -> Result<bool, Box<EvalAltResult>> {
-    ehdl(obj.as_bool().ok_or("Can't convert json to bool"))
+pub fn bool_json(obj: Value) -> Result<bool> {
+    obj.as_bool()
+        .ok_or_else(|| anyhow!("Can't convert json to bool"))
 }
- 
-pub fn gh<T: Into<String>>(repo: T) -> Result<String, Box<EvalAltResult>> {
+
+pub fn gh<T: Into<String>>(repo: T) -> Result<String> {
     let repo = repo.into();
-    let txt = ehdl(
-        ehdl(
-            ehdl(
-                reqwest::blocking::Client::builder()
-                    .redirect(reqwest::redirect::Policy::none())
-                    .user_agent(USER_AGENT)
-                    .build(),
-            )?
-            .get(format!(
-                "https://api.github.com/repos/{}/releases/latest",
-                repo
-            ))
-            .header(
-                reqwest::header::AUTHORIZATION,
-                format!("Bearer {}", ehdl(std::env::var("GITHUB_TOKEN"))?),
-            )
-            .header(
-                reqwest::header::USER_AGENT,
-                USER_AGENT
-            )
-            .send(),
-        )?
-        .text(),
-    )?;
+    let txt = reqwest::blocking::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent(USER_AGENT)
+        .build()?
+        .get(format!(
+            "https://api.github.com/repos/{}/releases/latest",
+            repo
+        ))
+        .header(
+            reqwest::header::AUTHORIZATION,
+            format!("Bearer {}", std::env::var("GITHUB_TOKEN")?),
+        )
+        .header(reqwest::header::USER_AGENT, USER_AGENT)
+        .send()?
+        .text()?;
     debug!("Got json from {repo}:\n{txt}");
-    let v: Value = ehdl(serde_json::from_str(&txt))?;
+    let v: Value = serde_json::from_str(&txt)?;
     let ver = string_json(v["tag_name"].to_owned())?;
     if let Some(ver) = ver.strip_prefix('v') {
         return Ok(ver.to_string());
@@ -97,8 +92,10 @@ impl CustomType for Req {
         builder
             .with_name("Req")
             .with_fn("new_req", Self::new)
-            .with_fn("get", Self::get)
-            .with_fn("head", Self::head);
+            .with_fn("get", |x: Self| ehdl(x.get()))
+            .with_fn("head", |mut x: Self, k: String, v: String| {
+                ehdl(x.head(k, v))
+            });
     }
 }
 
@@ -109,24 +106,18 @@ impl Req {
             headers: reqwest::header::HeaderMap::new(),
         }
     }
-    pub fn get(self) -> Result<String, Box<EvalAltResult>> {
-        ehdl(
-            ehdl(
-                ehdl(
-                    reqwest::blocking::Client::builder()
-                        .redirect(reqwest::redirect::Policy::none())
-                        .build(),
-                )?
-                .get(self.url)
-                .headers(self.headers)
-                .send(),
-            )?
-            .text(),
-        )
+    pub fn get(self) -> Result<String> {
+        Ok(reqwest::blocking::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()?
+            .get(self.url)
+            .headers(self.headers)
+            .send()?
+            .text()?)
     }
-    pub fn head(&mut self, key: String, val: String) -> Result<(), Box<EvalAltResult>> {
-        let x = ehdl(self.headers.try_entry(key))?;
-        x.or_insert(ehdl(val.parse())?);
+    pub fn head(&mut self, key: String, val: String) -> Result<()> {
+        let x = self.headers.try_entry(key)?;
+        x.or_insert(val.parse()?);
         Ok(())
     }
 }

@@ -6,8 +6,8 @@ mod cli;
 mod flatpak;
 mod oci;
 mod rpm_spec;
-mod util;
 mod update;
+mod util;
 
 use std::io;
 
@@ -107,10 +107,10 @@ async fn main() -> Result<()> {
             let entries = fetch_build_entries(config)?;
 
             println!("build_matrix={}", serde_json::to_string(&entries)?);
-        },
+        }
         Command::Update => {
             update::update_pkgs(anda_config::load_from_file(&cli.config).unwrap())?;
-        },
+        }
     }
     Ok(())
 }
