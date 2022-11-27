@@ -1,5 +1,8 @@
+use log::debug;
 use rhai::{CustomType, EvalAltResult};
 use serde_json::Value;
+
+pub const USER_AGENT: &str = "Anda-update";
 
 fn ehdl<A, B>(o: Result<A, B>) -> Result<A, Box<EvalAltResult>>
 where
@@ -15,6 +18,7 @@ pub fn get<T: reqwest::IntoUrl>(url: T) -> Result<String, Box<EvalAltResult>> {
     let client = ehdl(
         reqwest::blocking::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
+            .user_agent(USER_AGENT)
             .build(),
     )?;
     let res = ehdl(client.get(url).send())?;
@@ -48,27 +52,34 @@ pub fn bool_json(obj: Value) -> Result<bool, Box<EvalAltResult>> {
 }
  
 pub fn gh<T: Into<String>>(repo: T) -> Result<String, Box<EvalAltResult>> {
+    let repo = repo.into();
     let txt = ehdl(
         ehdl(
             ehdl(
                 reqwest::blocking::Client::builder()
                     .redirect(reqwest::redirect::Policy::none())
+                    .user_agent(USER_AGENT)
                     .build(),
             )?
             .get(format!(
-                "https://github.com/{}/releases/latest",
-                repo.into()
+                "https://api.github.com/repos/{}/releases/latest",
+                repo
             ))
             .header(
                 reqwest::header::AUTHORIZATION,
                 format!("Bearer {}", ehdl(std::env::var("GITHUB_TOKEN"))?),
             )
+            .header(
+                reqwest::header::USER_AGENT,
+                USER_AGENT
+            )
             .send(),
         )?
         .text(),
     )?;
+    debug!("Got json from {repo}:\n{txt}");
     let v: Value = ehdl(serde_json::from_str(&txt))?;
-    let ver = v["tag_name"].to_string();
+    let ver = string_json(v["tag_name"].to_owned())?;
     if let Some(ver) = ver.strip_prefix('v') {
         return Ok(ver.to_string());
     }

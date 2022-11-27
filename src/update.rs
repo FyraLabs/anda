@@ -10,6 +10,7 @@ use std::path::PathBuf;
 fn gen_en(rpmspec: rpm::RPMSpec) -> (Engine, Scope<'static>) {
     let mut sc = Scope::new();
     sc.push("rpm", rpmspec);
+    sc.push("USER_AGENT", tsunagu::USER_AGENT);
     let mut en = Engine::new();
     en.register_fn("get", tsunagu::get::<String>)
         .register_fn("get", tsunagu::get::<&str>)
