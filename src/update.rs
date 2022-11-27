@@ -17,6 +17,13 @@ fn gen_en(rpmspec: rpm::RPMSpec) -> (Engine, Scope<'static>) {
         .register_fn("gh", tsunagu::gh::<&str>)
         .register_fn("json", tsunagu::json::<String>)
         .register_fn("json", tsunagu::json::<&str>)
+        .register_fn("get_json", tsunagu::get_json::<&str>)
+        .register_fn("get_json", tsunagu::get_json_i)
+        .register_fn("string_json", tsunagu::string_json)
+        .register_fn("i64_json", tsunagu::i64_json)
+        .register_fn("f64_json", tsunagu::f64_json)
+        .register_fn("bool_json", tsunagu::bool_json)
+        .build_type::<tsunagu::Req>()
         .build_type::<rpm::RPMSpec>();
     (en, sc)
 }
@@ -25,7 +32,9 @@ pub fn update_pkgs(cfg: Manifest) -> Result<()> {
     for (name, proj) in cfg.project {
         if let Some(rpm) = proj.rpm {
             let spec = rpm.spec;
-            if rpm.update.is_none() { continue; }
+            if rpm.update.is_none() {
+                continue;
+            }
             let mut scr = rpm.update.unwrap();
             if scr.is_empty() {
                 scr = "update.rhai".into();
