@@ -8,3 +8,4 @@
 
 //rpm.version(gh("Bonandry/adwaita-plus"));
 rpm.version("0.3.63");
+rpm.source(0, "https://github.com/Ultramarine-Linux/umpkg/archive/refs/tags/%{version}.tar.gz");
