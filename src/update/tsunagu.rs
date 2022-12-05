@@ -114,6 +114,7 @@ impl Req {
             .redirect(reqwest::redirect::Policy::none())
             .build()?
             .get(self.url)
+            .header(reqwest::header::USER_AGENT, USER_AGENT)
             .headers(self.headers)
             .send()?
             .text()?)
