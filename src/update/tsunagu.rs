@@ -80,6 +80,9 @@ pub fn gh<T: Into<String>>(repo: T) -> Result<String> {
     }
     Ok(ver)
 }
+pub fn env(key: &str) -> Result<String> {
+    Ok(std::env::var(key)?)
+}
 
 #[derive(Clone)]
 pub struct Req {

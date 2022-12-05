@@ -17,6 +17,7 @@ fn gen_en(rpmspec: rpm::RPMSpec) -> (Engine, Scope<'static>) {
     let mut en = Engine::new();
     en.register_fn("get", |a: String| ehdl(tsunagu::get(a)))
         .register_fn("gh", |a: String| ehdl(tsunagu::gh(a)))
+        .register_fn("env", |a: &str| ehdl(tsunagu::env(a)))
         .register_fn("json", |a: String| ehdl(tsunagu::json(a)))
         .register_custom_operator("@", 255).unwrap()
         .register_fn("@", |o: Value, i: String| {
