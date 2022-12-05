@@ -71,10 +71,17 @@ impl RPMSpec {
         }
         Ok(())
     }
+    pub fn get(&mut self) -> String {
+        self.f.clone()
+    }
+    pub fn set(&mut self, ff: String) {
+        self.changed = true;
+        self.f = ff;
+    }
 }
 
 impl CustomType for RPMSpec {
     fn build(mut builder: rhai::TypeBuilder<'_, Self>) {
-        builder.with_name("Rpm").with_fn("version", Self::version).with_fn("source", Self::source);
+        builder.with_name("Rpm").with_fn("version", Self::version).with_fn("source", Self::source).with_get_set("f", Self::get, Self::set);
     }
 }

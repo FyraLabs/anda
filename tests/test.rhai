@@ -1,10 +1,9 @@
 // let req = new_req("https://api.snapcraft.io/v2/snaps/info/authy");
 // req.head("Snap-Device-Series", "16");
-// req.head("User-Agent", "Anda-update");
-// let obj = json(req.get());
-// let obj2 = get_json(obj, "channel-map");
-// let obj3 = get_json(obj2, 0);
-// rpm.version(string_json(get_json(obj3, "version")));
+// req.head("User-Agent", USER_AGENT);
+// let obj = json(req.get()) @ "channel-map" @ 0 @ "version";
+// rpm.version(obj.str());
+// rpm.f = sub("2.2.2", "3.3.3", rpm.f);
 
 //rpm.version(gh("Bonandry/adwaita-plus"));
 rpm.version("0.3.63");

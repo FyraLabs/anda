@@ -93,7 +93,7 @@ impl CustomType for Req {
             .with_name("Req")
             .with_fn("new_req", Self::new)
             .with_fn("get", |x: Self| ehdl(x.get()))
-            .with_fn("head", |mut x: Self, k: String, v: String| {
+            .with_fn("head", |x: &mut Self, k: String, v: String| {
                 ehdl(x.head(k, v))
             });
     }

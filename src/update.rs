@@ -1,5 +1,6 @@
 mod rpm;
 mod tsunagu;
+mod re;
 
 use anda_config::Manifest;
 use anyhow::Result;
@@ -15,19 +16,21 @@ fn gen_en(rpmspec: rpm::RPMSpec) -> (Engine, Scope<'static>) {
     sc.push("USER_AGENT", tsunagu::USER_AGENT);
     let mut en = Engine::new();
     en.register_fn("get", |a: String| ehdl(tsunagu::get(a)))
-        .register_fn("get", |a: String| ehdl(tsunagu::get(a)))
         .register_fn("gh", |a: String| ehdl(tsunagu::gh(a)))
         .register_fn("json", |a: String| ehdl(tsunagu::json(a)))
-        .register_fn("get_json", |o: Value, i: String| {
+        .register_custom_operator("@", 255).unwrap()
+        .register_fn("@", |o: Value, i: String| {
             ehdl(tsunagu::get_json(o, i))
         })
-        .register_fn("get_json", |o: Value, i: i64| {
+        .register_fn("@", |o: Value, i: i64| {
             ehdl(tsunagu::get_json_i(o, i))
         })
-        .register_fn("string_json", |a: Value| ehdl(tsunagu::string_json(a)))
-        .register_fn("i64_json", |a: Value| ehdl(tsunagu::i64_json(a)))
-        .register_fn("f64_json", |a: Value| ehdl(tsunagu::f64_json(a)))
-        .register_fn("bool_json", |a: Value| ehdl(tsunagu::bool_json(a)))
+        .register_fn("str", |a: Value| ehdl(tsunagu::string_json(a)))
+        .register_fn("i64", |a: Value| ehdl(tsunagu::i64_json(a)))
+        .register_fn("f64", |a: Value| ehdl(tsunagu::f64_json(a)))
+        .register_fn("bool", |a: Value| ehdl(tsunagu::bool_json(a)))
+        .register_fn("find", |a: &str, b: &str, c: i64| ehdl(re::find(a, b, c)))
+        .register_fn("sub", |a: &str, b: &str, c: &str| ehdl(re::sub(a, b, c)))
         .build_type::<tsunagu::Req>()
         .build_type::<rpm::RPMSpec>();
     (en, sc)
