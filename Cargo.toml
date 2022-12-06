@@ -41,7 +41,7 @@ serde_json = "1.0.87"
 regex = "1.6.0"
 lazy_static = "1.4.0"
 rhai = "1.11.0"
-reqwest = { version = "0.11.13", features = ["blocking"] }
+ureq = { version = "2.5.0", features = ["json"] }
 
 
 # [build-dependencies]

@@ -1,10 +1,10 @@
+mod re;
 mod rpm;
 mod tsunagu;
-mod re;
 
 use anda_config::Manifest;
 use anyhow::Result;
-use log::warn;
+use log::{debug, warn};
 use rhai::{Engine, Scope};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -15,17 +15,14 @@ fn gen_en(rpmspec: rpm::RPMSpec) -> (Engine, Scope<'static>) {
     sc.push("rpm", rpmspec);
     sc.push("USER_AGENT", tsunagu::USER_AGENT);
     let mut en = Engine::new();
-    en.register_fn("get", |a: String| ehdl(tsunagu::get(a)))
+    en.register_fn("get", |a: &str| ehdl(tsunagu::get(a)))
         .register_fn("gh", |a: String| ehdl(tsunagu::gh(a)))
         .register_fn("env", |a: &str| ehdl(tsunagu::env(a)))
         .register_fn("json", |a: String| ehdl(tsunagu::json(a)))
-        .register_custom_operator("@", 255).unwrap()
-        .register_fn("@", |o: Value, i: String| {
-            ehdl(tsunagu::get_json(o, i))
-        })
-        .register_fn("@", |o: Value, i: i64| {
-            ehdl(tsunagu::get_json_i(o, i))
-        })
+        .register_custom_operator("@", 255)
+        .unwrap()
+        .register_fn("@", |o: Value, i: String| ehdl(tsunagu::get_json(o, i)))
+        .register_fn("@", |o: Value, i: i64| ehdl(tsunagu::get_json_i(o, i)))
         .register_fn("str", |a: Value| ehdl(tsunagu::string_json(a)))
         .register_fn("i64", |a: Value| ehdl(tsunagu::i64_json(a)))
         .register_fn("f64", |a: Value| ehdl(tsunagu::f64_json(a)))
@@ -38,19 +35,16 @@ fn gen_en(rpmspec: rpm::RPMSpec) -> (Engine, Scope<'static>) {
 }
 
 pub fn update_pkgs(cfg: Manifest) -> Result<()> {
-    for (name, proj) in cfg.project {
-        if let Some(rpm) = proj.rpm {
-            let spec = rpm.spec;
+    for (name, proj) in cfg.project.iter() {
+        if let Some(rpm) = &proj.rpm {
+            let spec = &rpm.spec;
             if rpm.update.is_none() {
                 continue;
             }
-            let mut scr = rpm.update.unwrap();
-            if scr.is_empty() {
-                scr = "update.rhai".into();
-            }
+            let scr = rpm.update.to_owned().unwrap();
             let rpmspec = rpm::RPMSpec::new(name.clone(), &scr, spec)?;
+            debug!("{name}");
             let (en, mut sc) = gen_en(rpmspec);
-
             match en.run_file_with_scope(&mut sc, PathBuf::from(&scr)) {
                 Ok(()) => {
                     let rpm = sc

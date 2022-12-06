@@ -95,7 +95,7 @@ pub struct RpmBuild {
     pub plugin_opts: Option<BTreeMap<String, String>>,
     pub macros: Option<BTreeMap<String, String>>,
     pub opts: Option<BTreeMap<String, String>>,
-    pub update: Option<String>,
+    pub update: Option<PathBuf>,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
@@ -195,6 +195,10 @@ pub fn prefix_config(config: Manifest, prefix: &str) -> Manifest {
                 *sources = PathBuf::from(format!("{}/{}", prefix, sources.display()));
             } else {
                 rpm.sources = Some(PathBuf::from(prefix.to_string()));
+            }
+            if let Some(update) = &mut rpm.update {
+                let update = if update.to_str().is_none() || update.to_str().unwrap().is_empty() { "update.rhai" } else { update.to_str().unwrap() };
+                rpm.update = Some(PathBuf::from(format!("{prefix}/{update}")));
             }
         }
 

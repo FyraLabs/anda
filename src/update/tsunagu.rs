@@ -13,14 +13,14 @@ where
     }
     Ok(o.unwrap())
 }
-pub fn get<T: reqwest::IntoUrl>(url: T) -> Result<String> {
-    Ok(reqwest::blocking::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .user_agent(USER_AGENT)
-        .build()?
+pub fn get(url: &str) -> Result<String> {
+    Ok(ureq::AgentBuilder::new()
+        .redirects(0)
+        .build()
         .get(url)
-        .send()?
-        .text()?)
+        .set("User-Agent", USER_AGENT)
+        .call()?
+        .into_string()?)
 }
 
 pub fn json<T: Into<String>>(txt: T) -> Result<Value> {
@@ -57,23 +57,16 @@ pub fn bool_json(obj: Value) -> Result<bool> {
 
 pub fn gh<T: Into<String>>(repo: T) -> Result<String> {
     let repo = repo.into();
-    let txt = reqwest::blocking::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .user_agent(USER_AGENT)
-        .build()?
-        .get(format!(
-            "https://api.github.com/repos/{}/releases/latest",
-            repo
-        ))
-        .header(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", std::env::var("GITHUB_TOKEN")?),
-        )
-        .header(reqwest::header::USER_AGENT, USER_AGENT)
-        .send()?
-        .text()?;
-    debug!("Got json from {repo}:\n{txt}");
-    let v: Value = serde_json::from_str(&txt)?;
+    let v: Value =
+        ureq::get(format!("https://api.github.com/repos/{}/releases/latest", repo).as_str())
+            .set(
+                "Authorization",
+                format!("Bearer {}", std::env::var("GITHUB_TOKEN")?).as_str(),
+            )
+            .set("User-Agent", USER_AGENT)
+            .call()?
+            .into_json()?;
+    debug!("Got json from {repo}:\n{v}");
     let ver = string_json(v["tag_name"].to_owned())?;
     if let Some(ver) = ver.strip_prefix('v') {
         return Ok(ver.to_string());
@@ -87,7 +80,8 @@ pub fn env(key: &str) -> Result<String> {
 #[derive(Clone)]
 pub struct Req {
     pub url: String,
-    pub headers: reqwest::header::HeaderMap,
+    pub headers: Vec<(String, String)>,
+    pub redirects: i64,
 }
 
 impl CustomType for Req {
@@ -96,9 +90,8 @@ impl CustomType for Req {
             .with_name("Req")
             .with_fn("new_req", Self::new)
             .with_fn("get", |x: Self| ehdl(x.get()))
-            .with_fn("head", |x: &mut Self, k: String, v: String| {
-                ehdl(x.head(k, v))
-            });
+            .with_fn("redirects", |x: &mut Self, i: i64| x.redirects(i))
+            .with_fn("head", |x: &mut Self, k: String, v: String| x.head(k, v));
     }
 }
 
@@ -106,22 +99,22 @@ impl Req {
     pub fn new(url: String) -> Self {
         Self {
             url,
-            headers: reqwest::header::HeaderMap::new(),
+            headers: vec![],
+            redirects: 0,
         }
     }
     pub fn get(self) -> Result<String> {
-        Ok(reqwest::blocking::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()?
-            .get(self.url)
-            .header(reqwest::header::USER_AGENT, USER_AGENT)
-            .headers(self.headers)
-            .send()?
-            .text()?)
+        let r = ureq::AgentBuilder::new().redirects(self.redirects.try_into()?).build().get(&self.url);
+        let mut r = r.set("User-Agent", USER_AGENT);
+        for (k, v) in self.headers {
+            r = r.set(k.as_str(), v.as_str());
+        }
+        Ok(r.call()?.into_string()?)
     }
-    pub fn head(&mut self, key: String, val: String) -> Result<()> {
-        let x = self.headers.try_entry(key)?;
-        x.or_insert(val.parse()?);
-        Ok(())
+    pub fn head(&mut self, key: String, val: String) {
+        self.headers.push((key, val));
+    }
+    pub fn redirects(&mut self, i: i64) {
+        self.redirects = i;
     }
 }
