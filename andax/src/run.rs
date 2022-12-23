@@ -1,11 +1,12 @@
 use crate::update::tsunagu::ehdl;
-use crate::update::{re, rpm, tsunagu};
+use crate::update::{re, rpm, tsunagu, self};
 use anda_config::Manifest;
 use anyhow::Result;
 use log::{debug, warn};
 use rhai::{Engine, EvalAltResult, Map, NativeCallContext, Scope};
-use serde_json::Value;
+use rhai::plugin::*;
 use std::path::PathBuf;
+use std::thread;
 
 pub(crate) fn json(ctx: NativeCallContext, a: String) -> Result<Map, Box<EvalAltResult>> {
     ctx.engine().parse_json(a, true)
@@ -17,26 +18,20 @@ fn gen_en(rpmspec: rpm::RPMSpec) -> (Engine, Scope<'static>) {
     sc.push("USER_AGENT", tsunagu::USER_AGENT);
     sc.push("IS_WIN32", cfg!(windows));
     let mut en = Engine::new();
-    en.register_fn("get", |a: &str| ehdl(tsunagu::get(a)))
-        .register_fn("gh", |a: String| ehdl(tsunagu::gh(a)))
-        .register_fn("env", |a: &str| ehdl(tsunagu::env(a)))
-        .register_fn("json", json)
-        .register_fn("str", |a: Value| ehdl(tsunagu::string_json(a)))
-        .register_fn("i64", |a: Value| ehdl(tsunagu::i64_json(a)))
-        .register_fn("f64", |a: Value| ehdl(tsunagu::f64_json(a)))
-        .register_fn("bool", |a: Value| ehdl(tsunagu::bool_json(a)))
+    en.register_fn("json", json)
         .register_fn("find", |a: &str, b: &str, c: i64| ehdl(re::find(a, b, c)))
         .register_fn("sub", |a: &str, b: &str, c: &str| ehdl(re::sub(a, b, c)))
         .register_fn("sh", crate::io::shell)
         .register_fn("sh", crate::io::shell_cwd)
         .register_fn("sh", crate::io::sh)
         .register_fn("sh", crate::io::sh_cwd)
-        .build_type::<tsunagu::Req>()
+        .register_global_module(exported_module!(update::tsunagu::anda_rhai).into())
         .build_type::<rpm::RPMSpec>();
     (en, sc)
 }
 
 pub fn update_pkgs(cfg: Manifest) -> Result<()> {
+    let mut handlers = vec![];
     for (name, proj) in cfg.project.iter() {
         if let Some(rpm) = &proj.rpm {
             let spec = &rpm.spec;
@@ -45,22 +40,27 @@ pub fn update_pkgs(cfg: Manifest) -> Result<()> {
             }
             let scr = rpm.update.to_owned().unwrap();
             let rpmspec = rpm::RPMSpec::new(name.clone(), &scr, spec)?;
-            debug!("{name}");
-            let (en, mut sc) = gen_en(rpmspec);
-            match en.run_file_with_scope(&mut sc, PathBuf::from(&scr)) {
-                Ok(()) => {
-                    let rpm = sc
-                        .get_value::<rpm::RPMSpec>("rpm")
-                        .expect("No rpm object in rhai scope");
-                    if rpm.changed {
-                        rpm.write()?
+            let name = name.to_owned();
+            handlers.push(thread::spawn(move || -> Result<()> {
+                debug!("Running {name}");
+                let (en, mut sc) = gen_en(rpmspec);
+                match en.run_file_with_scope(&mut sc, PathBuf::from(&scr)) {
+                    Ok(()) => {
+                        let rpm = sc
+                            .get_value::<rpm::RPMSpec>("rpm")
+                            .expect("No rpm object in rhai scope");
+                        if rpm.changed {
+                            rpm.write()?;
+                        }
+                        Ok(())
+                    }
+                    Err(err) => {
+                        let e = *err;
+                        warn!("Fail {name}:\n{e}");
+                        Ok(())
                     }
                 }
-                Err(err) => {
-                    let e = *err;
-                    warn!("Fail {name}:\n{e}");
-                }
-            }
+            }));
         }
     }
     Ok(())
