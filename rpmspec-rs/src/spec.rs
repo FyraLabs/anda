@@ -1,6 +1,7 @@
+use chrono::{DateTime, FixedOffset, NaiveDate};
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::{Display, Formatter}};
 
 use serde::{Deserializer, Serializer};
 
@@ -104,114 +105,112 @@ pub struct Macro(String, String);
 
 /// RPM Macro definition
 pub struct MacroDef {}
-
 #[derive(Debug)]
-pub struct Changelog {
-    // parse from Ddd Mmm dd yyyy (Day of week, Month, Day, Year)
-    pub date: chrono::NaiveDate,
-    pub author: String,
-    /// Version-release of the package
-    pub version: Option<String>,
-    pub changes: Vec<String>,
+struct Changelog {
+    entries: Vec<ChangelogEntry>,
+}
+#[derive(Debug)]
+struct ChangelogEntry {
+    date: NaiveDate,
+    author: String,
+    text: Vec<String>,
+    version: String,
 }
 
 impl Changelog {
-    pub fn parse() {
-        // parse date
+    fn new() -> Changelog {
+        Changelog {
+            entries: Vec::new(),
+        }
+    }
 
-        let string = r#"* Fri Oct 21 2022 John Doe <packager@example.com> - 0.1.6-1.um37
-- local build
-- among us
-* Sat Oct 22 2022 Cappy Ishihara <cappy@cappuchino.xyz>
-- test
-"#
-        .trim_start();
+    fn parse(input: &str) -> Changelog {
+        let mut changelog = Changelog::new();
+        let mut current_entry = ChangelogEntry::new();
+        let mut in_changelog = false;
 
-        // split by *
-        let change = string.split('*').collect::<Vec<&str>>();
-
-        // variable box so we can redefine it later
-
-        for c in change {
-            let mut chdate = Box::new(chrono::NaiveDate::from_ymd(1970, 1, 1));
-            let mut chauthor = String::new();
-            let mut chversion = None;
-            let mut chchanges = Vec::new();
-
-            // if the line is empty, skip it
-            if c.trim().is_empty() {
-                continue;
-            }
-
-            // parse the first line
-            let mut lines = c.lines();
-            if let Some(line) = lines.next() {
-                let line = line.trim_start();
-                println!("line: {}", line);
-
-                // parse date
-
-                // split by the 3rd space (%a %b %d %Y <Author> - <Version>)
-                let split = line.split_whitespace().collect::<Vec<&str>>();
-                let spl = split.split_at(4);
-                let date = spl.0.join(" ");
-                // let date = split.next().unwrap();
-                // println!("date: {}", date);
-
-                let date = chrono::NaiveDate::parse_from_str(&date, "%a %b %d %Y");
-                // println!("date: {:?}", date);
-
-                chdate = Box::new(date.unwrap());
-
-                // parse author
-                let joined = spl.1.join(" ");
-
-                let split2 = joined.split_once(" - ");
-
-                let author = {
-                    if let Some(split2) = split2 {
-                        split2.0.to_string()
-                    } else {
-                        joined.clone()
+        for line in input.lines() {
+            if line.starts_with("%changelog") {
+                in_changelog = true;
+            } else if in_changelog {
+                if line.starts_with("* ") {
+                    if !current_entry.is_empty() {
+                        changelog.entries.push(current_entry);
                     }
-                };
-
-                chauthor = author;
-
-                let version = { split2.map(|split2| split2.1.to_string()) };
-
-                chversion = version
-            }
-
-            // parse the rest of the lines that start with -
-            for line in lines {
-                let line = line.trim_start();
-                if line.starts_with('-') {
-                    chchanges.push(line.strip_prefix('-').unwrap().trim_start().to_string());
+                    current_entry = ChangelogEntry::new();
+                    let parts = line.strip_prefix("* ").unwrap();
+                    // println!("parts: {:?}", parts);
+                    // example of parts: Dec 06 2022 root - 1.2.0-1
+                    // get the date
+                    let date_string = parts.split_whitespace().take(4).collect::<Vec<&str>>().join(" ");
+                    // println!("date_string: {:?}", date_string);
+                    // add filler time to the date string because our string isnt enough to parse
+                    current_entry.date = NaiveDate::parse_from_str(&date_string, "%a %b %d %Y").unwrap();
+                    // get the author.
+                    // we need to split the string by the date string and then take all the elements before -
+                    let (author, version) = parts.split_once(" - ").unwrap();
+                    let author = author.split_whitespace().skip(4).collect::<Vec<&str>>().join(" ");
+                    println!("author: {:?}", author);
+                    current_entry.author = author;
+                    current_entry.version = version.to_string();
+                } else if line.starts_with("- ") {
+                    current_entry.text.push(line.strip_prefix("- ").unwrap().to_string());
                 }
             }
-            /* println!("chdate: {:?}", chdate);
-            println!("chauthor: {}", chauthor);
-            println!("chversion: {:?}", chversion);
-            println!("chchanges: {:?}", chchanges); */
-
-            let changelog = Changelog {
-                date: *chdate,
-                author: chauthor,
-                version: chversion,
-                changes: chchanges,
-            };
-
-            println!("changelog: {:#?}", changelog);
         }
 
-        // println!("change: {:?}", change);
+        if !current_entry.is_empty() {
+            changelog.entries.push(current_entry);
+        }
+
+        changelog
+    }
+}
+
+impl Display for Changelog {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::new();
+        output.push_str("%changelog\n");
+        for entry in &self.entries {
+            output.push_str(&format!(
+                "* {} {} - {}\n",
+                entry.date.format("%a %b %d %Y"),
+                entry.author,
+                entry.version
+            ));
+
+            for line in &entry.text {
+                output.push_str(&format!("- {}\n", line));
+            }
+            output.push_str("\n");
+        }
+        write!(f, "{}", output)
+    }
+}
+
+impl ChangelogEntry {
+    fn new() -> ChangelogEntry {
+        ChangelogEntry {
+            date: NaiveDate::MIN,
+            author: String::new(),
+            text: Vec::new(),
+            version: String::new(),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.date == NaiveDate::MIN
+            && self.author.is_empty()
+            && self.text.is_empty()
     }
 }
 
 #[test]
 fn test_sadas() {
-    Changelog::parse();
+    let ch = include_str!("changelog.txt");
+    let changelog = Changelog::parse(ch);
+    println!("{:#?}", changelog);
+    println!("{}", changelog);
 
     let specfile = include_str!("../../tests/umpkg.spec");
     let spec = SpecParser::parse(Rule::file, specfile).unwrap();

@@ -1,0 +1,21 @@
+%changelog
+* Tue Dec 06 2022 root - 1.2.0-1
+- new version
+
+* Tue Dec 06 2022 root - 1.1.7-1
+- new version
+
+* Sat Nov 19 2022 root - 1.1.6-1
+- new version
+
+* Fri Nov 11 2022 Lleyton Gray <lleyton@fyralabs.com> - 1.1.5-1
+- new version
+
+* Sun Oct 23 2022 Lleyton Gray <lleyton@fyralabs.com> - 1.1.0-1
+- 1.1.0 release
+
+* Tue Jun 14 2022 Jamie Murphy <jamie@fyralabs.com> - 1.0-6
+- I think we finally fixed naming
+
+* Sat Jun 4 2022 Jamie Murphy <jamie@fyralabs.com> - 1.0-1
+- Initial Release
