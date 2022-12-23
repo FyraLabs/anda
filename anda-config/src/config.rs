@@ -70,6 +70,8 @@ pub struct Project {
     pub post_script: Option<PostScript>,
     pub env: Option<BTreeMap<String, String>>,
     pub alias: Option<Vec<String>>,
+    #[serde(default)]
+    pub labels: BTreeMap<String, String>,
 }
 #[derive(Deserialize, Eq, PartialEq, Hash, PartialOrd, Ord, Serialize, Debug, Clone)]
 pub struct PreScript {
@@ -101,6 +103,18 @@ pub struct RpmBuild {
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
 pub struct Docker {
     pub image: BTreeMap<String, DockerImage>, // tag, file
+}
+
+/// Turn a string into a BTreeMap<String, String>
+pub fn parse_map(input: &str) -> Option<BTreeMap<String, String>> {
+    // split by comma
+    let mut map = BTreeMap::new();
+    // check for valid input
+    for item in input.split(',') {
+        let (k, v) = item.split_once('=')?;
+        map.insert(k.to_string(), v.to_string());
+    }
+    Some(map)
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
@@ -197,7 +211,11 @@ pub fn prefix_config(config: Manifest, prefix: &str) -> Manifest {
                 rpm.sources = Some(PathBuf::from(prefix.to_string()));
             }
             if let Some(update) = &mut rpm.update {
-                let update = if update.to_str().is_none() || update.to_str().unwrap().is_empty() { "update.rhai" } else { update.to_str().unwrap() };
+                let update = if update.to_str().is_none() || update.to_str().unwrap().is_empty() {
+                    "update.rhai"
+                } else {
+                    update.to_str().unwrap()
+                };
                 rpm.update = Some(PathBuf::from(format!("{prefix}/{update}")));
             }
         }
@@ -286,5 +304,23 @@ mod test_parser {
         let config = load_from_string(config);
 
         println!("{:#?}", config);
+    }
+
+    #[test]
+    fn test_map() {
+        let m: BTreeMap<String, String> = [("foo".to_string(), "bar".to_string())].into();
+
+        assert_eq!(parse_map("foo=bar"), Some(m));
+
+        let multieq: BTreeMap<String, String> = [("foo".to_string(), "bar=baz".to_string())].into();
+
+        assert_eq!(parse_map("foo=bar=baz"), Some(multieq));
+
+        let multi: BTreeMap<String, String> = [
+            ("foo".to_string(), "bar".to_string()),
+            ("baz".to_string(), "qux".to_string()),
+        ].into();
+
+        assert_eq!(parse_map("foo=bar,baz=qux"), Some(multi));
     }
 }
