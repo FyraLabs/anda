@@ -8,6 +8,8 @@ license = "MIT"
 exclude = [
     "anda-build",
     "anda-config",
+    "rpmspec-rs",
+    "andax",
     ".devcontainer",
     ".github",
     ".flatpak-builder/*"
@@ -56,4 +58,5 @@ members = [
     "anda-config",
     "xtask",
     "rpmspec-rs",
+    "andax",
 ]

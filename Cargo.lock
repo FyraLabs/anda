@@ -86,6 +86,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "andax"
+version = "0.1.0"
+dependencies = [
+ "anda-config",
+ "anyhow",
+ "lazy_static",
+ "log",
+ "regex",
+ "rhai",
+ "serde",
+ "serde_json",
+ "ureq",
+]
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -96,9 +111,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.66"
+version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "216261ddc8289130e551ddcd5ce8a064710c0d064a4d2895c67151c92b5443f6"
+checksum = "2cb2f989d18dd141ab8ae82f64d1a8cdd37e0840f73a406896cf5e99502fab61"
 
 [[package]]
 name = "async-trait"
@@ -1380,6 +1395,7 @@ dependencies = [
  "instant",
  "num-traits",
  "rhai_codegen",
+ "serde",
  "smallvec",
  "smartstring",
 ]
@@ -1582,6 +1598,9 @@ name = "smallvec"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "smartstring"
@@ -1590,6 +1609,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3fb72c633efbaa2dd666986505016c32c3044395ceaf881518399d2f4127ee29"
 dependencies = [
  "autocfg",
+ "serde",
  "static_assertions",
  "version_check",
 ]
