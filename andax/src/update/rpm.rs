@@ -65,7 +65,7 @@ impl RPMSpec {
         self.changed = true;
         Ok(())
     }
-    pub fn write(self) -> Result<()> {
+    pub fn write(self) -> std::io::Result<()> {
         if self.changed {
             fs::write(self.spec, self.f)?;
         }

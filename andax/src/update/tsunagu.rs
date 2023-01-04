@@ -65,8 +65,8 @@ pub mod anda_rhai {
                 .with_name("Req")
                 .with_fn("new_req", Self::new)
                 .with_fn("get", |x: Self| ehdl(x.get()))
-                .with_fn("redirects", |x: &mut Self, i: i64| x.redirects(i))
-                .with_fn("head", |x: &mut Self, k: String, v: String| x.head(k, v));
+                .with_fn("redirects", Self::redirects)
+                .with_fn("head", Self::head);
         }
     }
 
@@ -89,13 +89,11 @@ pub mod anda_rhai {
             }
             ehdl(ehdl(r.call())?.into_string())
         }
-        pub fn head(&mut self, key: String, val: String) -> &mut Self {
+        pub fn head(&mut self, key: String, val: String) {
             self.headers.push((key, val));
-            self
         }
-        pub fn redirects(&mut self, i: i64) -> &mut Self {
+        pub fn redirects(&mut self, i: i64) {
             self.redirects = i;
-            self
         }
     }
 }

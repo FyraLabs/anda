@@ -1,6 +1,7 @@
-use std::process::Command;
-use rhai::EvalAltResult;
 use crate::update::tsunagu::ehdl;
+use rhai::plugin::*;
+use rhai::EvalAltResult;
+use std::process::Command;
 
 macro_rules! _sh_out {
     ($o:expr) => {
@@ -40,15 +41,27 @@ type T = Result<(i32, String, String), Box<EvalAltResult>>;
 /// ```
 /// Returns (rc, stdout, stderr)
 /// We will let rhai handle all the nasty things.
-pub(crate) fn shell(cmd: &str) -> T {
-    _sh_out!(ehdl(_cmd!(cmd).output())?)
-}
-pub(crate) fn shell_cwd(cmd: &str, cwd: &str) -> T {
-    _sh_out!(ehdl(_cmd!(cmd).current_dir(cwd).output())?)
-}
-pub(crate) fn sh(cmd: Vec<&str>) -> T {
-    _sh_out!(ehdl(Command::new(cmd[0]).args(&cmd[1..]).output())?)
-}
-pub(crate) fn sh_cwd(cmd: Vec<&str>, cwd: &str) -> T {
-    _sh_out!(ehdl(Command::new(cmd[0]).args(&cmd[1..]).current_dir(cwd).output())?)
+#[export_module]
+pub mod anda_rhai {
+    #[rhai_fn(return_raw, name = "sh")]
+    pub(crate) fn shell(cmd: &str) -> T {
+        _sh_out!(ehdl(_cmd!(cmd).output())?)
+    }
+    #[rhai_fn(return_raw, name = "sh")]
+    pub(crate) fn shell_cwd(cmd: &str, cwd: &str) -> T {
+        _sh_out!(ehdl(_cmd!(cmd).current_dir(cwd).output())?)
+    }
+    #[rhai_fn(return_raw, name = "sh")]
+    pub(crate) fn sh(cmd: Vec<&str>) -> T {
+        _sh_out!(ehdl(Command::new(cmd[0]).args(&cmd[1..]).output())?)
+    }
+    #[rhai_fn(return_raw, name = "sh")]
+    pub(crate) fn sh_cwd(cmd: Vec<&str>, cwd: &str) -> T {
+        _sh_out!(ehdl(
+            Command::new(cmd[0])
+                .args(&cmd[1..])
+                .current_dir(cwd)
+                .output()
+        )?)
+    }
 }
