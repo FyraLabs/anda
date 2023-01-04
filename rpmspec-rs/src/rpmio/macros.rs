@@ -1,3 +1,14 @@
+/// Welcome to the world of chaos
+/// The code was kinda ported from C
+/// see gh `rpm-software-management/rpm` -> `rpmio/macro.c`
+/// 
+/// == Guide to read docs ==
+/// "=>" indicates rust fn behaviours
+/// "->" indicates original C fn behaviours
+/// 
+/// Without pointers, a lot of functions were subjected to
+/// change (some rewritten, some get to take a shower)
+
 use std::{sync::{Arc, Mutex, MutexGuard}, collections::HashMap, io::{BufRead, BufReader}};
 use anyhow::{anyhow, bail, Ok, Result};
 use crate::{error::{self, ParserError}, spec::Macro};
@@ -80,26 +91,29 @@ impl SaiGaai {
         Ok(mc.lock().expect("Can't lock mc"))
     }
     fn find_entry(&self, mc: Context, name: String) -> Result<Entry> {
-        // original code using binary search
+        // original code use binary search
         let ctx = Self::get_ctx(&mc)?;
         Ok(ctx.table.get(&name).ok_or(ParserError::UnknownMacro(self.line, name))?.clone())
     }
     fn new_entry(&self, mc: Context, key: String, value: Entry) -> Result<()> {
-        // we don't have to extend our macro table,
-        // instead we just get it out of the mutex
+        // no need extend macro table
+        // instead get it out of the mutex
         let mut ctx = Self::get_ctx(&mc)?;
         ctx.n += 1;
         if let Some(x) = ctx.table.insert(key, value) {
-            warn!("Macro duplicated: {}", x.name);
+            // For debugging. Actually it's normal,
+            // but dunno why happens itfp.
+            debug!("Macro duplicated: {}", x.name);
         }
         Ok(())
     }
 
-    // * fgets(3) analogue that reads \ continuations. Last newline always trimmed.
-    // in this case, we probably prefer a bufread to throw newlines to us.
-    // then we trim and check for \, but also {[( stuff like\n these )]}
-    // we don't need the size parameter *I think*...
-    // I mean it says it's the *inbut* (yes, inbut) buffer size (bytes).
+    /// -> fgets(3) analogue that reads \ continuations. Last newline always trimmed.
+    /// 
+    /// in this case, we probably prefer a bufread to throw newlines to us.
+    /// then we trim and check for \, but also {[( stuff like\n these )]}
+    /// we don't need the size parameter *I think*...
+    /// I mean it says it's the *inbut* (yes, inbut) buffer size (bytes).
     fn rdcl(mut f: impl BufRead) -> Result<String> {
         let mut buf = String::new();
         let mut bc: u16 = 0; // { }
@@ -143,5 +157,39 @@ impl SaiGaai {
         }
         Ok(buf.trim_end().to_string())
     }
+    
+    /// => Return length of text between `pl` and `pr` inclusive.
+    /// 
+    /// -> Return text between `pl` and matching `pr` characters.
+    /// 
+    /// Nyu reinvented the wheel.
+    /// NOTE: expect `pl` to be first char
+    fn matchchar(text: &str, pl: char, pr: char) -> usize {
+        let mut lvl = 0;
+        let mut skip = false;
+        for (i, c) in text.chars().enumerate() {
+            if skip {
+                skip = false;
+                continue;
+            }
+            if c == '\\' {
+                skip = true;
+                continue;
+            }
+            if c == pr {
+                // why rust nu ++ and -- ???
+                lvl -= 1;
+                if lvl <= 0 {
+                    return i+1;
+                }
+            } else if c == pl {
+                lvl += 1;
+            }
+        }
+        0
+    }
 
+    fn mbErr(mb: MacroBuf, error: i64, fmt: &str, args: Vec<>) {
+        todo!();
+    }
 }
