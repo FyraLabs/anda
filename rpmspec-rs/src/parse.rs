@@ -9,7 +9,6 @@ use std::{
     process::Command, hash::Hash, fs::File,
 };
 
-mod macros;
 
 //? https://rpm-software-management.github.io/rpm/manual/spec.html
 const PREAMBLES: &[&str] = &[
