@@ -4,8 +4,11 @@ use crate::update::{self, re, rpm, tsunagu};
 use anda_config::Manifest;
 use anyhow::Result;
 use log::{debug, error, warn};
+use regex::Regex;
 use rhai::plugin::*;
 use rhai::{Engine, EvalAltResult, Map, NativeCallContext, Scope};
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::thread;
 
@@ -13,9 +16,8 @@ pub(crate) fn json(ctx: NativeCallContext, a: String) -> Result<Map, Box<EvalAlt
     ctx.engine().parse_json(a, true)
 }
 
-fn gen_en(rpmspec: rpm::RPMSpec) -> (Engine, Scope<'static>) {
+fn gen_en() -> (Engine, Scope<'static>) {
     let mut sc = Scope::new();
-    sc.push("rpm", rpmspec);
     sc.push("USER_AGENT", tsunagu::USER_AGENT);
     sc.push("IS_WIN32", cfg!(windows));
     let mut en = Engine::new();
@@ -28,7 +30,64 @@ fn gen_en(rpmspec: rpm::RPMSpec) -> (Engine, Scope<'static>) {
     (en, sc)
 }
 
-pub fn update_pkgs(cfg: Manifest) -> Result<()> {
+pub fn traceback(name: &String, scr: &PathBuf, err: EvalAltResult) {
+    let pos = err.position();
+    let line = pos.line();
+    let col = pos.position().unwrap_or(0);
+    if let Some(line) = line {
+        // Print code
+        warn!("{name}: {}:{line}:{col}", scr.display());
+        match File::open(scr) {
+            Ok(f) => {
+                let f = BufReader::new(f);
+                for (n, sl) in f.lines().enumerate() {
+                    if n != line {
+                        continue;
+                    }
+                    if let Err(e) = sl {
+                        error!("{name}: Cannot read line: {e}");
+                        break;
+                    }
+                    let sl = sl.unwrap();
+                    let re = Regex::new(r"\b.+?\b").unwrap();
+                    let m = re
+                        .find_at(sl.as_str(), col + 1)
+                        .expect("Can't match code with regex");
+                    warn!(" {line} | {sl}");
+                    warn!(
+                        " {} | {}{}",
+                        " ".repeat(line.to_string().len()),
+                        " ".repeat(col - 1),
+                        "^".repeat(m.range().len())
+                    );
+                    break;
+                }
+            }
+            Err(e) => error!("{name}: Cannot open `{}`: {e}", scr.display()),
+        }
+    } else {
+        warn!("{name}: {} (no position data)", scr.display());
+    }
+    warn!("{name}: {err}");
+}
+
+pub fn run<'a, F>(name: &'a String, scr: &'a PathBuf, f: F) -> Option<Scope<'a>>
+where
+    F: FnOnce(&mut Scope<'a>),
+{
+    let (en, mut sc) = gen_en();
+    f(&mut sc);
+    debug!("Running {name}");
+    match en.run_file_with_scope(&mut sc, scr.clone()) {
+        Ok(()) => Some(sc.to_owned()),
+        Err(err) => {
+            traceback(name, scr, *err);
+            None
+        }
+    }
+}
+
+pub fn update_rpms(cfg: Manifest) -> Result<()> {
     let mut handlers = vec![];
     for (name, proj) in cfg.project.iter() {
         if let Some(rpm) = &proj.rpm {
@@ -39,40 +98,26 @@ pub fn update_pkgs(cfg: Manifest) -> Result<()> {
             let scr = rpm.update.to_owned().unwrap();
             let rpmspec = rpm::RPMSpec::new(name.clone(), &scr, spec)?;
             let name = name.to_owned();
-            handlers.push(thread::spawn(move || -> std::io::Result<()> {
-                debug!("Running {name}");
-                let (en, mut sc) = gen_en(rpmspec);
-                match en.run_file_with_scope(&mut sc, PathBuf::from(&scr)) {
-                    Ok(()) => {
-                        let rpm = sc
-                            .get_value::<rpm::RPMSpec>("rpm")
-                            .expect("No rpm object in rhai scope");
-                        if rpm.changed {
-                            rpm.write()?;
+            handlers.push(thread::spawn(move || {
+                let sc = run(&name, &scr, |sc| { sc.push("rpm", rpmspec); });
+                if let Some(sc) = sc {
+                    let rpm = sc
+                        .get_value::<rpm::RPMSpec>("rpm")
+                        .expect("No rpm object in rhai scope");
+                    if rpm.changed {
+                        if let Err(e) = rpm.write() {
+                            error!("{name}: Failed to write RPM:");
+                            error!("{name}: {e}");
                         }
-                        Ok(())
-                    }
-                    Err(err) => {
-                        let e = *err;
-                        warn!("Fail {name}:\n{e}");
-                        Ok(())
                     }
                 }
             }));
         }
     }
 
-    // FIXME put me back into the threads!
-    let mut errors = vec![];
     for hdl in handlers {
         if let Err(e) = hdl.join() {
-            errors.push(e);
-        }
-    }
-    if !errors.is_empty() {
-        error!("During andax: Error(s) from rpm.write():");
-        for e in errors {
-            error!("{:?}", e);
+            error!("Cannot join thread: {e:?}");
         }
     }
 
@@ -88,7 +133,8 @@ mod tests {
         // FIXME can we avoid clone()
         let name = rpmspec.name.clone();
         let scr = rpmspec.chkupdate.clone();
-        let (en, mut sc) = gen_en(rpmspec);
+        let (en, mut sc) = gen_en();
+        sc.push("rpm", rpmspec);
 
         match en.run_file_with_scope(&mut sc, scr) {
             Ok(()) => {
