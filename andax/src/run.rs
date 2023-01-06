@@ -71,10 +71,11 @@ pub fn traceback(name: &String, scr: &PathBuf, err: EvalAltResult) {
     warn!("{name}: {err}");
 }
 
-pub fn run<'a, F>(name: &'a String, scr: &'a PathBuf, f: F) -> Option<Scope<'a>>
-where
-    F: FnOnce(&mut Scope<'a>),
-{
+pub fn run<'a>(
+    name: &'a String,
+    scr: &'a PathBuf,
+    f: impl FnOnce(&mut Scope<'a>),
+) -> Option<Scope<'a>> {
     let (en, mut sc) = gen_en();
     f(&mut sc);
     debug!("Running {name}");
@@ -98,8 +99,14 @@ pub fn update_rpms(cfg: Manifest) -> Result<()> {
             let scr = rpm.update.to_owned().unwrap();
             let rpmspec = rpm::RPMSpec::new(name.clone(), &scr, spec)?;
             let name = name.to_owned();
-            handlers.push(thread::spawn(move || {
-                let sc = run(&name, &scr, |sc| { sc.push("rpm", rpmspec); });
+            handlers.push(thread::Builder::new().name(name).spawn(move || {
+                let name = thread::current()
+                    .name()
+                    .expect("No name for andax thread??")
+                    .to_string();
+                let sc = run(&name, &scr, |sc| {
+                    sc.push("rpm", rpmspec);
+                });
                 if let Some(sc) = sc {
                     let rpm = sc
                         .get_value::<rpm::RPMSpec>("rpm")
@@ -111,13 +118,15 @@ pub fn update_rpms(cfg: Manifest) -> Result<()> {
                         }
                     }
                 }
-            }));
+            })?);
         }
     }
 
     for hdl in handlers {
+        let th = hdl.thread();
+        let name = th.name().expect("No name for andax thread??").to_string();
         if let Err(e) = hdl.join() {
-            error!("Cannot join thread: {e:?}");
+            error!("Cannot join thread `{name}`: {e:?}");
         }
     }
 

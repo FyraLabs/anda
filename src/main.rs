@@ -109,7 +109,7 @@ async fn main() -> Result<()> {
             println!("build_matrix={}", serde_json::to_string(&entries)?);
         }
         Command::Update => {
-            update::update_pkgs(anda_config::load_from_file(&cli.config).unwrap())?;
+            update::update_rpms(anda_config::load_from_file(&cli.config).unwrap())?;
         }
     }
     Ok(())

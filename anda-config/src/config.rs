@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use log::debug;
+use log::{debug, trace};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -163,7 +163,7 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
         let entry = entry.unwrap();
 
         // check if path is same path as config file
-        if entry.path().strip_prefix("./").unwrap() == path {
+        if entry.path().strip_prefix("./").expect("Fail to strip `./` (absolute paths?)") == path {
             continue;
         }
 
@@ -187,7 +187,7 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
         }
     }
 
-    debug!("Loaded config: {:#?}", config);
+    trace!("Loaded config: {:#?}", config);
     //let config = config.map_err(ProjectError::HclError);
     generate_alias(&mut config);
 
@@ -319,7 +319,8 @@ mod test_parser {
         let multi: BTreeMap<String, String> = [
             ("foo".to_string(), "bar".to_string()),
             ("baz".to_string(), "qux".to_string()),
-        ].into();
+        ]
+        .into();
 
         assert_eq!(parse_map("foo=bar,baz=qux"), Some(multi));
     }
