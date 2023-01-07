@@ -42,7 +42,8 @@ pub fn update_rpms(cfg: Manifest) -> Result<()> {
         let th = hdl.thread();
         let name = th.name().expect("No name for andax thread??").to_string();
         if let Err(e) = hdl.join() {
-            error!("Cannot join thread `{name}`: {e:?}");
+            let e = e.as_ref();
+            error!("Cannot join thread `{name}`");
         }
     }
 

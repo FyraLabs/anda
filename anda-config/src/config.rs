@@ -163,7 +163,12 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
         let entry = entry.unwrap();
 
         // check if path is same path as config file
-        if entry.path().strip_prefix("./").expect("Fail to strip `./` (absolute paths?)") == path {
+        if entry
+            .path()
+            .strip_prefix("./")
+            .expect("Fail to strip `./` (absolute paths?)")
+            == path
+        {
             continue;
         }
 

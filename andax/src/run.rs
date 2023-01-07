@@ -1,19 +1,44 @@
-use crate::io;
-use crate::update::tsunagu::ehdl;
-use crate::update::{self, re, rpm, tsunagu};
-use anda_config::Manifest;
+use crate::{
+    error::AndaxError,
+    io,
+    update::{
+        self, re, rpm,
+        tsunagu::{self, ehdl},
+    },
+};
 use anyhow::Result;
-use log::{debug, error, warn};
+use lazy_static::lazy_static;
+use log::{debug, error, trace, warn};
 use regex::Regex;
-use rhai::plugin::*;
-use rhai::{Engine, EvalAltResult, Map, NativeCallContext, Scope};
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
-use std::thread;
+use rhai::{plugin::*, Engine, EvalAltResult, Map, NativeCallContext, Scope};
+use std::{
+    fs::File,
+    io::{stdout, BufRead, BufReader},
+    path::PathBuf,
+    thread,
+};
 
 pub(crate) fn json(ctx: NativeCallContext, a: String) -> Result<Map, Box<EvalAltResult>> {
     ctx.engine().parse_json(a, true)
+}
+
+lazy_static! {
+    static ref FN_NAME: Regex = Regex::new(r"[^(]+").unwrap();
+}
+
+fn rf<T>(ctx: NativeCallContext, res: Result<T, anyhow::Error>) -> Result<T, Box<EvalAltResult>> {
+    res.map_err(|err| {
+        let rhai_fn = ctx.fn_name();
+        let fn_src = ctx.source().unwrap_or("");
+        Box::new(EvalAltResult::ErrorRuntime(
+            Dynamic::from(AndaxError::RustError(
+                rhai_fn.to_string(),
+                fn_src.to_string(),
+                std::rc::Rc::from(err),
+            )),
+            ctx.position(),
+        ))
+    })
 }
 
 fn gen_en() -> (Engine, Scope<'static>) {
@@ -31,12 +56,13 @@ fn gen_en() -> (Engine, Scope<'static>) {
 }
 
 pub fn traceback(name: &String, scr: &PathBuf, err: EvalAltResult) {
+    trace!("{name}: Generating traceback");
     let pos = err.position();
     let line = pos.line();
     let col = pos.position().unwrap_or(0);
+    let stdout = stdout();
     if let Some(line) = line {
         // Print code
-        warn!("{name}: {}:{line}:{col}", scr.display());
         match File::open(scr) {
             Ok(f) => {
                 let f = BufReader::new(f);
@@ -53,6 +79,8 @@ pub fn traceback(name: &String, scr: &PathBuf, err: EvalAltResult) {
                     let m = re
                         .find_at(sl.as_str(), col + 1)
                         .expect("Can't match code with regex");
+                    let lock = stdout.lock();
+                    warn!("{name}: {}:{line}:{col}", scr.display());
                     warn!(" {line} | {sl}");
                     warn!(
                         " {} | {}{}",
@@ -86,51 +114,6 @@ pub fn run<'a>(
             None
         }
     }
-}
-
-pub fn update_rpms(cfg: Manifest) -> Result<()> {
-    let mut handlers = vec![];
-    for (name, proj) in cfg.project.iter() {
-        if let Some(rpm) = &proj.rpm {
-            let spec = &rpm.spec;
-            if rpm.update.is_none() {
-                continue;
-            }
-            let scr = rpm.update.to_owned().unwrap();
-            let rpmspec = rpm::RPMSpec::new(name.clone(), &scr, spec)?;
-            let name = name.to_owned();
-            handlers.push(thread::Builder::new().name(name).spawn(move || {
-                let name = thread::current()
-                    .name()
-                    .expect("No name for andax thread??")
-                    .to_string();
-                let sc = run(&name, &scr, |sc| {
-                    sc.push("rpm", rpmspec);
-                });
-                if let Some(sc) = sc {
-                    let rpm = sc
-                        .get_value::<rpm::RPMSpec>("rpm")
-                        .expect("No rpm object in rhai scope");
-                    if rpm.changed {
-                        if let Err(e) = rpm.write() {
-                            error!("{name}: Failed to write RPM:");
-                            error!("{name}: {e}");
-                        }
-                    }
-                }
-            })?);
-        }
-    }
-
-    for hdl in handlers {
-        let th = hdl.thread();
-        let name = th.name().expect("No name for andax thread??").to_string();
-        if let Err(e) = hdl.join() {
-            error!("Cannot join thread `{name}`: {e:?}");
-        }
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]

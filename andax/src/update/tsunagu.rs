@@ -1,7 +1,9 @@
-use log::debug;
+use std::thread;
+
+use log::{debug, warn};
+use rhai::plugin::*;
 use rhai::{CustomType, EvalAltResult};
 use serde_json::Value;
-use rhai::plugin::*;
 
 type RhaiRes<T> = Result<T, Box<EvalAltResult>>;
 pub fn ehdl<A, B>(o: Result<A, B>) -> RhaiRes<A>
@@ -9,6 +11,8 @@ where
     B: std::fmt::Debug + std::fmt::Display,
 {
     if let Err(e) = o {
+        let th = thread::current();
+        // warn!("{}: Error from function");
         return Err(e.to_string().into());
     }
     Ok(o.unwrap())
@@ -19,26 +23,35 @@ pub mod anda_rhai {
 
     #[rhai_fn(return_raw)]
     pub fn get(url: &str) -> RhaiRes<String> {
-        ehdl(ehdl(ureq::AgentBuilder::new()
-            .redirects(0)
-            .build()
-            .get(url)
-            .set("User-Agent", USER_AGENT)
-            .call())?
-            .into_string())
+        ehdl(
+            ehdl(
+                ureq::AgentBuilder::new()
+                    .redirects(0)
+                    .build()
+                    .get(url)
+                    .set("User-Agent", USER_AGENT)
+                    .call(),
+            )?
+            .into_string(),
+        )
     }
 
     #[rhai_fn(return_raw)]
     pub fn gh(repo: &str) -> RhaiRes<String> {
-        let v: Value =
-            ehdl(ehdl(ureq::get(format!("https://api.github.com/repos/{}/releases/latest", repo).as_str())
+        let v: Value = ehdl(
+            ehdl(
+                ureq::get(
+                    format!("https://api.github.com/repos/{}/releases/latest", repo).as_str(),
+                )
                 .set(
                     "Authorization",
                     format!("Bearer {}", env("GITHUB_TOKEN")?).as_str(),
                 )
                 .set("User-Agent", USER_AGENT)
-                .call())?
-                .into_json())?;
+                .call(),
+            )?
+            .into_json(),
+        )?;
         debug!("Got json from {repo}:\n{v}");
         let binding = v["tag_name"].to_owned();
         let ver = binding.as_str().unwrap_or_default();
