@@ -1,9 +1,9 @@
 use std::thread;
 
-use log::debug;
 use rhai::plugin::*;
 use rhai::{CustomType, EvalAltResult};
 use serde_json::Value;
+use tracing::debug;
 
 type RhaiRes<T> = Result<T, Box<EvalAltResult>>;
 pub fn ehdl<A, B>(o: Result<A, B>) -> RhaiRes<A>

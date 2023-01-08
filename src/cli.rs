@@ -1,7 +1,6 @@
 // This module is included in the build.rs file so we can generate some CLI completions/man pages
 // If you want to add a crate in here, also add it to build-dependencies
 
-use anyhow::Result;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 use std::{path::PathBuf, str::FromStr};

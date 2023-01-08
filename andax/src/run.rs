@@ -3,7 +3,7 @@ use crate::{
     io,
     update::{self, re, rpm, tsunagu},
 };
-use log::{debug, error, trace, warn};
+use tracing::{debug, error, trace, warn};
 use regex::Regex;
 use rhai::{plugin::*, Engine, EvalAltResult, NativeCallContext as CallCtx, Scope};
 use std::{
@@ -18,7 +18,7 @@ fn json(ctx: CallCtx, a: String) -> Result<rhai::Map, Box<EvalAltResult>> {
 }
 
 
-pub(crate) fn rf<T>(ctx: CallCtx, res: anyhow::Result<T>) -> Result<T, Box<EvalAltResult>>
+pub(crate) fn rf<T>(ctx: CallCtx, res: color_eyre::Result<T>) -> Result<T, Box<EvalAltResult>>
 where
     T: rhai::Variant + Clone,
 {
@@ -40,8 +40,8 @@ fn gen_en() -> (Engine, Scope<'static>) {
     sc.push("IS_WIN32", cfg!(windows));
     let mut en = Engine::new();
     en.register_fn("json", json)
-        .register_fn("find", |ctx, a, b, c| rf(ctx, re::find(a, b, c)))
-        .register_fn("sub", |ctx, a, b, c| rf(ctx, re::sub(a, b, c)))
+        // .register_fn("find", |ctx, a, b, c| rf(ctx, re::find(a, b, c)))
+        // .register_fn("sub", |ctx, a, b, c| rf(ctx, re::sub(a, b, c)))
         .register_global_module(exported_module!(io::anda_rhai).into())
         .register_global_module(exported_module!(update::tsunagu::anda_rhai).into())
         .build_type::<rpm::RPMSpec>();
@@ -55,7 +55,7 @@ pub fn _tb(
     pos: Position,
     rhai_fn: &str,
     fn_src: &str,
-    oerr: Option<Rc<anyhow::Error>>,
+    oerr: Option<Rc<color_eyre::Report>>,
 ) {
     let line = pos.line();
     let col = pos.position().unwrap_or(0);
@@ -154,7 +154,7 @@ pub fn run<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::{anyhow, Result};
+    use color_eyre::{Result, Report};
 
     fn run_update(rpmspec: rpm::RPMSpec) -> Result<()> {
         // FIXME can we avoid clone()
@@ -176,7 +176,7 @@ mod tests {
             Err(err) => {
                 let e = *err;
                 warn!("Fail {}:\n{e}", name);
-                Err(anyhow!(e.to_string()))
+                Err(Report::msg(e.to_string()))
             }
         }
     }

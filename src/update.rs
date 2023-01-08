@@ -1,7 +1,7 @@
 use anda_config::Manifest;
 use andax::{run, update::rpm::RPMSpec};
-use anyhow::Result;
-use log::error;
+use color_eyre::Result;
+use tracing::error;
 use std::thread;
 
 pub fn update_rpms(cfg: Manifest) -> Result<()> {
@@ -41,8 +41,8 @@ pub fn update_rpms(cfg: Manifest) -> Result<()> {
     for hdl in handlers {
         let th = hdl.thread();
         let name = th.name().expect("No name for andax thread??").to_string();
-        if let Err(e) = hdl.join() {
-            let e = e.as_ref();
+        if let Err(_e) = hdl.join() {
+            // let e = e.as_ref();
             error!("Cannot join thread `{name}`");
         }
     }

@@ -1,6 +1,4 @@
-use anyhow::Result;
-
-use log::{debug, trace};
+use tracing::{debug, trace};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -133,7 +131,7 @@ pub struct Flatpak {
     pub post_script: Option<PostScript>,
 }
 
-pub fn to_string(config: Manifest) -> Result<String> {
+pub fn to_string(config: Manifest) -> Result<String, hcl::Error> {
     let config = hcl::to_string(&config)?;
     Ok(config)
 }

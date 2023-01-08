@@ -8,9 +8,9 @@ use clap::clap_derive::ValueEnum;
 use tempfile::TempDir;
 
 use crate::util::CommandLog;
-use anyhow::{anyhow, Result};
+use color_eyre::{Result, Report};
 use async_trait::async_trait;
-use log::{debug, info};
+use tracing::{debug, info};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -104,12 +104,12 @@ pub enum RPMBuilder {
 }
 
 impl FromStr for RPMBuilder {
-    type Err = anyhow::Error;
+    type Err = Report;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "mock" => Ok(RPMBuilder::Mock),
             "rpmbuild" => Ok(RPMBuilder::Rpmbuild),
-            _ => Err(anyhow!("Invalid RPM builder: {}", s)),
+            _ => Err(Report::msg(format!("Invalid RPM builder: {}", s))),
         }
     }
 }
@@ -419,7 +419,7 @@ impl RPMSpecBackend for MockBackend {
             }
         }
 
-        Err(anyhow!("Failed to find srpm"))
+        Err(Report::msg("Failed to find srpm"))
     }
     async fn build_rpm(&self, spec: &Path) -> Result<Vec<PathBuf>> {
         let mut cmd = self.mock();

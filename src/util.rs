@@ -3,8 +3,10 @@
 use std::{collections::BTreeMap, fs::read_to_string, path::Path};
 
 use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
-use anyhow::Result;
+use color_eyre::Result;
 use async_trait::async_trait;
+use cmd_lib::log;
+use color_eyre::Report;
 use console::style;
 use lazy_static::lazy_static;
 use log::{debug, info};
@@ -193,7 +195,7 @@ impl CommandLog for Command {
                     // exit program
                     eprintln!("Received ctrl-c, exiting");
                     // std::process::exit(127);
-                    Err(anyhow::anyhow!("Received ctrl-c, exiting"))
+                    Err(Report::msg("Received ctrl-c, exiting"))
                 }
                 w = output.wait() => {
 
@@ -204,7 +206,7 @@ impl CommandLog for Command {
                         Ok(())
                     } else {
                         info!("Command exited with status: {}", status);
-                        Err(anyhow::anyhow!("Command exited with status: {}", status))
+                        Err(Report::msg(format!("Command exited with status: {}", status)))
                     }
                     // info!("Child process finished");
                 }
@@ -387,4 +389,15 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
     println!("{}", anda_config::config::to_string(config)?);
 
     Ok(())
+}
+
+pub(crate) fn convert_filter(filter: log::LevelFilter) -> tracing_subscriber::filter::LevelFilter {
+    match filter {
+        log::LevelFilter::Off => tracing_subscriber::filter::LevelFilter::OFF,
+        log::LevelFilter::Error => tracing_subscriber::filter::LevelFilter::ERROR,
+        log::LevelFilter::Warn => tracing_subscriber::filter::LevelFilter::WARN,
+        log::LevelFilter::Info => tracing_subscriber::filter::LevelFilter::INFO,
+        log::LevelFilter::Debug => tracing_subscriber::filter::LevelFilter::DEBUG,
+        log::LevelFilter::Trace => tracing_subscriber::filter::LevelFilter::TRACE,
+    }
 }

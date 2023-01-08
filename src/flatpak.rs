@@ -1,15 +1,14 @@
 #![allow(dead_code)]
-use anyhow::{anyhow, Result};
+use crate::util::CommandLog;
+use color_eyre::Report;
 use flatpak::application::FlatpakApplication;
 use std::{
     env,
     fmt::Display,
     path::{Path, PathBuf},
 };
-
 use tokio::process::Command;
-
-use crate::util::CommandLog;
+type Result<T> = std::result::Result<T, Report>;
 
 pub enum FlatpakArtifact {
     Ref(String),
@@ -81,14 +80,14 @@ impl FlatpakBuilder {
     pub async fn build(&self, manifest: &Path) -> Result<String> {
         // we parse the flatpak metadata file
         let flatpak_meta = FlatpakApplication::load_from_file(manifest.display().to_string())
-            .map_err(|e| anyhow!(e))?;
+            .map_err(color_eyre::Report::msg)?;
 
         // create the flatpak output folders
         let output_dir = env::current_dir()?
             .join(".flatpak-builder/build")
             .join(&flatpak_meta.app_id);
-        std::fs::create_dir_all(&output_dir).map_err(|e| anyhow!(e))?;
-        std::fs::create_dir_all(&self.output_repo).map_err(|e| anyhow!(e))?;
+        std::fs::create_dir_all(&output_dir)?;
+        std::fs::create_dir_all(&self.output_repo)?;
 
         // build the flatpak
         let mut flatpak = Command::new("flatpak-builder");
@@ -117,7 +116,7 @@ impl FlatpakBuilder {
     }
 
     pub async fn bundle(&self, app_id: &str) -> Result<PathBuf> {
-        std::fs::create_dir_all(&self.bundles_dir).map_err(|e| anyhow!(e))?;
+        std::fs::create_dir_all(&self.bundles_dir)?;
         let bundle_path = self.bundles_dir.join(format!("{}.flatpak", app_id));
 
         let mut flatpak = Command::new("flatpak");

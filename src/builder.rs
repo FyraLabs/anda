@@ -7,14 +7,13 @@ use crate::{
     util::{get_commit_id_cwd, get_date},
 };
 use anda_config::{Docker, Flatpak, Project, RpmBuild};
-use anyhow::{anyhow, Context, Result};
 use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-
+use color_eyre::{Result, eyre::Context, Report};
 use cmd_lib::run_cmd;
-use log::{debug, trace};
+use tracing::{debug, trace};
 
 pub async fn build_rpm(
     opts: RPMOptions,
@@ -55,7 +54,7 @@ pub async fn build_rpm(
         if let Some((key, value)) = split {
             opts2.def_macro(key, value);
         } else {
-            return Err(anyhow!("Invalid rpm macro: {}", rpmmacro));
+            return Err(Report::msg(format!("Invalid rpm macro: {}", rpmmacro)));
         }
     }
     {
@@ -89,9 +88,7 @@ pub async fn build_rpm(
 
     let builder = builder.build(spec, &opts2).await;
 
-    let a = run_cmd!(createrepo_c --quiet --update ${repo_path});
-
-    a.map_err(|e| anyhow!(e))?;
+    run_cmd!(createrepo_c --quiet --update ${repo_path})?;
 
     builder
 }
@@ -146,7 +143,7 @@ pub async fn build_rpm_call(
         for script in pre_script.commands.iter() {
             let mut cmd = Command::new("sh");
             cmd.arg("-x").arg("-c").arg(script);
-            cmd.status().map_err(|e| anyhow!(e))?;
+            cmd.status()?;
         }
     }
 
@@ -164,7 +161,7 @@ pub async fn build_rpm_call(
         for script in post_script.commands.iter() {
             let mut cmd = Command::new("sh");
             cmd.arg("-x").arg("-c").arg(script);
-            cmd.status().map_err(|e| anyhow!(e))?;
+            cmd.status()?;
         }
     }
 
@@ -185,7 +182,7 @@ pub async fn build_flatpak_call(
         for script in pre_script.commands.iter() {
             let mut cmd = Command::new("sh");
             cmd.arg("-x").arg("-c").arg(script);
-            cmd.status().map_err(|e| anyhow!(e))?;
+            cmd.status()?;
         }
     }
 
@@ -201,7 +198,7 @@ pub async fn build_flatpak_call(
         for script in post_script.commands.iter() {
             let mut cmd = Command::new("sh");
             cmd.arg("-x").arg("-c").arg(script);
-            cmd.status().map_err(|e| anyhow!(e))?;
+            cmd.status()?;
         }
     }
 
@@ -408,7 +405,7 @@ pub async fn builder(
     oci_opts: OciOpts,
 ) -> Result<()> {
     // Parse the project manifest
-    let config = anda_config::load_from_file(&cli.config.clone()).map_err(|e| anyhow!(e))?;
+    let config = anda_config::load_from_file(&cli.config.clone())?;
     trace!("all: {}", all);
     trace!("project: {:?}", project);
     trace!("package: {:?}", package);
@@ -439,10 +436,10 @@ pub async fn builder(
                 )
                 .await?;
             } else {
-                return Err(anyhow!("Project not found: {}", name));
+                return Err(Report::msg(format!("Project not found: {}", name)));
             }
         } else {
-            return Err(anyhow!("No project specified"));
+            return Err(Report::msg("No project specified"));
         }
     }
     Ok(())

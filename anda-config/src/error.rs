@@ -17,12 +17,6 @@ impl From<hcl::error::Error> for ProjectError {
     }
 }
 
-impl From<anyhow::Error> for ProjectError {
-    fn from(err: anyhow::Error) -> Self {
-        ProjectError::Other(err.to_string())
-    }
-}
-
 impl std::fmt::Display for ProjectError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -47,4 +41,8 @@ impl std::fmt::Display for ProjectError {
             }
         }
     }
+}
+
+impl std::error::Error for ProjectError {
+    
 }

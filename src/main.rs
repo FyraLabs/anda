@@ -8,15 +8,12 @@ mod oci;
 mod rpm_spec;
 mod update;
 mod util;
-
-use std::io;
-
-use anyhow::Result;
-
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{Cli, Command};
-use log::debug;
+use color_eyre::{Result, Report};
+use std::io;
+use tracing::debug;
 use util::fetch_build_entries;
 
 #[tokio::main]
@@ -25,9 +22,10 @@ async fn main() -> Result<()> {
     let mut app = Cli::command();
     app.build();
 
-    pretty_env_logger::formatted_builder()
-        .filter_level(cli.verbose.log_level_filter())
-        .init();
+    let subscriber = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(util::convert_filter(cli.verbose.log_level_filter()))
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     match cli.command.clone() {
         Command::Build {
@@ -48,9 +46,7 @@ async fn main() -> Result<()> {
                     .display_name("anda-build")
                     .name("anda-build");
                 a.print_help().unwrap();
-                return Err(anyhow::anyhow!(
-                    "No project specified, and --all not specified."
-                ));
+                return Err(Report::msg("No project specified, and --all not specified."));
             }
 
             debug!("{:?}", &all);

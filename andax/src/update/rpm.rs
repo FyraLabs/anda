@@ -1,5 +1,5 @@
-use anyhow::Result;
-use log::info;
+use color_eyre::Result;
+use tracing::info;
 use rhai::{CustomType, EvalAltResult};
 use std::{
     fs,
