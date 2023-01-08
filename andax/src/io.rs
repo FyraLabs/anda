@@ -1,5 +1,5 @@
-use rhai::plugin::*;
-use rhai::EvalAltResult;
+use crate::error::AndaxRes;
+use rhai::{plugin::*, EvalAltResult};
 use std::process::Command;
 
 macro_rules! _sh_out {
@@ -8,8 +8,8 @@ macro_rules! _sh_out {
             $o.status
                 .code()
                 .ok_or::<Box<EvalAltResult>>("No exit code".into())?,
-            ehdl::<_, std::string::FromUtf8Error>($ctx, String::from_utf8($o.stdout))?,
-            ehdl::<_, std::string::FromUtf8Error>($ctx, String::from_utf8($o.stderr))?,
+            String::from_utf8($o.stdout).ehdl($ctx)?,
+            String::from_utf8($o.stderr).ehdl($ctx)?,
         ))
     };
 }
@@ -42,37 +42,31 @@ type T = Result<(i32, String, String), Box<EvalAltResult>>;
 /// We will let rhai handle all the nasty things.
 #[export_module]
 pub mod anda_rhai {
-    use crate::run::ehdl;
 
     #[rhai_fn(return_raw, name = "sh")]
     pub(crate) fn shell(ctx: NativeCallContext, cmd: &str) -> T {
-        _sh_out!(&ctx, ehdl::<_, std::io::Error>(&ctx, _cmd!(cmd).output())?)
+        _sh_out!(&ctx, _cmd!(cmd).output().ehdl(&ctx)?)
     }
     #[rhai_fn(return_raw, name = "sh")]
     pub(crate) fn shell_cwd(ctx: NativeCallContext, cmd: &str, cwd: &str) -> T {
-        _sh_out!(
-            &ctx,
-            ehdl::<_, std::io::Error>(&ctx, _cmd!(cmd).current_dir(cwd).output())?
-        )
+        _sh_out!(&ctx, _cmd!(cmd).current_dir(cwd).output().ehdl(&ctx)?)
     }
     #[rhai_fn(return_raw, name = "sh")]
     pub(crate) fn sh(ctx: NativeCallContext, cmd: Vec<&str>) -> T {
         _sh_out!(
             &ctx,
-            ehdl::<_, std::io::Error>(&ctx, Command::new(cmd[0]).args(&cmd[1..]).output())?
+            Command::new(cmd[0]).args(&cmd[1..]).output().ehdl(&ctx)?
         )
     }
     #[rhai_fn(return_raw, name = "sh")]
     pub(crate) fn sh_cwd(ctx: NativeCallContext, cmd: Vec<&str>, cwd: &str) -> T {
         _sh_out!(
             &ctx,
-            ehdl::<_, std::io::Error>(
-                &ctx,
-                Command::new(cmd[0])
-                    .args(&cmd[1..])
-                    .current_dir(cwd)
-                    .output()
-            )?
+            Command::new(cmd[0])
+                .args(&cmd[1..])
+                .current_dir(cwd)
+                .output()
+                .ehdl(&ctx)?
         )
     }
 }

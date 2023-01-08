@@ -1,5 +1,8 @@
-use rhai::plugin::*;
-use rhai::{CustomType, EvalAltResult};
+use crate::{
+    error::AndaxRes,
+    run::{ehdl, rf},
+};
+use rhai::{plugin::*, CustomType, EvalAltResult};
 use serde_json::Value;
 use tracing::debug;
 
@@ -8,39 +11,33 @@ type RhaiRes<T> = Result<T, Box<EvalAltResult>>;
 pub(crate) const USER_AGENT: &str = "Anda-update";
 #[export_module]
 pub mod anda_rhai {
-    use crate::run::{ehdl, rf};
 
     #[rhai_fn(return_raw)]
     pub fn get(ctx: NativeCallContext, url: &str) -> RhaiRes<String> {
-        ehdl::<_, std::io::Error>(&ctx,
-            ehdl::<_, ureq::Error>(&ctx,
-                ureq::AgentBuilder::new()
-                    .redirects(0)
-                    .build()
-                    .get(url)
-                    .set("User-Agent", USER_AGENT)
-                    .call(),
-            )?
-            .into_string(),
-        )
+        ureq::AgentBuilder::new()
+            .redirects(0)
+            .build()
+            .get(url)
+            .set("User-Agent", USER_AGENT)
+            .call()
+            .ehdl(&ctx)?
+            .into_string()
+            .ehdl(&ctx)
     }
 
     #[rhai_fn(return_raw)]
     pub fn gh(ctx: NativeCallContext, repo: &str) -> RhaiRes<String> {
-        let v: Value = ehdl::<_, std::io::Error>(&ctx,
-            ehdl::<_, ureq::Error>(&ctx,
-                ureq::get(
-                    format!("https://api.github.com/repos/{}/releases/latest", repo).as_str(),
-                )
+        let v: Value =
+            ureq::get(format!("https://api.github.com/repos/{}/releases/latest", repo).as_str())
                 .set(
                     "Authorization",
-                    format!("Bearer {}", ehdl::<_, std::env::VarError>(&ctx, std::env::var("GITHUB_TOKEN"))?).as_str(),
+                    format!("Bearer {}", std::env::var("GITHUB_TOKEN").ehdl(&ctx)?).as_str(),
                 )
                 .set("User-Agent", USER_AGENT)
-                .call(),
-            )?
-            .into_json(),
-        )?;
+                .call()
+                .ehdl(&ctx)?
+                .into_json()
+                .ehdl(&ctx)?;
         debug!("Got json from {repo}:\n{v}");
         let binding = v["tag_name"].to_owned();
         let ver = binding.as_str().unwrap_or_default();
@@ -51,7 +48,7 @@ pub mod anda_rhai {
     }
     #[rhai_fn(return_raw)]
     pub(crate) fn env(ctx: NativeCallContext, key: &str) -> RhaiRes<String> {
-        ehdl::<_, std::env::VarError>(&ctx, std::env::var(key))
+        std::env::var(key).ehdl(&ctx)
     }
 
     #[derive(Clone)]

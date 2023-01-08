@@ -32,7 +32,9 @@ where
         ))
     })
 }
-pub(crate) fn ehdl<A, B>(
+
+// for compatibility
+pub(crate) fn ehdl<A>(
     ctx: &CallCtx,
     o: Result<A, impl std::error::Error + 'static>,
 ) -> Result<A, Box<EvalAltResult>> {
@@ -71,11 +73,10 @@ pub fn _tb(
     rhai_fn: &str,
     fn_src: &str,
     oerr: Option<Rc<color_eyre::Report>>,
-    arb: Option<Rc<dyn std::error::Error>>
+    arb: Option<Rc<dyn std::error::Error>>,
 ) {
     let line = pos.line();
     let col = pos.position().unwrap_or(0);
-    // let stdout = stdout();
     if let Some(line) = line {
         // Print code
         match File::open(scr) {
@@ -91,13 +92,11 @@ pub fn _tb(
                     }
                     let sl = sl.unwrap();
                     let re = Regex::new(r"[\w_][\w_\d]+?").unwrap();
-                    let m = re.find_at(sl.as_str(), col + 1);
-                    let m = if let Some(x) = m {
+                    let m = if let Some(x) = re.find_at(sl.as_str(), col + 1) {
                         x.range().len()
                     } else {
                         1
                     };
-                    // let lock = stdout.lock();
                     let lns = " ".repeat(line.to_string().len());
                     let src = if fn_src.is_empty() {
                         "".to_string()
