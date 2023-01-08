@@ -1,6 +1,6 @@
 use std::thread;
 
-use log::{debug, warn};
+use log::debug;
 use rhai::plugin::*;
 use rhai::{CustomType, EvalAltResult};
 use serde_json::Value;

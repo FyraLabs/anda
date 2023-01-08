@@ -1,40 +1,33 @@
 use crate::{
     error::AndaxError,
     io,
-    update::{
-        self, re, rpm,
-        tsunagu::{self, ehdl},
-    },
+    update::{self, re, rpm, tsunagu},
 };
-use anyhow::Result;
-use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
 use regex::Regex;
-use rhai::{plugin::*, Engine, EvalAltResult, Map, NativeCallContext, Scope};
+use rhai::{plugin::*, Engine, EvalAltResult, NativeCallContext as CallCtx, Scope};
 use std::{
     fs::File,
-    io::{stdout, BufRead, BufReader},
+    io::{BufRead, BufReader},
     path::PathBuf,
-    thread,
+    rc::Rc,
 };
 
-pub(crate) fn json(ctx: NativeCallContext, a: String) -> Result<Map, Box<EvalAltResult>> {
+fn json(ctx: CallCtx, a: String) -> Result<rhai::Map, Box<EvalAltResult>> {
     ctx.engine().parse_json(a, true)
 }
 
-lazy_static! {
-    static ref FN_NAME: Regex = Regex::new(r"[^(]+").unwrap();
-}
 
-fn rf<T>(ctx: NativeCallContext, res: Result<T, anyhow::Error>) -> Result<T, Box<EvalAltResult>> {
+pub(crate) fn rf<T>(ctx: CallCtx, res: anyhow::Result<T>) -> Result<T, Box<EvalAltResult>>
+where
+    T: rhai::Variant + Clone,
+{
     res.map_err(|err| {
-        let rhai_fn = ctx.fn_name();
-        let fn_src = ctx.source().unwrap_or("");
         Box::new(EvalAltResult::ErrorRuntime(
             Dynamic::from(AndaxError::RustError(
-                rhai_fn.to_string(),
-                fn_src.to_string(),
-                std::rc::Rc::from(err),
+                ctx.fn_name().to_string(),
+                ctx.source().unwrap_or("").to_string(),
+                Rc::from(err),
             )),
             ctx.position(),
         ))
@@ -47,27 +40,33 @@ fn gen_en() -> (Engine, Scope<'static>) {
     sc.push("IS_WIN32", cfg!(windows));
     let mut en = Engine::new();
     en.register_fn("json", json)
-        .register_fn("find", |a: &str, b: &str, c: i64| ehdl(re::find(a, b, c)))
-        .register_fn("sub", |a: &str, b: &str, c: &str| ehdl(re::sub(a, b, c)))
+        .register_fn("find", |ctx, a, b, c| rf(ctx, re::find(a, b, c)))
+        .register_fn("sub", |ctx, a, b, c| rf(ctx, re::sub(a, b, c)))
         .register_global_module(exported_module!(io::anda_rhai).into())
         .register_global_module(exported_module!(update::tsunagu::anda_rhai).into())
         .build_type::<rpm::RPMSpec>();
     (en, sc)
 }
 
-pub fn traceback(name: &String, scr: &PathBuf, err: EvalAltResult) {
-    trace!("{name}: Generating traceback");
-    let pos = err.position();
+pub fn _tb(
+    name: &String,
+    scr: &PathBuf,
+    err: EvalAltResult,
+    pos: Position,
+    rhai_fn: &str,
+    fn_src: &str,
+    oerr: Option<Rc<anyhow::Error>>,
+) {
     let line = pos.line();
     let col = pos.position().unwrap_or(0);
-    let stdout = stdout();
+    // let stdout = stdout();
     if let Some(line) = line {
         // Print code
         match File::open(scr) {
             Ok(f) => {
                 let f = BufReader::new(f);
                 for (n, sl) in f.lines().enumerate() {
-                    if n != line {
+                    if n != line - 1 {
                         continue;
                     }
                     if let Err(e) = sl {
@@ -79,15 +78,29 @@ pub fn traceback(name: &String, scr: &PathBuf, err: EvalAltResult) {
                     let m = re
                         .find_at(sl.as_str(), col + 1)
                         .expect("Can't match code with regex");
-                    let lock = stdout.lock();
-                    warn!("{name}: {}:{line}:{col}", scr.display());
+                    // let lock = stdout.lock();
+                    warn!(
+                        "{name}: {}:{line}:{col} {}",
+                        scr.display(),
+                        if !rhai_fn.is_empty() {
+                            format!("at `{rhai_fn}()`")
+                        } else {
+                            "".into()
+                        }
+                    );
+                    let lns = " ".repeat(line.to_string().len());
                     warn!(" {line} | {sl}");
                     warn!(
-                        " {} | {}{}",
-                        " ".repeat(line.to_string().len()),
+                        " {lns} | {}{}",
                         " ".repeat(col - 1),
                         "^".repeat(m.range().len())
                     );
+                    if !fn_src.is_empty() {
+                        warn!(" {lns} = Function source: {fn_src}");
+                    }
+                    if let Some(oerr) = oerr {
+                        warn!(" {lns} = From this error: {oerr}");
+                    }
                     break;
                 }
             }
@@ -97,6 +110,28 @@ pub fn traceback(name: &String, scr: &PathBuf, err: EvalAltResult) {
         warn!("{name}: {} (no position data)", scr.display());
     }
     warn!("{name}: {err}");
+}
+
+pub fn traceback(name: &String, scr: &PathBuf, err: EvalAltResult) {
+    trace!("{name}: Generating traceback");
+    let pos = err.position();
+    if let EvalAltResult::ErrorRuntime(ref run_err, pos) = err {
+        if let Some(AndaxError::RustError(rhai_fn, fn_src, oerr)) =
+            run_err.clone().try_cast::<AndaxError>()
+        {
+            _tb(
+                name,
+                scr,
+                err,
+                pos,
+                rhai_fn.as_str(),
+                fn_src.as_str(),
+                Some(oerr),
+            );
+            return;
+        }
+    }
+    _tb(name, scr, err, pos, "", "", None);
 }
 
 pub fn run<'a>(
@@ -119,7 +154,7 @@ pub fn run<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::anyhow;
+    use anyhow::{anyhow, Result};
 
     fn run_update(rpmspec: rpm::RPMSpec) -> Result<()> {
         // FIXME can we avoid clone()
