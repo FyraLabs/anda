@@ -3,7 +3,6 @@ use crate::{
     io,
     update::{self, re, rpm, tsunagu},
 };
-use tracing::{debug, error, trace, warn};
 use regex::Regex;
 use rhai::{plugin::*, Engine, EvalAltResult, NativeCallContext as CallCtx, Scope};
 use std::{
@@ -12,11 +11,11 @@ use std::{
     path::PathBuf,
     rc::Rc,
 };
+use tracing::{debug, error, trace, warn};
 
 fn json(ctx: CallCtx, a: String) -> Result<rhai::Map, Box<EvalAltResult>> {
     ctx.engine().parse_json(a, true)
 }
-
 
 pub(crate) fn rf<T>(ctx: CallCtx, res: color_eyre::Result<T>) -> Result<T, Box<EvalAltResult>>
 where
@@ -40,8 +39,8 @@ fn gen_en() -> (Engine, Scope<'static>) {
     sc.push("IS_WIN32", cfg!(windows));
     let mut en = Engine::new();
     en.register_fn("json", json)
-        // .register_fn("find", |ctx, a, b, c| rf(ctx, re::find(a, b, c)))
-        // .register_fn("sub", |ctx, a, b, c| rf(ctx, re::sub(a, b, c)))
+        .register_fn("find", |ctx: CallCtx, a, b, c| rf(ctx, re::find(a, b, c)))
+        .register_fn("sub", |ctx: CallCtx, a, b, c| rf(ctx, re::sub(a, b, c)))
         .register_global_module(exported_module!(io::anda_rhai).into())
         .register_global_module(exported_module!(update::tsunagu::anda_rhai).into())
         .build_type::<rpm::RPMSpec>();
@@ -75,9 +74,12 @@ pub fn _tb(
                     }
                     let sl = sl.unwrap();
                     let re = Regex::new(r"\b.+?\b").unwrap();
-                    let m = re
-                        .find_at(sl.as_str(), col + 1)
-                        .expect("Can't match code with regex");
+                    let m = re.find_at(sl.as_str(), col + 1);
+                    let m = if let Some(x) = m {
+                        x.range().len()
+                    } else {
+                        1
+                    };
                     // let lock = stdout.lock();
                     warn!(
                         "{name}: {}:{line}:{col} {}",
@@ -90,11 +92,7 @@ pub fn _tb(
                     );
                     let lns = " ".repeat(line.to_string().len());
                     warn!(" {line} | {sl}");
-                    warn!(
-                        " {lns} | {}{}",
-                        " ".repeat(col - 1),
-                        "^".repeat(m.range().len())
-                    );
+                    warn!(" {lns} | {}{}", " ".repeat(col - 1), "^".repeat(m));
                     if !fn_src.is_empty() {
                         warn!(" {lns} = Function source: {fn_src}");
                     }
@@ -154,7 +152,7 @@ pub fn run<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use color_eyre::{Result, Report};
+    use color_eyre::{Report, Result};
 
     fn run_update(rpmspec: rpm::RPMSpec) -> Result<()> {
         // FIXME can we avoid clone()
