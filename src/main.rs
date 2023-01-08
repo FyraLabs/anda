@@ -24,6 +24,7 @@ async fn main() -> Result<()> {
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(util::convert_filter(cli.verbose.log_level_filter()))
+        .event_format(tracing_subscriber::fmt::format().pretty())
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 

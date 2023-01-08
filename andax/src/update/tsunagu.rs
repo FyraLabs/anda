@@ -1,30 +1,19 @@
-use std::thread;
-
 use rhai::plugin::*;
 use rhai::{CustomType, EvalAltResult};
 use serde_json::Value;
 use tracing::debug;
 
 type RhaiRes<T> = Result<T, Box<EvalAltResult>>;
-pub fn ehdl<A, B>(o: Result<A, B>) -> RhaiRes<A>
-where
-    B: std::fmt::Debug + std::fmt::Display,
-{
-    if let Err(e) = o {
-        let th = thread::current();
-        // warn!("{}: Error from function");
-        return Err(e.to_string().into());
-    }
-    Ok(o.unwrap())
-}
+
 pub(crate) const USER_AGENT: &str = "Anda-update";
 #[export_module]
 pub mod anda_rhai {
+    use crate::run::{ehdl, rf};
 
     #[rhai_fn(return_raw)]
-    pub fn get(url: &str) -> RhaiRes<String> {
-        ehdl(
-            ehdl(
+    pub fn get(ctx: NativeCallContext, url: &str) -> RhaiRes<String> {
+        ehdl::<_, std::io::Error>(&ctx,
+            ehdl::<_, ureq::Error>(&ctx,
                 ureq::AgentBuilder::new()
                     .redirects(0)
                     .build()
@@ -37,15 +26,15 @@ pub mod anda_rhai {
     }
 
     #[rhai_fn(return_raw)]
-    pub fn gh(repo: &str) -> RhaiRes<String> {
-        let v: Value = ehdl(
-            ehdl(
+    pub fn gh(ctx: NativeCallContext, repo: &str) -> RhaiRes<String> {
+        let v: Value = ehdl::<_, std::io::Error>(&ctx,
+            ehdl::<_, ureq::Error>(&ctx,
                 ureq::get(
                     format!("https://api.github.com/repos/{}/releases/latest", repo).as_str(),
                 )
                 .set(
                     "Authorization",
-                    format!("Bearer {}", env("GITHUB_TOKEN")?).as_str(),
+                    format!("Bearer {}", ehdl::<_, std::env::VarError>(&ctx, std::env::var("GITHUB_TOKEN"))?).as_str(),
                 )
                 .set("User-Agent", USER_AGENT)
                 .call(),
@@ -61,8 +50,8 @@ pub mod anda_rhai {
         Ok(ver.to_string())
     }
     #[rhai_fn(return_raw)]
-    pub(crate) fn env(key: &str) -> RhaiRes<String> {
-        ehdl(std::env::var(key))
+    pub(crate) fn env(ctx: NativeCallContext, key: &str) -> RhaiRes<String> {
+        ehdl::<_, std::env::VarError>(&ctx, std::env::var(key))
     }
 
     #[derive(Clone)]
@@ -77,7 +66,7 @@ pub mod anda_rhai {
             builder
                 .with_name("Req")
                 .with_fn("new_req", Self::new)
-                .with_fn("get", |x: Self| ehdl(x.get()))
+                .with_fn("get", |ctx: NativeCallContext, x: Self| rf(ctx, x.get()))
                 .with_fn("redirects", Self::redirects)
                 .with_fn("head", Self::head);
         }
@@ -91,16 +80,16 @@ pub mod anda_rhai {
                 redirects: 0,
             }
         }
-        pub fn get(self) -> RhaiRes<String> {
+        pub fn get(self) -> color_eyre::Result<String> {
             let r = ureq::AgentBuilder::new()
-                .redirects(ehdl(self.redirects.try_into())?)
+                .redirects(self.redirects.try_into()?)
                 .build()
                 .get(&self.url);
             let mut r = r.set("User-Agent", USER_AGENT);
             for (k, v) in self.headers {
                 r = r.set(k.as_str(), v.as_str());
             }
-            ehdl(ehdl(r.call())?.into_string())
+            Ok(r.call()?.into_string()?)
         }
         pub fn head(&mut self, key: String, val: String) {
             self.headers.push((key, val));

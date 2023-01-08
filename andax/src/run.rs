@@ -11,7 +11,7 @@ use std::{
     path::PathBuf,
     rc::Rc,
 };
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, instrument, trace, warn};
 
 fn json(ctx: CallCtx, a: String) -> Result<rhai::Map, Box<EvalAltResult>> {
     ctx.engine().parse_json(a, true)
@@ -22,6 +22,21 @@ where
     T: rhai::Variant + Clone,
 {
     res.map_err(|err| {
+        Box::new(EvalAltResult::ErrorRuntime(
+            Dynamic::from(AndaxError::RustReport(
+                ctx.fn_name().to_string(),
+                ctx.source().unwrap_or("").to_string(),
+                Rc::from(err),
+            )),
+            ctx.position(),
+        ))
+    })
+}
+pub(crate) fn ehdl<A, B>(
+    ctx: &CallCtx,
+    o: Result<A, impl std::error::Error + 'static>,
+) -> Result<A, Box<EvalAltResult>> {
+    o.map_err(|err| {
         Box::new(EvalAltResult::ErrorRuntime(
             Dynamic::from(AndaxError::RustError(
                 ctx.fn_name().to_string(),
@@ -47,14 +62,16 @@ fn gen_en() -> (Engine, Scope<'static>) {
     (en, sc)
 }
 
+#[instrument(name = "traceback")]
 pub fn _tb(
-    name: &String,
+    proj: &String,
     scr: &PathBuf,
     err: EvalAltResult,
     pos: Position,
     rhai_fn: &str,
     fn_src: &str,
     oerr: Option<Rc<color_eyre::Report>>,
+    arb: Option<Rc<dyn std::error::Error>>
 ) {
     let line = pos.line();
     let col = pos.position().unwrap_or(0);
@@ -69,11 +86,11 @@ pub fn _tb(
                         continue;
                     }
                     if let Err(e) = sl {
-                        error!("{name}: Cannot read line: {e}");
+                        error!("{proj}: Cannot read line: {e}");
                         break;
                     }
                     let sl = sl.unwrap();
-                    let re = Regex::new(r"\b.+?\b").unwrap();
+                    let re = Regex::new(r"[\w_][\w_\d]+?").unwrap();
                     let m = re.find_at(sl.as_str(), col + 1);
                     let m = if let Some(x) = m {
                         x.range().len()
@@ -81,40 +98,50 @@ pub fn _tb(
                         1
                     };
                     // let lock = stdout.lock();
-                    warn!(
-                        "{name}: {}:{line}:{col} {}",
-                        scr.display(),
-                        if !rhai_fn.is_empty() {
-                            format!("at `{rhai_fn}()`")
-                        } else {
-                            "".into()
-                        }
-                    );
                     let lns = " ".repeat(line.to_string().len());
-                    warn!(" {line} | {sl}");
-                    warn!(" {lns} | {}{}", " ".repeat(col - 1), "^".repeat(m));
-                    if !fn_src.is_empty() {
-                        warn!(" {lns} = Function source: {fn_src}");
-                    }
-                    if let Some(oerr) = oerr {
-                        warn!(" {lns} = From this error: {oerr}");
-                    }
-                    break;
+                    let src = if fn_src.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!(" {lns} = Function source: {fn_src}")
+                    };
+                    let soerr = if let Some(oerr) = oerr {
+                        format!(" {lns} = From this error: {oerr}")
+                    } else if let Some(oerr) = arb {
+                        format!(" {lns} = From this error: {oerr}")
+                    } else {
+                        "".to_string()
+                    };
+                    let func = if !rhai_fn.is_empty() {
+                        format!("{rhai_fn}()")
+                    } else {
+                        "unknown".into()
+                    };
+                    let code = format!(
+                        " {lns} |\n {line} | {sl}\n {lns} | {}{}\n {lns} + When invoking: {func}\n{src}\n{soerr}",
+                        " ".repeat(col - 1),
+                        "^".repeat(m)
+                    );
+                    warn!(
+                        proj,
+                        script = format!("{}:{line}:{col}", scr.display()),
+                        func,
+                        "{err}\n{code}"
+                    );
+                    return;
                 }
             }
-            Err(e) => error!("{name}: Cannot open `{}`: {e}", scr.display()),
+            Err(e) => error!("{proj}: Cannot open `{}`: {e}", scr.display()),
         }
     } else {
-        warn!("{name}: {} (no position data)", scr.display());
+        warn!("{proj}: {} (no position data)\n{err}", scr.display());
     }
-    warn!("{name}: {err}");
 }
 
 pub fn traceback(name: &String, scr: &PathBuf, err: EvalAltResult) {
     trace!("{name}: Generating traceback");
     let pos = err.position();
     if let EvalAltResult::ErrorRuntime(ref run_err, pos) = err {
-        if let Some(AndaxError::RustError(rhai_fn, fn_src, oerr)) =
+        if let Some(AndaxError::RustReport(rhai_fn, fn_src, oerr)) =
             run_err.clone().try_cast::<AndaxError>()
         {
             _tb(
@@ -125,11 +152,27 @@ pub fn traceback(name: &String, scr: &PathBuf, err: EvalAltResult) {
                 rhai_fn.as_str(),
                 fn_src.as_str(),
                 Some(oerr),
+                None,
+            );
+            return;
+        }
+        if let Some(AndaxError::RustError(rhai_fn, fn_src, oerr)) =
+            run_err.clone().try_cast::<AndaxError>()
+        {
+            _tb(
+                name,
+                scr,
+                err,
+                pos,
+                rhai_fn.as_str(),
+                fn_src.as_str(),
+                None,
+                Some(oerr),
             );
             return;
         }
     }
-    _tb(name, scr, err, pos, "", "", None);
+    _tb(name, scr, err, pos, "", "", None, None);
 }
 
 pub fn run<'a>(
