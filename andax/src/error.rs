@@ -34,4 +34,4 @@ macro_rules! impl_ehdl {
 impl_ehdl!(Result<T, std::string::FromUtf8Error>);
 impl_ehdl!(std::io::Result<T>);
 impl_ehdl!(Result<T, ureq::Error>);
-impl_ehdl!(Result<T, std::env::VarError>);
+impl_ehdl!(Result<T, serde_json::Error>);

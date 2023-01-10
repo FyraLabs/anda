@@ -1,8 +1,8 @@
 use anda_config::Manifest;
 use andax::{run, update::rpm::RPMSpec};
 use color_eyre::Result;
-use tracing::{error, debug, trace, instrument};
 use std::thread;
+use tracing::{debug, error, instrument, trace};
 
 #[instrument]
 pub fn update_rpms(cfg: Manifest) -> Result<()> {
@@ -10,10 +10,19 @@ pub fn update_rpms(cfg: Manifest) -> Result<()> {
     for (name, proj) in cfg.project.iter() {
         if let Some(rpm) = &proj.rpm {
             let spec = &rpm.spec;
-            if rpm.update.is_none() {
-                continue;
-            }
-            let scr = rpm.update.to_owned().unwrap();
+            let scr = if rpm.update.is_none() {
+                let s = rpm.spec.display().to_string();
+                let paths: Vec<&str> = s.split('/').collect();
+                let path = &paths[..paths.len() - 1].join("/");
+                let scr = format!("{path}/update.rhai");
+                if !std::path::Path::new(&scr).exists() {
+                    continue;
+                }
+                debug!("Found {scr}");
+                std::path::PathBuf::from(scr)
+            } else {
+                rpm.update.to_owned().unwrap()
+            };
             let rpmspec = RPMSpec::new(name.clone(), &scr, spec)?;
             let name = name.to_owned();
             trace!(name, scr = scr.display().to_string(), "Th start");

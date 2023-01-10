@@ -37,7 +37,7 @@ impl RPMSpec {
         }
         let m = m.unwrap();
         if ver != m[2] {
-            info!("{}: {} -> {}", self.name, &m[2], ver);
+            info!("{}: {} —→ {}", self.name, &m[2], ver);
             self.f = re
                 .replace(&self.f, format!("Version:{}{ver}\n", &m[1]))
                 .to_string();

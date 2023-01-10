@@ -8,6 +8,7 @@ type RhaiRes<T> = Result<T, Box<EvalAltResult>>;
 pub(crate) const USER_AGENT: &str = "Anda-update";
 #[export_module]
 pub mod anda_rhai {
+    use std::env::VarError;
 
     #[rhai_fn(return_raw)]
     pub fn get(ctx: NativeCallContext, url: &str) -> RhaiRes<String> {
@@ -28,7 +29,7 @@ pub mod anda_rhai {
             ureq::get(format!("https://api.github.com/repos/{}/releases/latest", repo).as_str())
                 .set(
                     "Authorization",
-                    format!("Bearer {}", std::env::var("GITHUB_TOKEN").ehdl(&ctx)?).as_str(),
+                    format!("Bearer {}", env("GITHUB_TOKEN")?).as_str(),
                 )
                 .set("User-Agent", USER_AGENT)
                 .call()
@@ -43,53 +44,90 @@ pub mod anda_rhai {
         }
         Ok(ver.to_string())
     }
+
     #[rhai_fn(return_raw)]
-    pub(crate) fn env(ctx: NativeCallContext, key: &str) -> RhaiRes<String> {
-        std::env::var(key).ehdl(&ctx)
+    pub fn pypi(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
+        ctx.engine()
+            .eval(format!("get(`https://pypi.org/pypi/{name}/json`).json().info.version").as_str())
     }
 
-    #[derive(Clone)]
-    pub(crate) struct Req {
-        pub url: String,
-        pub headers: Vec<(String, String)>,
-        pub redirects: i64,
+    #[rhai_fn(return_raw)]
+    pub fn crates(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
+        ctx.engine().eval(
+            format!(
+                "get(`https://crates.io/api/v1/crates/{name}`).json().crate.max_stable_version"
+            )
+            .as_str(),
+        )
     }
 
-    impl CustomType for Req {
-        fn build(mut builder: rhai::TypeBuilder<'_, Self>) {
-            builder
-                .with_name("Req")
-                .with_fn("new_req", Self::new)
-                .with_fn("get", |ctx: NativeCallContext, x: Self| rf(ctx, x.get()))
-                .with_fn("redirects", Self::redirects)
-                .with_fn("head", Self::head);
-        }
+    #[rhai_fn(return_raw)]
+    pub fn crates_max(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
+        ctx.engine().eval(
+            format!("get(`https://crates.io/api/v1/crates/{name}`).json().crate.max_version")
+                .as_str(),
+        )
     }
 
-    impl Req {
-        pub fn new(url: String) -> Self {
-            Self {
-                url,
-                headers: vec![],
-                redirects: 0,
-            }
+    #[rhai_fn(return_raw)]
+    pub fn crates_newest(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
+        ctx.engine().eval(
+            format!("get(`https://crates.io/api/v1/crates/{name}`).json().crate.newest_version")
+                .as_str(),
+        )
+    }
+
+    #[rhai_fn(return_raw)]
+    pub(crate) fn env(key: &str) -> Result<String, Box<EvalAltResult>> {
+        match std::env::var(key) {
+            Ok(s) => Ok(s),
+            Err(VarError::NotPresent) => Err(format!("env(`{key}`) not present").into()),
+            Err(VarError::NotUnicode(o)) => Err(format!("env(`{key}`): invalid UTF: {o:?}").into()),
         }
-        pub fn get(self) -> color_eyre::Result<String> {
-            let r = ureq::AgentBuilder::new()
-                .redirects(self.redirects.try_into()?)
-                .build()
-                .get(&self.url);
-            let mut r = r.set("User-Agent", USER_AGENT);
-            for (k, v) in self.headers {
-                r = r.set(k.as_str(), v.as_str());
-            }
-            Ok(r.call()?.into_string()?)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct Req {
+    pub url: String,
+    pub headers: Vec<(String, String)>,
+    pub redirects: i64,
+}
+
+impl CustomType for Req {
+    fn build(mut builder: rhai::TypeBuilder<'_, Self>) {
+        builder
+            .with_name("Req")
+            .with_fn("new_req", Self::new)
+            .with_fn("get", |ctx: NativeCallContext, x: Self| rf(ctx, x.get()))
+            .with_fn("redirects", Self::redirects)
+            .with_fn("head", Self::head);
+    }
+}
+
+impl Req {
+    pub fn new(url: String) -> Self {
+        Self {
+            url,
+            headers: vec![],
+            redirects: 0,
         }
-        pub fn head(&mut self, key: String, val: String) {
-            self.headers.push((key, val));
+    }
+    pub fn get(self) -> color_eyre::Result<String> {
+        let r = ureq::AgentBuilder::new()
+            .redirects(self.redirects.try_into()?)
+            .build()
+            .get(&self.url);
+        let mut r = r.set("User-Agent", USER_AGENT);
+        for (k, v) in self.headers {
+            r = r.set(k.as_str(), v.as_str());
         }
-        pub fn redirects(&mut self, i: i64) {
-            self.redirects = i;
-        }
+        Ok(r.call()?.into_string()?)
+    }
+    pub fn head(&mut self, key: String, val: String) {
+        self.headers.push((key, val));
+    }
+    pub fn redirects(&mut self, i: i64) {
+        self.redirects = i;
     }
 }

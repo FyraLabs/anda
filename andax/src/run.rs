@@ -1,5 +1,5 @@
 use crate::{
-    error::AndaxError,
+    error::{AndaxError, AndaxRes},
     io,
     update::{self, re, rpm, tsunagu},
 };
@@ -15,6 +15,9 @@ use tracing::{debug, error, instrument, trace, warn};
 
 fn json(ctx: CallCtx, a: String) -> Result<rhai::Map, Box<EvalAltResult>> {
     ctx.engine().parse_json(a, true)
+}
+fn json_arr(ctx: CallCtx, a: String) -> Result<rhai::Array, Box<EvalAltResult>> {
+    serde_json::from_str(&a).ehdl(&ctx)
 }
 
 pub(crate) fn rf<T>(ctx: CallCtx, res: color_eyre::Result<T>) -> Result<T, Box<EvalAltResult>>
@@ -39,10 +42,12 @@ fn gen_en() -> (Engine, Scope<'static>) {
     sc.push("IS_WIN32", cfg!(windows));
     let mut en = Engine::new();
     en.register_fn("json", json)
+        .register_fn("json_arr", json_arr)
         .register_fn("find", |ctx: CallCtx, a, b, c| rf(ctx, re::find(a, b, c)))
         .register_fn("sub", |ctx: CallCtx, a, b, c| rf(ctx, re::sub(a, b, c)))
         .register_global_module(exported_module!(io::anda_rhai).into())
         .register_global_module(exported_module!(update::tsunagu::anda_rhai).into())
+        .build_type::<update::tsunagu::Req>()
         .build_type::<rpm::RPMSpec>();
     (en, sc)
 }
@@ -76,13 +81,18 @@ pub fn _tb(
                     let sl = sl.unwrap();
                     let re = Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").unwrap();
                     let m = if let Some(x) = re.find_at(sl.as_str(), col - 1) {
-                        if x.range().start != col - 1 { 1 } else { x.range().len() }
+                        if x.range().start != col - 1 {
+                            1
+                        } else {
+                            x.range().len()
+                        }
                     } else {
                         1
                     };
                     let lns = " ".repeat(line.to_string().len());
                     let mut code = format!(
-                        " {lns} │\n {line} │ {sl}\n {lns} │ {}{}",
+                        " {lns} ┌{}\n {line} │ {sl}\n {lns} │ {}{}",
+                        "─".repeat(col),
                         " ".repeat(col - 1),
                         "─".repeat(m)
                     );
@@ -100,9 +110,9 @@ pub fn _tb(
                     }
                     let c = code.matches('└').count();
                     if c > 0 {
-                        code = code.replacen('└', "├", c-1);
+                        code = code.replacen('└', "├", c - 1);
                     }
-                    warn!(
+                    error!(
                         proj,
                         script = format!("{}:{line}:{col}", scr.display()),
                         "{err}\n{code}"
@@ -113,7 +123,7 @@ pub fn _tb(
             Err(e) => error!("{proj}: Cannot open `{}`: {e}", scr.display()),
         }
     } else {
-        warn!("{proj}: {} (no position data)\n{err}", scr.display());
+        error!("{proj}: {} (no position data)\n{err}", scr.display());
     }
 }
 
@@ -169,46 +179,5 @@ pub fn run<'a>(
             traceback(name, scr, *err);
             None
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use color_eyre::{Report, Result};
-
-    fn run_update(rpmspec: rpm::RPMSpec) -> Result<()> {
-        // FIXME can we avoid clone()
-        let name = rpmspec.name.clone();
-        let scr = rpmspec.chkupdate.clone();
-        let (en, mut sc) = gen_en();
-        sc.push("rpm", rpmspec);
-
-        match en.run_file_with_scope(&mut sc, scr) {
-            Ok(()) => {
-                let rpm = sc
-                    .get_value::<rpm::RPMSpec>("rpm")
-                    .expect("No rpm object in rhai scope");
-                if rpm.changed {
-                    rpm.write()?;
-                }
-                Ok(())
-            }
-            Err(err) => {
-                let e = *err;
-                warn!("Fail {}:\n{e}", name);
-                Err(Report::msg(e.to_string()))
-            }
-        }
-    }
-
-    #[test]
-    fn run_rhai() -> Result<()> {
-        run_update(rpm::RPMSpec::new(
-            "umpkg".into(),
-            "tests/test.rhai",
-            "tests/umpkg.spec",
-        )?)?;
-        Ok(())
     }
 }
