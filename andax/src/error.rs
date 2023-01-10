@@ -3,7 +3,6 @@ pub enum AndaxError {
     // rhai_fn, fn_src, E
     RustReport(String, String, std::rc::Rc<color_eyre::Report>),
     RustError(String, String, std::rc::Rc<dyn std::error::Error>),
-    Others
 }
 
 pub(crate) trait AndaxRes<T> {
@@ -13,7 +12,10 @@ pub(crate) trait AndaxRes<T> {
 macro_rules! impl_ehdl {
     ($x:ty) => {
         impl<T> AndaxRes<T> for $x {
-            fn ehdl(self, ctx: &rhai::NativeCallContext) -> Result<T, Box<rhai::EvalAltResult>> where Self: Sized {
+            fn ehdl(self, ctx: &rhai::NativeCallContext) -> Result<T, Box<rhai::EvalAltResult>>
+            where
+                Self: Sized,
+            {
                 self.map_err(|err| {
                     Box::new(rhai::EvalAltResult::ErrorRuntime(
                         rhai::Dynamic::from(AndaxError::RustError(
@@ -23,9 +25,9 @@ macro_rules! impl_ehdl {
                         )),
                         ctx.position(),
                     ))
-                })    
+                })
             }
-        }        
+        }
     };
 }
 

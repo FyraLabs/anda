@@ -1,4 +1,4 @@
-use color_eyre::{Result, Report};
+use color_eyre::{Report, Result};
 use regex::Regex;
 
 pub fn find(r: &str, text: &str, group: i64) -> Result<String> {

@@ -33,23 +33,6 @@ where
     })
 }
 
-// for compatibility
-pub(crate) fn ehdl<A>(
-    ctx: &CallCtx,
-    o: Result<A, impl std::error::Error + 'static>,
-) -> Result<A, Box<EvalAltResult>> {
-    o.map_err(|err| {
-        Box::new(EvalAltResult::ErrorRuntime(
-            Dynamic::from(AndaxError::RustError(
-                ctx.fn_name().to_string(),
-                ctx.source().unwrap_or("").to_string(),
-                Rc::from(err),
-            )),
-            ctx.position(),
-        ))
-    })
-}
-
 fn gen_en() -> (Engine, Scope<'static>) {
     let mut sc = Scope::new();
     sc.push("USER_AGENT", tsunagu::USER_AGENT);
@@ -91,39 +74,37 @@ pub fn _tb(
                         break;
                     }
                     let sl = sl.unwrap();
-                    let re = Regex::new(r"[\w_][\w_\d]+?").unwrap();
-                    let m = if let Some(x) = re.find_at(sl.as_str(), col + 1) {
-                        x.range().len()
+                    let re = Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").unwrap();
+                    let m = if let Some(x) = re.find_at(sl.as_str(), col - 1) {
+                        if x.range().start != col - 1 { 1 } else { x.range().len() }
                     } else {
                         1
                     };
                     let lns = " ".repeat(line.to_string().len());
-                    let src = if fn_src.is_empty() {
-                        "".to_string()
-                    } else {
-                        format!(" {lns} = Function source: {fn_src}")
-                    };
-                    let soerr = if let Some(oerr) = oerr {
-                        format!(" {lns} = From this error: {oerr}")
-                    } else if let Some(oerr) = arb {
-                        format!(" {lns} = From this error: {oerr}")
-                    } else {
-                        "".to_string()
-                    };
-                    let func = if !rhai_fn.is_empty() {
-                        format!("{rhai_fn}()")
-                    } else {
-                        "unknown".into()
-                    };
-                    let code = format!(
-                        " {lns} |\n {line} | {sl}\n {lns} | {}{}\n {lns} + When invoking: {func}\n{src}\n{soerr}",
+                    let mut code = format!(
+                        " {lns} │\n {line} │ {sl}\n {lns} │ {}{}",
                         " ".repeat(col - 1),
-                        "^".repeat(m)
+                        "─".repeat(m)
                     );
+                    if !rhai_fn.is_empty() {
+                        code += &*format!("\n {lns} └─═ When invoking: {rhai_fn}()");
+                    }
+                    if !fn_src.is_empty() {
+                        code += &*format!("\n {lns} └─═ Function source: {fn_src}");
+                    }
+                    if let Some(o) = oerr {
+                        code += &*format!("\n {lns} └─═ From: {o}");
+                    }
+                    if let Some(o) = arb {
+                        code += &*format!("\n {lns} └─═ From: {o}");
+                    }
+                    let c = code.matches('└').count();
+                    if c > 0 {
+                        code = code.replacen('└', "├", c-1);
+                    }
                     warn!(
                         proj,
                         script = format!("{}:{line}:{col}", scr.display()),
-                        func,
                         "{err}\n{code}"
                     );
                     return;

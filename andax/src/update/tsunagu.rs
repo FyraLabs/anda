@@ -1,7 +1,4 @@
-use crate::{
-    error::AndaxRes,
-    run::{ehdl, rf},
-};
+use crate::{error::AndaxRes, run::rf};
 use rhai::{plugin::*, CustomType, EvalAltResult};
 use serde_json::Value;
 use tracing::debug;

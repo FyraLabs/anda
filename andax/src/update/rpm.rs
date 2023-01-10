@@ -1,10 +1,10 @@
 use color_eyre::Result;
-use tracing::info;
 use rhai::{CustomType, EvalAltResult};
 use std::{
     fs,
     path::{Path, PathBuf},
 };
+use tracing::info;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RPMSpec {
@@ -44,6 +44,28 @@ impl RPMSpec {
             self.changed = true;
         }
         Ok(())
+    }
+    pub fn define(&mut self, name: &str, val: &str) -> Result<(), Box<EvalAltResult>> {
+        let re = regex::Regex::new(r"(?m)%define(\s+)(\S+)(\s+)(\S+)$").unwrap();
+        for cap in re.captures_iter(self.f.as_str()) {
+            if &cap[2] == name {
+                self.f = self.f.replace(&cap[0], format!("%define{}{name}{}{val}", &cap[1], &cap[3]).as_str());
+                self.changed = true;
+                return Ok(());
+            }
+        }
+        Err(format!("Can't find `%define {name}` in spec").into())
+    }
+    pub fn global(&mut self, name: &str, val: &str) -> Result<(), Box<EvalAltResult>> {
+        let re = regex::Regex::new(r"(?m)%global(\s+)(\S+)(\s+)(\S+)$").unwrap();
+        for cap in re.captures_iter(self.f.as_str()) {
+            if &cap[2] == name {
+                self.f = self.f.replace(&cap[0], format!("%global{}{name}{}{val}", &cap[1], &cap[3]).as_str());
+                self.changed = true;
+                return Ok(());
+            }
+        }
+        Err(format!("Can't find `%global {name}` in spec").into())
     }
     pub fn source(&mut self, i: i64, p: String) -> Result<(), Box<EvalAltResult>> {
         let re = regex::Regex::new(r"Source(\d+):(\s+)([^\n]+)\n").unwrap();

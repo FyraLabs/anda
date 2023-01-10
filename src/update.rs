@@ -1,9 +1,10 @@
 use anda_config::Manifest;
 use andax::{run, update::rpm::RPMSpec};
 use color_eyre::Result;
-use tracing::error;
+use tracing::{error, debug, trace, instrument};
 use std::thread;
 
+#[instrument]
 pub fn update_rpms(cfg: Manifest) -> Result<()> {
     let mut handlers = vec![];
     for (name, proj) in cfg.project.iter() {
@@ -15,6 +16,7 @@ pub fn update_rpms(cfg: Manifest) -> Result<()> {
             let scr = rpm.update.to_owned().unwrap();
             let rpmspec = RPMSpec::new(name.clone(), &scr, spec)?;
             let name = name.to_owned();
+            trace!(name, scr = scr.display().to_string(), "Th start");
             handlers.push(thread::Builder::new().name(name).spawn(move || {
                 let name = thread::current()
                     .name()
@@ -29,8 +31,7 @@ pub fn update_rpms(cfg: Manifest) -> Result<()> {
                         .expect("No rpm object in rhai scope");
                     if rpm.changed {
                         if let Err(e) = rpm.write() {
-                            error!("{name}: Failed to write RPM:");
-                            error!("{name}: {e}");
+                            error!("{name}: Failed to write RPM: {e}");
                         }
                     }
                 }
@@ -38,12 +39,13 @@ pub fn update_rpms(cfg: Manifest) -> Result<()> {
         }
     }
 
+    debug!("Joining {} threads", handlers.len());
+
     for hdl in handlers {
         let th = hdl.thread();
         let name = th.name().expect("No name for andax thread??").to_string();
-        if let Err(_e) = hdl.join() {
-            // let e = e.as_ref();
-            error!("Cannot join thread `{name}`");
+        if let Err(e) = hdl.join() {
+            error!("Panic @ `{name}`");
         }
     }
 
