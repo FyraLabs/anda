@@ -595,7 +595,7 @@ impl RPMSpecBackend for RPMBuildBackend {
                 let rpms_dir = self.resultdir.join("rpm/rpms");
                 std::fs::create_dir_all(&rpms_dir)?;
                 let dest = rpms_dir.join(entry.file_name());
-                std::fs::copy(entry.path(), &dest)?;
+                std::fs::copy(entry.path(), dest)?;
                 rpms.push(rpms_dir.join(entry.file_name()));
             }
         }
@@ -635,7 +635,7 @@ impl RPMSpecBackend for RPMBuildBackend {
                 let srpm_dir = self.resultdir.join("rpm/srpm");
                 std::fs::create_dir_all(&srpm_dir)?;
                 let dest = srpm_dir.join(entry.file_name());
-                std::fs::copy(entry.path(), &dest)?;
+                std::fs::copy(entry.path(), dest)?;
                 //rpms.push(srpm_dir.join(entry.file_name()));
             } else if entry.file_name().to_string_lossy().ends_with(".rpm") {
                 //rpms.push(entry.path().to_path_buf());
@@ -644,7 +644,7 @@ impl RPMSpecBackend for RPMBuildBackend {
                 let rpms_dir = self.resultdir.join("rpm/rpms");
                 std::fs::create_dir_all(&rpms_dir)?;
                 let dest = rpms_dir.join(entry.file_name());
-                std::fs::copy(entry.path(), &dest)?;
+                std::fs::copy(entry.path(), dest)?;
                 rpms.push(rpms_dir.join(entry.file_name()));
             }
         }

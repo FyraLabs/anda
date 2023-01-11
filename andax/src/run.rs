@@ -1,5 +1,5 @@
 use crate::{
-    error::{AndaxError, AndaxRes},
+    error::{AndaxError, AndaxRes, TbErr},
     io,
     update::{self, re, rpm, tsunagu},
 };
@@ -27,8 +27,8 @@ where
     res.map_err(|err| {
         Box::new(EvalAltResult::ErrorRuntime(
             Dynamic::from(AndaxError::RustReport(
-                ctx.fn_name().to_string(),
-                ctx.source().unwrap_or("").to_string(),
+                ctx.fn_name().into(),
+                ctx.source().unwrap_or("").into(),
                 Rc::from(err),
             )),
             ctx.position(),
@@ -52,20 +52,30 @@ fn gen_en() -> (Engine, Scope<'static>) {
     (en, sc)
 }
 
+/// Generates Error description from nanitozo \
+/// used in `_tb()`
+fn _gemsg(nanitozo: &TbErr) -> String {
+    match nanitozo {
+        TbErr::Report(o) => format!("From: {o}"),
+        TbErr::Arb(o) => format!("From: {o}"),
+        TbErr::Rhai(o) => format!("Rhai: {o}"),
+    }
+}
+
+fn _gpos(p: Position) -> Option<(usize, usize)> {
+    p.line().map(|l| (l, p.position().unwrap_or(0)))
+}
+
 #[instrument(name = "traceback")]
 pub fn _tb(
-    proj: &String,
+    proj: &str,
     scr: &PathBuf,
-    err: EvalAltResult,
+    nanitozo: TbErr,
     pos: Position,
     rhai_fn: &str,
     fn_src: &str,
-    oerr: Option<Rc<color_eyre::Report>>,
-    arb: Option<Rc<dyn std::error::Error>>,
 ) {
-    let line = pos.line();
-    let col = pos.position().unwrap_or(0);
-    if let Some(line) = line {
+    if let Some((line, col)) = _gpos(pos) {
         // Print code
         match File::open(scr) {
             Ok(f) => {
@@ -102,12 +112,7 @@ pub fn _tb(
                     if !fn_src.is_empty() {
                         code += &*format!("\n {lns} └─═ Function source: {fn_src}");
                     }
-                    if let Some(o) = oerr {
-                        code += &*format!("\n {lns} └─═ From: {o}");
-                    }
-                    if let Some(o) = arb {
-                        code += &*format!("\n {lns} └─═ From: {o}");
-                    }
+                    code += &*format!("\n {lns} └─═ {}", _gemsg(&nanitozo));
                     let c = code.matches('└').count();
                     if c > 0 {
                         code = code.replacen('└', "├", c - 1);
@@ -115,7 +120,7 @@ pub fn _tb(
                     error!(
                         proj,
                         script = format!("{}:{line}:{col}", scr.display()),
-                        "{err}\n{code}"
+                        "Andax Exception ——\n{code}"
                     );
                     return;
                 }
@@ -123,11 +128,12 @@ pub fn _tb(
             Err(e) => error!("{proj}: Cannot open `{}`: {e}", scr.display()),
         }
     } else {
+        let err = _gemsg(&nanitozo);
         error!("{proj}: {} (no position data)\n{err}", scr.display());
     }
 }
 
-pub fn traceback(name: &String, scr: &PathBuf, err: EvalAltResult) {
+pub fn traceback(name: &str, scr: &PathBuf, err: EvalAltResult) {
     trace!("{name}: Generating traceback");
     let pos = err.position();
     if let EvalAltResult::ErrorRuntime(ref run_err, pos) = err {
@@ -137,12 +143,10 @@ pub fn traceback(name: &String, scr: &PathBuf, err: EvalAltResult) {
             _tb(
                 name,
                 scr,
-                err,
+                TbErr::Report(oerr),
                 pos,
                 rhai_fn.as_str(),
                 fn_src.as_str(),
-                Some(oerr),
-                None,
             );
             return;
         }
@@ -152,21 +156,19 @@ pub fn traceback(name: &String, scr: &PathBuf, err: EvalAltResult) {
             _tb(
                 name,
                 scr,
-                err,
+                TbErr::Arb(oerr),
                 pos,
                 rhai_fn.as_str(),
                 fn_src.as_str(),
-                None,
-                Some(oerr),
             );
             return;
         }
     }
-    _tb(name, scr, err, pos, "", "", None, None);
+    _tb(name, scr, TbErr::Rhai(err), pos, "", "");
 }
 
 pub fn run<'a>(
-    name: &'a String,
+    name: &'a str,
     scr: &'a PathBuf,
     f: impl FnOnce(&mut Scope<'a>),
 ) -> Option<Scope<'a>> {
@@ -174,7 +176,7 @@ pub fn run<'a>(
     f(&mut sc);
     debug!("Running {name}");
     match en.run_file_with_scope(&mut sc, scr.clone()) {
-        Ok(()) => Some(sc.to_owned()),
+        Ok(()) => Some(sc),
         Err(err) => {
             traceback(name, scr, *err);
             None

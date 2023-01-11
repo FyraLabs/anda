@@ -11,8 +11,8 @@ pub fn update_rpms(cfg: Manifest) -> Result<()> {
         if let Some(rpm) = &proj.rpm {
             let spec = &rpm.spec;
             let scr = if rpm.update.is_none() {
-                let s = rpm.spec.display().to_string();
-                let paths: Vec<&str> = s.split('/').collect();
+                // FIXME remove filename, any better impl?
+                let paths: Vec<&str> = rpm.spec.to_str().unwrap_or_default().split('/').collect();
                 let path = &paths[..paths.len() - 1].join("/");
                 let scr = format!("{path}/update.rhai");
                 if !std::path::Path::new(&scr).exists() {
@@ -23,15 +23,12 @@ pub fn update_rpms(cfg: Manifest) -> Result<()> {
             } else {
                 rpm.update.to_owned().unwrap()
             };
+            trace!(name, scr = scr.to_str(), "Th start");
             let rpmspec = RPMSpec::new(name.clone(), &scr, spec)?;
-            let name = name.to_owned();
-            trace!(name, scr = scr.display().to_string(), "Th start");
-            handlers.push(thread::Builder::new().name(name).spawn(move || {
-                let name = thread::current()
-                    .name()
-                    .expect("No name for andax thread??")
-                    .to_string();
-                let sc = run(&name, &scr, |sc| {
+            handlers.push(thread::Builder::new().name(name.clone()).spawn(move || {
+                let th = thread::current();
+                let name = th.name().expect("No name for andax thread??");
+                let sc = run(name, &scr, |sc| {
                     sc.push("rpm", rpmspec);
                 });
                 if let Some(sc) = sc {
@@ -54,7 +51,7 @@ pub fn update_rpms(cfg: Manifest) -> Result<()> {
         let th = hdl.thread();
         let name = th.name().expect("No name for andax thread??").to_string();
         if let Err(e) = hdl.join() {
-            error!("Panic @ `{name}`");
+            error!("Panic @ `{name}` : {e:#?}");
         }
     }
 

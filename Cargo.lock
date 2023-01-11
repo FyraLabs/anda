@@ -102,6 +102,7 @@ dependencies = [
  "regex",
  "rhai",
  "serde_json",
+ "smartstring",
  "tracing",
  "ureq",
 ]

@@ -15,3 +15,4 @@ ureq = { version = "~2", features = ["json"] }
 anda-config = { path = "../anda-config" }
 tracing = "0.1.37"
 color-eyre = "0.6.2"
+smartstring = "1.0.1"
