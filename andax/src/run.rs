@@ -99,10 +99,13 @@ pub fn _tb(
                     } else {
                         1
                     };
-                    let lns = " ".repeat(line.to_string().len());
+                    let ln = line.to_string().len();
+                    let lns = " ".repeat(ln);
+                    let _l = "─".repeat(ln);
+                    let _r = "─".repeat(sl.len()+2);
                     let mut code = format!(
-                        " {lns} ┌{}\n {line} │ {sl}\n {lns} │ {}{}",
-                        "─".repeat(col),
+                        "─{_l}─┬{_r}\n {lns} │ {}:{line}:{col}\n─{_l}─┼{_r}\n {line} │ {sl}\n {lns} │ {}{}",
+                        scr.display(),
                         " ".repeat(col - 1),
                         "─".repeat(m)
                     );
@@ -117,11 +120,7 @@ pub fn _tb(
                     if c > 0 {
                         code = code.replacen('└', "├", c - 1);
                     }
-                    error!(
-                        proj,
-                        script = format!("{}:{line}:{col}", scr.display()),
-                        "Andax Exception ——\n{code}"
-                    );
+                    error!("Script Exception —— {proj}\n{code}");
                     return;
                 }
             }

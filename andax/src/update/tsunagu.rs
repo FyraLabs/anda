@@ -5,7 +5,7 @@ use tracing::debug;
 
 type RhaiRes<T> = Result<T, Box<EvalAltResult>>;
 
-pub(crate) const USER_AGENT: &str = "Anda-update";
+pub(crate) const USER_AGENT: &str = "andax";
 #[export_module]
 pub mod anda_rhai {
     use std::env::VarError;

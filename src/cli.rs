@@ -191,4 +191,9 @@ pub enum Command {
 
     /// Update all projects
     Update,
+
+    /// Run .anda scripts
+    Run {
+        scripts: Vec<String>,
+    },
 }

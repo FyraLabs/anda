@@ -57,3 +57,32 @@ pub fn update_rpms(cfg: Manifest) -> Result<()> {
 
     Ok(())
 }
+
+#[instrument]
+pub fn run_scripts(scripts: &[String]) -> Result<()> {
+    let mut handlers = vec![];
+    for scr in scripts {
+        trace!(scr, "Th start");
+        handlers.push(
+            thread::Builder::new()
+                .name(scr.to_string())
+                .spawn(move || {
+                    let th = thread::current();
+                    let name = th.name().expect("No name for andax thread??");
+                    run(name, &std::path::PathBuf::from(name), |_| {});
+                })?,
+        );
+    }
+
+    debug!("Joining {} threads", handlers.len());
+
+    for hdl in handlers {
+        let th = hdl.thread();
+        let name = th.name().expect("No name for andax thread??").to_string();
+        if let Err(e) = hdl.join() {
+            error!("Panic @ `{name}` : {e:#?}");
+        }
+    }
+
+    Ok(())
+}

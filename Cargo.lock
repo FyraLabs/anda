@@ -96,13 +96,13 @@ dependencies = [
 name = "andax"
 version = "0.1.0"
 dependencies = [
- "anda-config",
  "color-eyre",
  "lazy_static",
  "regex",
  "rhai",
  "serde_json",
  "smartstring",
+ "tempfile",
  "tracing",
  "ureq",
 ]

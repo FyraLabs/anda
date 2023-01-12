@@ -11,7 +11,7 @@ mod util;
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{Cli, Command};
-use color_eyre::{Result, Report};
+use color_eyre::{Report, Result};
 use std::io;
 use tracing::debug;
 use util::fetch_build_entries;
@@ -28,7 +28,9 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
-    match cli.command.clone() {
+    let cmd = cli.command.to_owned();
+
+    match cmd {
         Command::Build {
             all,
             project,
@@ -47,7 +49,9 @@ async fn main() -> Result<()> {
                     .display_name("anda-build")
                     .name("anda-build");
                 a.print_help().unwrap();
-                return Err(Report::msg("No project specified, and --all not specified."));
+                return Err(Report::msg(
+                    "No project specified, and --all not specified.",
+                ));
             }
 
             debug!("{:?}", &all);
@@ -107,6 +111,9 @@ async fn main() -> Result<()> {
         }
         Command::Update => {
             update::update_rpms(anda_config::load_from_file(&cli.config).unwrap())?;
+        }
+        Command::Run { scripts } => {
+            return update::run_scripts(&scripts);
         }
     }
     Ok(())
