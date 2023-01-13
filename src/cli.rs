@@ -191,8 +191,12 @@ pub enum Command {
 
     /// Update all projects
     Update {
+        /// Labels to pass to the scripts
         #[clap(short, long)]
         labels: Option<String>,
+        /// Filter out projects if the labels specified in anda.hcl match
+        #[clap(short, long)]
+        filters: Option<String>,
     },
 
     /// Run .anda scripts

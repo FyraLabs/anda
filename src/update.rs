@@ -5,29 +5,37 @@ use std::{collections::BTreeMap, thread};
 use tracing::{debug, error, instrument, trace};
 
 #[instrument]
-pub fn update_rpms(cfg: Manifest, lbls: BTreeMap<String, String>) -> Result<()> {
+pub fn update_rpms(
+    cfg: Manifest,
+    lbls: BTreeMap<String, String>,
+    fls: BTreeMap<String, String>,
+) -> Result<()> {
     let mut handlers = vec![];
     for (name, proj) in cfg.project.iter() {
-        if let Some(rpm) = &proj.rpm {
-            let spec = &rpm.spec;
-            let scr = if let Some(scr) = &rpm.update {
-                scr.to_owned()
-            } else {
-                continue;
-            };
+        if let Some(scr) = &proj.update {
             trace!(name, scr = scr.to_str(), "Th start");
-            let rpmspec = RPMSpec::new(name.to_owned(), &scr, spec)?;
-            let lbls = lbls.clone();
+            let mut lbls = lbls.clone();
+            lbls.extend(proj.labels.clone());
+            for (k, v) in &fls {
+                if let Some(val) = lbls.get(k) {
+                    if val == v {
+                        continue;
+                    }
+                }
+                break;
+            }
+            let proj = proj.to_owned();
             handlers.push(thread::Builder::new().name(name.clone()).spawn(move || {
                 let th = thread::current();
                 let name = th.name().expect("No name for andax thread??");
+                let scr = proj.update.expect("No update script? How did I get here??");
                 let sc = run(name, &scr, lbls, |sc| {
-                    sc.push("rpm", rpmspec);
+                    if let Some(rpm) = &proj.rpm {
+                        sc.push("rpm", RPMSpec::new(name.to_owned(), &scr, &rpm.spec));
+                    }
                 });
                 if let Some(sc) = sc {
-                    let rpm = sc
-                        .get_value::<RPMSpec>("rpm")
-                        .expect("No rpm object in rhai scope");
+                    let rpm: RPMSpec = sc.get_value("rpm").expect("No rpm object in rhai scope");
                     if rpm.changed {
                         if let Err(e) = rpm.write() {
                             error!("{name}: Failed to write RPM: {e}");

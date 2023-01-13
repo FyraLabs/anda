@@ -16,18 +16,18 @@ pub struct RPMSpec {
 }
 
 impl RPMSpec {
-    pub fn new<T, U>(name: String, chkupdate: T, spec: U) -> Result<Self>
+    pub fn new<T, U>(name: String, chkupdate: T, spec: U) -> Self
     where
         T: Into<PathBuf> + AsRef<Path>,
         U: Into<PathBuf> + AsRef<Path>,
     {
-        Ok(Self {
+        Self {
             name,
             chkupdate: chkupdate.into(),
             changed: false,
-            f: fs::read_to_string(&spec)?,
+            f: fs::read_to_string(&spec).expect("Cannot read spec to string"),
             spec: spec.into(),
-        })
+        }
     }
     pub fn version(&mut self, ver: String) -> Result<(), Box<EvalAltResult>> {
         let re = regex::Regex::new(r"Version:(\s+)([\.\d]+)\n").unwrap();

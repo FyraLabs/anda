@@ -70,6 +70,7 @@ pub struct Project {
     pub alias: Option<Vec<String>>,
     #[serde(default)]
     pub labels: BTreeMap<String, String>,
+    pub update: Option<PathBuf>,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
@@ -86,7 +87,6 @@ pub struct RpmBuild {
     pub plugin_opts: Option<BTreeMap<String, String>>,
     pub macros: Option<BTreeMap<String, String>>,
     pub opts: Option<BTreeMap<String, String>>,
-    pub update: Option<PathBuf>,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
@@ -214,11 +214,11 @@ pub fn prefix_config(config: Manifest, prefix: &str) -> Manifest {
         } // default!(obj, attr, default_value);
         if let Some(rpm) = &mut new_project.rpm {
             rpm.spec = PathBuf::from(format!("{prefix}/{}", rpm.spec.display()));
-            default!(rpm, update, "update.rhai");
             default!(rpm, pre_script, "rpm_pre.rhai");
             default!(rpm, post_script, "rpm_post.rhai");
             default!(rpm, sources, ".");
         }
+        default!(new_project, update, "update.rhai");
         default!(new_project, pre_script, "pre.rhai");
         default!(new_project, post_script, "pre.rhai");
 

@@ -108,11 +108,13 @@ async fn main() -> Result<()> {
 
             println!("build_matrix={}", serde_json::to_string(&entries)?);
         }
-        Command::Update { labels } => {
+        Command::Update { labels, filters } => {
             let labels = util::parse_labels(labels.unwrap_or_default());
+            let filters = util::parse_labels(filters.unwrap_or_default());
             update::update_rpms(
                 anda_config::load_from_file(&cli.config).unwrap(),
                 labels.ok_or_else(|| Report::msg("Cannot parse --labels"))?,
+                filters.ok_or_else(|| Report::msg("Cannot parse --labels"))?,
             )?;
         }
         Command::Run { scripts, labels } => {
