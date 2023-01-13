@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::cli::PackageType;
 
+#[derive(Clone)]
 pub struct Artifacts {
     pub packages: BTreeMap<String, PackageType>,
 }

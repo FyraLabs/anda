@@ -3,16 +3,16 @@
 /// see anda rpm_spec.rs
 use rhai::plugin::*;
 
-#[export_module]
-pub mod anda_rhai {
-    fn cmd_srpm(spec: &str, sources: Option<&str>) -> Vec<String> {
+// 正にこうです。 :3
+macro_rules! rpmargs {
+    ($a:expr, $spec:expr, $sources:expr) => {
         [
             "mock",
-            "--buildsrpm",
+            $a,
             "--spec",
-            spec,
+            $spec,
             "--sources",
-            sources.unwrap_or(""),
+            $sources.unwrap_or(""),
             "--resultdir",
             format!(
                 "{:?}",
@@ -25,9 +25,20 @@ pub mod anda_rhai {
             .as_str(),
             "--enable-network",
             "--verbose",
-            ]
+        ]
         .into_iter()
         .map(|s| s.to_string())
         .collect()
+    };
+}
+
+#[export_module]
+#[allow(dead_code)]
+pub mod anda_rhai {
+    fn cmd_srpm(spec: &str, sources: Option<&str>) -> Vec<String> {
+        rpmargs!("--buildsrpm", spec, sources)
+    }
+    fn cmd_rpm(spec: &str, sources: Option<&str>) -> Vec<String> {
+        rpmargs!("--rebuild", spec, sources)
     }
 }

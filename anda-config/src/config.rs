@@ -1,9 +1,9 @@
-use tracing::{debug, trace};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
+use tracing::{debug, trace};
 
 use crate::error::ProjectError;
 
@@ -64,21 +64,12 @@ pub struct Project {
     pub podman: Option<Docker>,
     pub docker: Option<Docker>,
     pub flatpak: Option<Flatpak>,
-    pub pre_script: Option<PreScript>,
-    pub post_script: Option<PostScript>,
+    pub pre_script: Option<PathBuf>,
+    pub post_script: Option<PathBuf>,
     pub env: Option<BTreeMap<String, String>>,
     pub alias: Option<Vec<String>>,
     #[serde(default)]
     pub labels: BTreeMap<String, String>,
-}
-#[derive(Deserialize, Eq, PartialEq, Hash, PartialOrd, Ord, Serialize, Debug, Clone)]
-pub struct PreScript {
-    pub commands: Vec<String>,
-}
-
-#[derive(Deserialize, Eq, PartialEq, Hash, Serialize, Debug, Clone)]
-pub struct PostScript {
-    pub commands: Vec<String>,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
@@ -86,8 +77,8 @@ pub struct RpmBuild {
     pub spec: PathBuf,
     pub sources: Option<PathBuf>,
     pub package: Option<String>,
-    pub pre_script: Option<PreScript>,
-    pub post_script: Option<PostScript>,
+    pub pre_script: Option<PathBuf>,
+    pub post_script: Option<PathBuf>,
     pub enable_scm: Option<bool>,
     pub scm_opts: Option<BTreeMap<String, String>>,
     pub config: Option<BTreeMap<String, String>>,
@@ -127,8 +118,8 @@ pub struct DockerImage {
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
 pub struct Flatpak {
     pub manifest: PathBuf,
-    pub pre_script: Option<PreScript>,
-    pub post_script: Option<PostScript>,
+    pub pre_script: Option<PathBuf>,
+    pub post_script: Option<PathBuf>,
 }
 
 pub fn to_string(config: Manifest) -> Result<String, hcl::Error> {
@@ -202,26 +193,34 @@ pub fn prefix_config(config: Manifest, prefix: &str) -> Manifest {
 
     for (project_name, project) in config.project.iter() {
         // set project name to prefix
-        let new_project_name = format!("{}/{}", prefix, project_name);
+        let new_project_name = format!("{prefix}/{project_name}");
         // modify project data
         let mut new_project = project.clone();
 
-        if let Some(rpm) = &mut new_project.rpm {
-            rpm.spec = PathBuf::from(format!("{}/{}", prefix, rpm.spec.display()));
-            if let Some(sources) = &mut rpm.sources {
-                *sources = PathBuf::from(format!("{}/{}", prefix, sources.display()));
-            } else {
-                rpm.sources = Some(PathBuf::from(prefix.to_string()));
-            }
-            if let Some(update) = &mut rpm.update {
-                let update = if update.to_str().is_none() || update.to_str().unwrap().is_empty() {
-                    "update.rhai"
+        macro_rules! default {
+            ($o:expr, $attr:ident, $d:expr) => {
+                if let Some($attr) = &mut $o.$attr {
+                    if $attr.as_os_str().is_empty() {
+                        *$attr = $d.into();
+                    }
+                    *$attr = PathBuf::from(format!("{prefix}/{}", $attr.display()));
                 } else {
-                    update.to_str().unwrap()
-                };
-                rpm.update = Some(PathBuf::from(format!("{prefix}/{update}")));
-            }
+                    let p = PathBuf::from(format!("{prefix}/{}", $d));
+                    if p.exists() {
+                        $o.$attr = Some(p);
+                    }
+                }
+            };
+        } // default!(obj, attr, default_value);
+        if let Some(rpm) = &mut new_project.rpm {
+            rpm.spec = PathBuf::from(format!("{prefix}/{}", rpm.spec.display()));
+            default!(rpm, update, "update.rhai");
+            default!(rpm, pre_script, "rpm_pre.rhai");
+            default!(rpm, post_script, "rpm_post.rhai");
+            default!(rpm, sources, ".");
         }
+        default!(new_project, pre_script, "pre.rhai");
+        default!(new_project, post_script, "pre.rhai");
 
         new_config.project.remove(project_name);
         new_config.project.insert(new_project_name, new_project);

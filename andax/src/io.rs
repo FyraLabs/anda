@@ -28,38 +28,46 @@ macro_rules! _cmd {
 }
 
 type T = Result<(i32, String, String), Box<EvalAltResult>>;
+type Ctx<'a> = NativeCallContext<'a>;
 
 /// for andax, shell():
 /// ```
-/// shell("echo hai");
-/// shell(["echo", "hai"]);
-/// shell(["rm", "-rf", "/path/with/some space"]);
-/// // cwd
-/// shell("ls -al", "/current/working/directory");
-/// shell(["grep", "andaman", "file"], "/working/dir");
+/// sh("echo hai");
+/// sh(["echo", "hai"]);
+/// sh(["rm", "-rf", "/path/with/some space"]);
+/// sh("ls -al", "/current/working/directory");
+/// sh(["grep", "andaman", "file"], "/working/dir");
 /// ```
 /// Returns (rc, stdout, stderr)
 /// We will let rhai handle all the nasty things.
 #[export_module]
+#[allow(dead_code)]
 pub mod anda_rhai {
-
+    use std::{
+        fs::File,
+        io::{BufRead, BufReader, Lines},
+    };
+    /// run a command using `cmd` on Windows and `sh` on other systems
     #[rhai_fn(return_raw, name = "sh")]
-    pub(crate) fn shell(ctx: NativeCallContext, cmd: &str) -> T {
+    fn shell(ctx: Ctx, cmd: &str) -> T {
         _sh_out!(&ctx, _cmd!(cmd).output().ehdl(&ctx)?)
     }
+    /// run a command using `cmd` on Windows and `sh` on other systems in working dir
     #[rhai_fn(return_raw, name = "sh")]
-    pub(crate) fn shell_cwd(ctx: NativeCallContext, cmd: &str, cwd: &str) -> T {
+    fn shell_cwd(ctx: Ctx, cmd: &str, cwd: &str) -> T {
         _sh_out!(&ctx, _cmd!(cmd).current_dir(cwd).output().ehdl(&ctx)?)
     }
+    /// run an executable
     #[rhai_fn(return_raw, name = "sh")]
-    pub(crate) fn sh(ctx: NativeCallContext, cmd: Vec<&str>) -> T {
+    fn sh(ctx: Ctx, cmd: Vec<&str>) -> T {
         _sh_out!(
             &ctx,
             Command::new(cmd[0]).args(&cmd[1..]).output().ehdl(&ctx)?
         )
     }
+    /// run an executable in working directory
     #[rhai_fn(return_raw, name = "sh")]
-    pub(crate) fn sh_cwd(ctx: NativeCallContext, cmd: Vec<&str>, cwd: &str) -> T {
+    fn sh_cwd(ctx: Ctx, cmd: Vec<&str>, cwd: &str) -> T {
         _sh_out!(
             &ctx,
             Command::new(cmd[0])
@@ -68,5 +76,33 @@ pub mod anda_rhai {
                 .output()
                 .ehdl(&ctx)?
         )
+    }
+    /// list files and folders in directory
+    /// ## Example
+    /// ```rhai
+    /// for x in ls("/") {
+    ///     if x == "bin" {
+    ///         print("I found the `/bin` folder!");
+    ///     }
+    /// }
+    /// ```
+    #[rhai_fn(return_raw)]
+    fn ls(ctx: Ctx, dir: Option<&str>) -> Result<Vec<String>, Box<EvalAltResult>> {
+        let mut res = vec![];
+        for dir in std::fs::read_dir(dir.unwrap_or(".")).ehdl(&ctx)? {
+            res.push(dir.ehdl(&ctx)?.path().to_string_lossy().to_string());
+        }
+        Ok(res)
+    }
+    /// iterator for lines in a file
+    /// ## Example
+    /// ```rhai
+    /// for line in flines("/path/to/file.txt") {
+    ///     print(line);
+    /// }
+    /// ```
+    #[rhai_fn(return_raw)]
+    fn flines(ctx: Ctx, path: &str) -> Result<Lines<BufReader<File>>, Box<EvalAltResult>> {
+        Ok(BufReader::new(File::open(path).ehdl(&ctx)?).lines())
     }
 }

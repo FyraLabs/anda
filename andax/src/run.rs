@@ -3,12 +3,14 @@ use crate::{
     io,
     update::{self, re, rpm, tsunagu},
 };
+use lazy_static::lazy_static;
 use regex::Regex;
 use rhai::{plugin::*, Engine, EvalAltResult, NativeCallContext as CallCtx, Scope};
 use std::{
+    collections::BTreeMap,
     fs::File,
     io::{BufRead, BufReader},
-    path::PathBuf,
+    path::Path,
     rc::Rc,
 };
 use tracing::{debug, error, instrument, trace, warn};
@@ -47,6 +49,7 @@ fn gen_en() -> (Engine, Scope<'static>) {
         .register_fn("sub", |ctx: CallCtx, a, b, c| rf(ctx, re::sub(a, b, c)))
         .register_global_module(exported_module!(io::anda_rhai).into())
         .register_global_module(exported_module!(update::tsunagu::anda_rhai).into())
+        .register_static_module("rpmbuild", exported_module!(crate::build::anda_rhai).into())
         .build_type::<update::tsunagu::Req>()
         .build_type::<rpm::RPMSpec>();
     (en, sc)
@@ -66,73 +69,73 @@ fn _gpos(p: Position) -> Option<(usize, usize)> {
     p.line().map(|l| (l, p.position().unwrap_or(0)))
 }
 
-#[instrument(name = "traceback")]
-pub fn _tb(
-    proj: &str,
-    scr: &PathBuf,
-    nanitozo: TbErr,
-    pos: Position,
-    rhai_fn: &str,
-    fn_src: &str,
-) {
-    if let Some((line, col)) = _gpos(pos) {
-        // Print code
-        match File::open(scr) {
-            Ok(f) => {
-                let f = BufReader::new(f);
-                for (n, sl) in f.lines().enumerate() {
-                    if n != line - 1 {
-                        continue;
-                    }
-                    if let Err(e) = sl {
-                        error!("{proj}: Cannot read line: {e}");
-                        break;
-                    }
-                    let sl = sl.unwrap();
-                    let re = Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").unwrap();
-                    let m = if let Some(x) = re.find_at(sl.as_str(), col - 1) {
-                        if x.range().start != col - 1 {
-                            1
-                        } else {
-                            x.range().len()
-                        }
-                    } else {
-                        1
-                    };
-                    let ln = line.to_string().len();
-                    let lns = " ".repeat(ln);
-                    let _l = "─".repeat(ln);
-                    let _r = "─".repeat(sl.len()+2);
-                    let mut code = format!(
-                        "─{_l}─┬{_r}\n {lns} │ {}:{line}:{col}\n─{_l}─┼{_r}\n {line} │ {sl}\n {lns} │ {}{}",
-                        scr.display(),
-                        " ".repeat(col - 1),
-                        "─".repeat(m)
-                    );
-                    if !rhai_fn.is_empty() {
-                        code += &*format!("\n {lns} └─═ When invoking: {rhai_fn}()");
-                    }
-                    if !fn_src.is_empty() {
-                        code += &*format!("\n {lns} └─═ Function source: {fn_src}");
-                    }
-                    code += &*format!("\n {lns} └─═ {}", _gemsg(&nanitozo));
-                    let c = code.matches('└').count();
-                    if c > 0 {
-                        code = code.replacen('└', "├", c - 1);
-                    }
-                    error!("Script Exception —— {proj}\n{code}");
-                    return;
-                }
-            }
-            Err(e) => error!("{proj}: Cannot open `{}`: {e}", scr.display()),
-        }
-    } else {
-        let err = _gemsg(&nanitozo);
-        error!("{proj}: {} (no position data)\n{err}", scr.display());
-    }
+pub fn _tb_fb(p: &str, s: std::path::Display, nntz: TbErr) {
+    error!("{p}: {s} (no position data)\n{}", _gemsg(&nntz));
 }
 
-pub fn traceback(name: &str, scr: &PathBuf, err: EvalAltResult) {
+lazy_static! {
+    static ref WORD_REGEX: Regex = Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").unwrap();
+}
+
+#[instrument(name = "traceback")]
+pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str, fn_src: &str) {
+    if let Some((line, col)) = _gpos(pos) {
+        // Print code
+        let f = File::open(scr);
+        let scr = scr.display();
+        macro_rules! die {
+            ($var:expr, $msg:expr) => {{
+                if let Err(e) = $var {
+                    error!($msg, e);
+                    return _tb_fb(proj, scr, nanitozo);
+                }
+                $var.unwrap()
+            }};
+        }
+        let f = die!(f, "{proj}: Cannot open `{scr}`: {}");
+        for (n, sl) in BufReader::new(f).lines().enumerate() {
+            if n != line - 1 {
+                continue;
+            }
+            let sl = die!(sl, "{proj}: Cannot read line: {}");
+            let m = if let Some(x) = WORD_REGEX.find_at(sl.as_str(), col - 1) {
+                let r = x.range();
+                if r.start != col - 1 {
+                    1
+                } else {
+                    r.len()
+                }
+            } else {
+                1
+            };
+            let ln = line.to_string().len();
+            let lns = " ".repeat(ln);
+            let _l = "─".repeat(ln);
+            let _r = "─".repeat(sl.len() + 2);
+            let mut code = format!(
+                "─{_l}─┬{_r}\n {lns} │ {scr}:{line}:{col}\n─{_l}─┼{_r}\n {line} │ {sl}\n {lns} │ {}{}",
+                " ".repeat(col - 1),
+                "─".repeat(m)
+            );
+            if !rhai_fn.is_empty() {
+                code += &*format!("\n {lns} └─═ When invoking: {rhai_fn}()");
+            }
+            if !fn_src.is_empty() {
+                code += &*format!("\n {lns} └─═ Function source: {fn_src}");
+            }
+            code += &*format!("\n {lns} └─═ {}", _gemsg(&nanitozo));
+            let c = code.matches('└').count();
+            if c > 0 {
+                code = code.replacen('└', "├", c - 1);
+            }
+            return error!("Script Exception —— {proj}\n{code}");
+        }
+        error!("{proj}: nonexistance Exception line {line} in file {scr}");
+    }
+    _tb_fb(proj, scr.display(), nanitozo)
+}
+
+pub fn traceback(name: &str, scr: &Path, err: EvalAltResult) {
     trace!("{name}: Generating traceback");
     let pos = err.position();
     if let EvalAltResult::ErrorRuntime(ref run_err, pos) = err {
@@ -168,13 +171,19 @@ pub fn traceback(name: &str, scr: &PathBuf, err: EvalAltResult) {
 
 pub fn run<'a>(
     name: &'a str,
-    scr: &'a PathBuf,
+    scr: &'a Path,
+    labels: BTreeMap<String, String>,
     f: impl FnOnce(&mut Scope<'a>),
 ) -> Option<Scope<'a>> {
     let (en, mut sc) = gen_en();
     f(&mut sc);
+    let mut lbls = rhai::Map::new();
+    for (k, v) in labels {
+        lbls.insert(k.into(), v.into());
+    }
+    sc.push("labels", lbls);
     debug!("Running {name}");
-    match en.run_file_with_scope(&mut sc, scr.clone()) {
+    match en.run_file_with_scope(&mut sc, scr.to_path_buf()) {
         Ok(()) => Some(sc),
         Err(err) => {
             traceback(name, scr, *err);

@@ -190,10 +190,15 @@ pub enum Command {
     CI,
 
     /// Update all projects
-    Update,
+    Update {
+        #[clap(short, long)]
+        labels: Option<String>,
+    },
 
     /// Run .anda scripts
     Run {
         scripts: Vec<String>,
+        #[clap(short, long)]
+        labels: Option<String>,
     },
 }

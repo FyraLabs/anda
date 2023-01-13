@@ -14,7 +14,6 @@ use cli::{Cli, Command};
 use color_eyre::{Report, Result};
 use std::io;
 use tracing::debug;
-use util::fetch_build_entries;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -105,15 +104,26 @@ async fn main() -> Result<()> {
         }
         Command::CI => {
             let config = anda_config::load_from_file(&cli.config).unwrap();
-            let entries = fetch_build_entries(config)?;
+            let entries = util::fetch_build_entries(config)?;
 
             println!("build_matrix={}", serde_json::to_string(&entries)?);
         }
-        Command::Update => {
-            update::update_rpms(anda_config::load_from_file(&cli.config).unwrap())?;
+        Command::Update { labels } => {
+            let labels = util::parse_labels(labels.unwrap_or_default());
+            update::update_rpms(
+                anda_config::load_from_file(&cli.config).unwrap(),
+                labels.ok_or_else(|| Report::msg("Cannot parse --labels"))?,
+            )?;
         }
-        Command::Run { scripts } => {
-            return update::run_scripts(&scripts);
+        Command::Run { scripts, labels } => {
+            if scripts.is_empty() {
+                return Err(Report::msg("No scripts to run"))
+            }
+            let labels = util::parse_labels(labels.unwrap_or_default());
+            update::run_scripts(
+                &scripts,
+                labels.ok_or_else(|| Report::msg("Cannot parse --labels"))?,
+            )?;
         }
     }
     Ok(())

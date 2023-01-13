@@ -3,19 +3,16 @@
 use std::{collections::BTreeMap, fs::read_to_string, path::Path};
 
 use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
-use color_eyre::Result;
 use async_trait::async_trait;
 use cmd_lib::log;
-use color_eyre::Report;
+use color_eyre::{Report, Result};
 use console::style;
 use lazy_static::lazy_static;
 use log::{debug, info};
-use nix::sys::signal;
-use nix::unistd::Pid;
+use nix::{sys::signal, unistd::Pid};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use tokio::io::AsyncBufReadExt;
-use tokio::process::Command;
+use tokio::{io::AsyncBufReadExt, process::Command};
 
 lazy_static! {
     static ref ARCH_REGEX: Regex = Regex::new("(BuildArch|ExclusiveArch):\\s(.+)").unwrap();
@@ -320,7 +317,7 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
                             true
                         } else {
                             prompt_default(
-                                &format!("Add spec file `{}` to manifest?", path.display()),
+                                format!("Add spec file `{}` to manifest?", path.display()),
                                 true,
                             )?
                         }
@@ -354,7 +351,7 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
                         true
                     } else {
                         prompt_default(
-                            &format!("Add Dockerfile `{}` to manifest?", path.display()),
+                            format!("Add Dockerfile `{}` to manifest?", path.display()),
                             true,
                         )?
                     }
@@ -400,4 +397,21 @@ pub(crate) fn convert_filter(filter: log::LevelFilter) -> tracing_subscriber::fi
         log::LevelFilter::Debug => tracing_subscriber::filter::LevelFilter::DEBUG,
         log::LevelFilter::Trace => tracing_subscriber::filter::LevelFilter::TRACE,
     }
+}
+
+pub(crate) fn parse_labels(labels: String) -> Option<BTreeMap<String, String>> {
+    let mut tree = BTreeMap::new();
+    if labels.is_empty() {
+        return Some(tree);
+    }
+    for entry in labels.split(',') {
+        if entry.matches('=').count() != 1 {
+            return None;
+        }
+        let mut sp = entry.split('=');
+        let key = sp.next().unwrap();
+        let val = sp.next().unwrap();
+        tree.insert(key.to_string(), val.to_string());
+    }
+    Some(tree)
 }

@@ -7,13 +7,10 @@ use crate::{
     util::{get_commit_id_cwd, get_date},
 };
 use anda_config::{Docker, Flatpak, Project, RpmBuild};
-use std::{
-    path::{Path, PathBuf},
-    process::Command,
-};
-use color_eyre::{Result, eyre::Context, Report};
 use cmd_lib::run_cmd;
-use tracing::{debug, trace};
+use color_eyre::{eyre::eyre, eyre::Context, Report, Result};
+use std::path::{Path, PathBuf};
+use tracing::{debug, error, trace};
 
 pub async fn build_rpm(
     opts: RPMOptions,
@@ -127,42 +124,69 @@ pub async fn build_flatpak(
     Ok(artifacts)
 }
 
+macro_rules! script {
+    ($name:expr, $scr:expr, $( $var:ident ),*) => {
+        let sc = andax::run(
+            $name,
+            &$scr,
+            std::collections::BTreeMap::new(),
+            |sc| {
+                $( sc.push(stringify!($var), $var); )*
+            },
+        );
+        #[allow(unused_assignments)]
+        if let Some(sc) = sc {
+            $( $var = sc.get_value(stringify!($var)).expect(concat!("No `{}` in scope", stringify!($var))); )*
+        } else {
+            error!(
+                scr = $scr.display().to_string(),
+                concat!(stringify!($scr), " —— failed with aforementioned exception.")
+            );
+            return Err(eyre!(concat!(stringify!($scr), " failed")));
+        }
+    };
+}
+
 // Functions to actually call the builds
 // yeah this is ugly and relies on side effects, but it reduces code duplication
 // to anyone working on this, please rewrite this call to make it more readable
 pub async fn build_rpm_call(
     cli: &Cli,
-    opts: RPMOptions,
+    mut opts: RPMOptions,
     rpmbuild: &RpmBuild,
-    rpm_builder: RPMBuilder,
+    mut rpm_builder: RPMBuilder,
     artifact_store: &mut Artifacts,
-    rpmb_opts: RpmOpts,
+    mut rpmb_opts: RpmOpts,
 ) -> Result<()> {
     // run pre-build script
     if let Some(pre_script) = &rpmbuild.pre_script {
-        for script in pre_script.commands.iter() {
-            let mut cmd = Command::new("sh");
-            cmd.arg("-x").arg("-c").arg(script);
-            cmd.status()?;
-        }
+        script!(
+            rpmbuild.spec.as_os_str().to_str().unwrap_or_default(),
+            pre_script,
+            opts,
+            rpm_builder,
+            rpmb_opts
+        );
     }
 
     let art = build_rpm(
-        opts,
+        opts.clone(),
         &rpmbuild.spec,
         rpm_builder,
         &cli.target_dir,
-        rpmb_opts,
+        rpmb_opts.clone(),
     )
     .await?;
 
     // run post-build script
     if let Some(post_script) = &rpmbuild.post_script {
-        for script in post_script.commands.iter() {
-            let mut cmd = Command::new("sh");
-            cmd.arg("-x").arg("-c").arg(script);
-            cmd.status()?;
-        }
+        script!(
+            rpmbuild.spec.as_os_str().to_str().unwrap_or_default(),
+            post_script,
+            opts,
+            rpm_builder,
+            rpmb_opts
+        );
     }
 
     for artifact in art {
@@ -176,17 +200,17 @@ pub async fn build_flatpak_call(
     cli: &Cli,
     flatpak: &Flatpak,
     artifact_store: &mut Artifacts,
-    flatpak_opts: FlatpakOpts,
+    mut flatpak_opts: FlatpakOpts,
 ) -> Result<()> {
     if let Some(pre_script) = &flatpak.pre_script {
-        for script in pre_script.commands.iter() {
-            let mut cmd = Command::new("sh");
-            cmd.arg("-x").arg("-c").arg(script);
-            cmd.status()?;
-        }
+        script!(
+            flatpak.manifest.as_path().to_str().unwrap_or("<flatpak>"),
+            pre_script,
+            flatpak_opts
+        );
     }
 
-    let art = build_flatpak(&cli.target_dir, &flatpak.manifest, flatpak_opts)
+    let art = build_flatpak(&cli.target_dir, &flatpak.manifest, flatpak_opts.to_owned())
         .await
         .unwrap();
 
@@ -195,11 +219,11 @@ pub async fn build_flatpak_call(
     }
 
     if let Some(post_script) = &flatpak.post_script {
-        for script in post_script.commands.iter() {
-            let mut cmd = Command::new("sh");
-            cmd.arg("-x").arg("-c").arg(script);
-            cmd.status()?;
-        }
+        script!(
+            flatpak.manifest.as_path().to_str().unwrap_or("<flatpak>"),
+            post_script,
+            flatpak_opts
+        );
     }
 
     Ok(())
