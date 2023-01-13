@@ -97,7 +97,8 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
             if n != line - 1 {
                 continue;
             }
-            let sl = die!(sl, "{proj}: Cannot read line: {}");
+            // replace tabs to avoid wrong position when print
+            let sl = die!(sl, "{proj}: Cannot read line: {}").replace('\t', " ");
             let m = if let Some(x) = WORD_REGEX.find_at(sl.as_str(), col - 1) {
                 let r = x.range();
                 if r.start != col - 1 {
@@ -115,7 +116,7 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
             let mut code = format!(
                 "─{_l}─┬{_r}\n {lns} │ {scr}:{line}:{col}\n─{_l}─┼{_r}\n {line} │ {sl}\n {lns} │ {}{}",
                 " ".repeat(col - 1),
-                "─".repeat(m)
+                "🭶".repeat(m)
             );
             if !rhai_fn.is_empty() {
                 code += &*format!("\n {lns} └─═ When invoking: {rhai_fn}()");
@@ -182,6 +183,16 @@ pub fn run<'a>(
         lbls.insert(k.into(), v.into());
     }
     sc.push("labels", lbls);
+    exec(name, scr, sc, en)
+}
+
+#[instrument(skip(sc, en))]
+fn exec<'a>(
+    name: &'a str,
+    scr: &'a Path,
+    mut sc: Scope<'a>,
+    en: Engine
+) -> Option<Scope<'a>> {
     debug!("Running {name}");
     match en.run_file_with_scope(&mut sc, scr.to_path_buf()) {
         Ok(()) => Some(sc),

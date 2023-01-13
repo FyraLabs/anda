@@ -6,3 +6,4 @@ mod build;
 
 pub use run::run;
 pub use run::traceback;
+pub use rhai::Map;

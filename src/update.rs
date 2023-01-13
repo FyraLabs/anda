@@ -11,7 +11,7 @@ pub fn update_rpms(
     fls: BTreeMap<String, String>,
 ) -> Result<()> {
     let mut handlers = vec![];
-    for (name, proj) in cfg.project.iter() {
+    'p: for (name, proj) in cfg.project.iter() {
         if let Some(scr) = &proj.update {
             trace!(name, scr = scr.to_str(), "Th start");
             let mut lbls = lbls.clone();
@@ -22,14 +22,21 @@ pub fn update_rpms(
                         continue;
                     }
                 }
-                break;
+                continue 'p; // for any filters !match labels in proj (strict)
             }
+            let fls = fls.clone();
             let proj = proj.to_owned();
             handlers.push(thread::Builder::new().name(name.clone()).spawn(move || {
                 let th = thread::current();
                 let name = th.name().expect("No name for andax thread??");
                 let scr = proj.update.expect("No update script? How did I get here??");
                 let sc = run(name, &scr, lbls, |sc| {
+                    // we have to do it here as `Dynamic` in andax::Map nu Sync impl
+                    let mut filters = andax::Map::new();
+                    for (k, v) in fls {
+                        filters.insert(k.into(), v.into());
+                    }
+                    sc.push("filters", filters);
                     if let Some(rpm) = &proj.rpm {
                         sc.push("rpm", RPMSpec::new(name.to_owned(), &scr, &rpm.spec));
                     }
