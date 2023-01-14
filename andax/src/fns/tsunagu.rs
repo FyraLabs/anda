@@ -4,13 +4,13 @@ use serde_json::Value;
 use std::env::VarError;
 use tracing::trace;
 
-type RhaiRes<T> = Result<T, Box<EvalAltResult>>;
+type Res<T> = Result<T, Box<EvalAltResult>>;
 
 pub(crate) const USER_AGENT: &str = "andax";
 #[export_module]
 pub mod ar {
     #[rhai_fn(return_raw)]
-    pub(crate) fn get(ctx: NativeCallContext, url: &str) -> RhaiRes<String> {
+    pub(crate) fn get(ctx: NativeCallContext, url: &str) -> Res<String> {
         ureq::AgentBuilder::new()
             .redirects(0)
             .build()
@@ -23,7 +23,7 @@ pub mod ar {
     }
 
     #[rhai_fn(return_raw)]
-    pub(crate) fn gh(ctx: NativeCallContext, repo: &str) -> RhaiRes<String> {
+    pub(crate) fn gh(ctx: NativeCallContext, repo: &str) -> Res<String> {
         let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/releases/latest"))
             .set("Authorization", &format!("Bearer {}", env("GITHUB_TOKEN")?))
             .set("User-Agent", USER_AGENT)
@@ -40,7 +40,7 @@ pub mod ar {
         Ok(ver.to_string())
     }
     #[rhai_fn(return_raw)]
-    pub(crate) fn gh_tag(ctx: NativeCallContext, repo: &str) -> RhaiRes<String> {
+    pub(crate) fn gh_tag(ctx: NativeCallContext, repo: &str) -> Res<String> {
         let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/tags"))
             .set("Authorization", &format!("Bearer {}", env("GITHUB_TOKEN")?))
             .set("User-Agent", USER_AGENT)
@@ -58,39 +58,33 @@ pub mod ar {
     }
 
     #[rhai_fn(return_raw)]
-    pub(crate) fn pypi(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
+    pub(crate) fn pypi(ctx: NativeCallContext, name: &str) -> Res<String> {
         ctx.engine().eval(&format!("get(`https://pypi.org/pypi/{name}/json`).json().info.version"))
     }
 
     #[rhai_fn(return_raw)]
-    pub(crate) fn crates(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
+    pub(crate) fn crates(ctx: NativeCallContext, name: &str) -> Res<String> {
         ctx.engine().eval(&format!(
             "get(`https://crates.io/api/v1/crates/{name}`).json().crate.max_stable_version"
         ))
     }
 
     #[rhai_fn(return_raw)]
-    pub(crate) fn crates_max(
-        ctx: NativeCallContext,
-        name: &str,
-    ) -> Result<String, Box<EvalAltResult>> {
+    pub(crate) fn crates_max(ctx: NativeCallContext, name: &str) -> Res<String> {
         ctx.engine().eval(&format!(
             "get(`https://crates.io/api/v1/crates/{name}`).json().crate.max_version"
         ))
     }
 
     #[rhai_fn(return_raw)]
-    pub(crate) fn crates_newest(
-        ctx: NativeCallContext,
-        name: &str,
-    ) -> Result<String, Box<EvalAltResult>> {
-        ctx.engine().eval(
-            &format!("get(`https://crates.io/api/v1/crates/{name}`).json().crate.newest_version")
-        )
+    pub(crate) fn crates_newest(ctx: NativeCallContext, name: &str) -> Res<String> {
+        ctx.engine().eval(&format!(
+            "get(`https://crates.io/api/v1/crates/{name}`).json().crate.newest_version"
+        ))
     }
 
     #[rhai_fn(return_raw)]
-    pub(crate) fn env(key: &str) -> Result<String, Box<EvalAltResult>> {
+    pub(crate) fn env(key: &str) -> Res<String> {
         match std::env::var(key) {
             Ok(s) => Ok(s),
             Err(VarError::NotPresent) => Err(format!("env(`{key}`) not present").into()),

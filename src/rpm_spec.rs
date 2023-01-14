@@ -109,7 +109,7 @@ impl FromStr for RPMBuilder {
         match s {
             "mock" => Ok(RPMBuilder::Mock),
             "rpmbuild" => Ok(RPMBuilder::Rpmbuild),
-            _ => Err(Report::msg(format!("Invalid RPM builder: {s}"))),
+            _ => Err(eyre!("Invalid RPM builder: {s}")),
         }
     }
 }
@@ -418,7 +418,7 @@ impl RPMSpecBackend for MockBackend {
             }
         }
 
-        Err(Report::msg("Failed to find srpm"))
+        Err(eyre!("Failed to find srpm"))
     }
     async fn build_rpm(&self, spec: &Path) -> Result<Vec<PathBuf>> {
         let mut cmd = self.mock();

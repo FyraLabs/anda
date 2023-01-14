@@ -52,7 +52,7 @@ pub async fn build_rpm(
         if let Some((key, value)) = split {
             opts2.def_macro(key, value);
         } else {
-            return Err(Report::msg(format!("Invalid rpm macro: {rpmmacro}")));
+            return Err(eyre!("Invalid rpm macro: {rpmmacro}"));
         }
     }
     {
@@ -340,7 +340,7 @@ pub async fn build_project(
                 run_scripts(
                     scripts
                         .iter()
-                        .map(|p| p.to_string_lossy().to_string())
+                        .map(|p| p.to_string_lossy())
                         .collect::<Vec<String>>()
                         .as_slice(),
                     project.labels,
@@ -441,10 +441,10 @@ pub async fn builder(
                 build_project(cli, project.clone(), package, rpm_opts, flatpak_opts, oci_opts)
                     .await?;
             } else {
-                return Err(Report::msg(format!("Project not found: {name}")));
+                return Err(eyre!("Project not found: {name}"));
             }
         } else {
-            return Err(Report::msg("No project specified"));
+            return Err(eyre!("No project specified"));
         }
     }
     Ok(())

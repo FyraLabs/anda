@@ -88,9 +88,7 @@ pub struct Docker {
 
 /// Turn a string into a BTreeMap<String, String>
 pub fn parse_map(input: &str) -> Option<BTreeMap<String, String>> {
-    // split by comma
     let mut map = BTreeMap::new();
-    // check for valid input
     for item in input.split(',') {
         let (k, v) = item.split_once('=')?;
         map.insert(k.to_string(), v.to_string());

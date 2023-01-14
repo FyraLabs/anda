@@ -173,7 +173,7 @@ impl CommandLog for Command {
                     // exit program
                     eprintln!("Received ctrl-c, exiting");
                     // std::process::exit(127);
-                    Err(Report::msg("Received ctrl-c, exiting"))
+                    Err(eyre!("Received ctrl-c, exiting"))
                 }
                 w = output.wait() => {
 
@@ -184,7 +184,7 @@ impl CommandLog for Command {
                         Ok(())
                     } else {
                         info!("Command exited with status: {status}");
-                        Err(Report::msg(format!("Command exited with status: {status}")))
+                        Err(eyre!("Command exited with status: {status}"))
                     }
                     // info!("Child process finished");
                 }

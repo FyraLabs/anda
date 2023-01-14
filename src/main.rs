@@ -42,7 +42,7 @@ async fn main() -> Result<()> {
                     .display_name("anda-build")
                     .name("anda-build");
                 a.print_help().unwrap();
-                return Err(Report::msg("No project specified, and --all not specified."));
+                return Err(eyre!("No project specified, and --all not specified."));
             }
 
             debug!("{all:?}");
@@ -96,18 +96,18 @@ async fn main() -> Result<()> {
             let filters = parse_map(&filters.unwrap_or_default());
             update::update_rpms(
                 anda_config::load_from_file(&cli.config).unwrap(),
-                labels.ok_or_else(|| Report::msg("Cannot parse --labels"))?,
-                filters.ok_or_else(|| Report::msg("Cannot parse --labels"))?,
+                labels.ok_or_else(|| eyre!("Cannot parse --labels"))?,
+                filters.ok_or_else(|| eyre!("Cannot parse --labels"))?,
             )?;
         }
         Command::Run { scripts, labels } => {
             if scripts.is_empty() {
-                return Err(Report::msg("No scripts to run"));
+                return Err(eyre!("No scripts to run"));
             }
             let labels = parse_map(&labels.unwrap_or_default());
             update::run_scripts(
                 &scripts,
-                labels.ok_or_else(|| Report::msg("Cannot parse --labels"))?,
+                labels.ok_or_else(|| eyre!("Cannot parse --labels"))?,
             )?;
         }
     }
