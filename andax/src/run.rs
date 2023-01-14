@@ -21,6 +21,9 @@ fn json(ctx: CallCtx, a: String) -> Result<rhai::Map, Box<EvalAltResult>> {
 fn json_arr(ctx: CallCtx, a: String) -> Result<rhai::Array, Box<EvalAltResult>> {
     serde_json::from_str(&a).ehdl(&ctx)
 }
+fn exit(ctx: CallCtx) -> Result<(), Box<EvalAltResult>> {
+    Err(Box::new(EvalAltResult::ErrorRuntime(Dynamic::from(AndaxError::Exit), ctx.position())))
+}
 
 pub(crate) fn rf<T>(ctx: CallCtx, res: color_eyre::Result<T>) -> Result<T, Box<EvalAltResult>>
 where
@@ -47,6 +50,7 @@ fn gen_en() -> (Engine, Scope<'static>) {
         .register_fn("json_arr", json_arr)
         .register_fn("find", |ctx: CallCtx, a, b, c| rf(ctx, re::find(a, b, c)))
         .register_fn("sub", |ctx: CallCtx, a, b, c| rf(ctx, re::sub(a, b, c)))
+        .register_fn("exit", exit)
         .register_global_module(exported_module!(io::anda_rhai).into())
         .register_global_module(exported_module!(update::tsunagu::anda_rhai).into())
         .register_static_module("rpmbuild", exported_module!(crate::build::anda_rhai).into())
@@ -140,31 +144,31 @@ pub fn traceback(name: &str, scr: &Path, err: EvalAltResult) {
     trace!("{name}: Generating traceback");
     let pos = err.position();
     if let EvalAltResult::ErrorRuntime(ref run_err, pos) = err {
-        if let Some(AndaxError::RustReport(rhai_fn, fn_src, oerr)) =
-            run_err.clone().try_cast::<AndaxError>()
-        {
-            _tb(
-                name,
-                scr,
-                TbErr::Report(oerr),
-                pos,
-                rhai_fn.as_str(),
-                fn_src.as_str(),
-            );
-            return;
-        }
-        if let Some(AndaxError::RustError(rhai_fn, fn_src, oerr)) =
-            run_err.clone().try_cast::<AndaxError>()
-        {
-            _tb(
-                name,
-                scr,
-                TbErr::Arb(oerr),
-                pos,
-                rhai_fn.as_str(),
-                fn_src.as_str(),
-            );
-            return;
+        match run_err.clone().try_cast::<AndaxError>() {
+            Some(AndaxError::RustReport(rhai_fn, fn_src, oerr)) => {
+                return _tb(
+                    name,
+                    scr,
+                    TbErr::Report(oerr),
+                    pos,
+                    rhai_fn.as_str(),
+                    fn_src.as_str(),
+                );
+            }
+            Some(AndaxError::RustError(rhai_fn, fn_src, oerr)) => {
+                return _tb(
+                    name,
+                    scr,
+                    TbErr::Arb(oerr),
+                    pos,
+                    rhai_fn.as_str(),
+                    fn_src.as_str(),
+                );
+            }
+            Some(AndaxError::Exit) => {
+                return debug!("Exit from rhai at: {pos}");
+            }
+            None => {}
         }
     }
     _tb(name, scr, TbErr::Rhai(err), pos, "", "");
@@ -187,12 +191,7 @@ pub fn run<'a>(
 }
 
 #[instrument(skip(sc, en))]
-fn exec<'a>(
-    name: &'a str,
-    scr: &'a Path,
-    mut sc: Scope<'a>,
-    en: Engine
-) -> Option<Scope<'a>> {
+fn exec<'a>(name: &'a str, scr: &'a Path, mut sc: Scope<'a>, en: Engine) -> Option<Scope<'a>> {
     debug!("Running {name}");
     match en.run_file_with_scope(&mut sc, scr.to_path_buf()) {
         Ok(()) => Some(sc),

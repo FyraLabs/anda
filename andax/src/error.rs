@@ -9,6 +9,7 @@ pub enum AndaxError {
     // rhai_fn, fn_src, E
     RustReport(SStr, SStr, Rc<color_eyre::Report>),
     RustError(SStr, SStr, Rc<dyn std::error::Error>),
+    Exit
 }
 pub enum TbErr {
     Report(Rc<color_eyre::Report>),
