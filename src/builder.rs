@@ -29,7 +29,7 @@ pub async fn build_rpm(
     if repodata_path.exists() {
         let repo_path = repo_path.canonicalize()?;
 
-        let repo_path = format!("file://{}", repo_path.canonicalize().unwrap().display());
+        let repo_path = format!("file://{}", repo_path.display());
         if opts2.extra_repos.is_none() {
             opts2.extra_repos = Some(vec![repo_path]);
         } else {
@@ -52,7 +52,7 @@ pub async fn build_rpm(
         if let Some((key, value)) = split {
             opts2.def_macro(key, value);
         } else {
-            return Err(Report::msg(format!("Invalid rpm macro: {}", rpmmacro)));
+            return Err(Report::msg(format!("Invalid rpm macro: {rpmmacro}")));
         }
     }
     {
@@ -62,27 +62,21 @@ pub async fn build_rpm(
 
         let date = get_date();
 
-        let autogitversion = if let Some(commit) = commit_id.clone() {
-            let commit = commit.chars().take(8).collect::<String>();
-            format!("{}.{}", &date, commit)
-        } else {
-            date.clone()
-        };
+        let autogitversion = commit_id
+            .as_ref()
+            .map(|commit| format!("{date}.{}", commit.chars().take(8).collect::<String>()))
+            .unwrap_or(date.clone());
 
         // limit to 16 chars
 
         opts2.def_macro("autogitversion", &autogitversion);
 
-        if let Some(commit) = commit_id {
-            opts2.def_macro("autogitcommit", &commit);
-        } else {
-            opts2.def_macro("autogitcommit", "unknown");
-        }
+        opts2.def_macro("autogitcommit", &commit_id.unwrap_or("unknown".into()));
 
         opts2.def_macro("autogitdate", &date);
     }
 
-    trace!("Building RPMs with {:?}", opts2);
+    trace!("Building RPMs with {opts2:?}");
 
     let builder = builder.build(spec, &opts2).await;
 
@@ -162,7 +156,7 @@ pub async fn build_rpm_call(
     // run pre-build script
     if let Some(pre_script) = &rpmbuild.pre_script {
         script!(
-            rpmbuild.spec.as_os_str().to_str().unwrap_or_default(),
+            rpmbuild.spec.as_os_str().to_str().unwrap_or(""),
             pre_script,
             opts,
             rpm_builder,
@@ -177,7 +171,7 @@ pub async fn build_rpm_call(
     // run post-build script
     if let Some(post_script) = &rpmbuild.post_script {
         script!(
-            rpmbuild.spec.as_os_str().to_str().unwrap_or_default(),
+            rpmbuild.spec.as_os_str().to_str().unwrap_or(""),
             post_script,
             opts,
             rpm_builder,
@@ -238,10 +232,10 @@ pub fn build_oci_call(
     for (tag, image) in &manifest.image {
         let art = build_oci(
             backend,
-            image.dockerfile.as_ref().unwrap().to_string(),
+            image.dockerfile.to_owned().unwrap(),
             image.tag_latest.unwrap_or(false),
-            tag.to_string(),
-            image.version.as_ref().unwrap_or(&"latest".to_string()).to_string(),
+            tag.clone(),
+            image.version.to_owned().unwrap_or("latest".to_string()),
             image.context.clone(),
         );
 
@@ -283,7 +277,7 @@ pub async fn build_project(
         // load SCM options
         if let Some(scm_opt) = &rpmbuild.scm_opts {
             rpm_opts.scm_opts =
-                scm_opt.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>();
+                scm_opt.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<String>>();
         }
 
         // load extra config options
@@ -291,14 +285,14 @@ pub async fn build_project(
         if let Some(cfg) = &rpmbuild.config {
             rpm_opts
                 .config_opts
-                .extend(cfg.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>());
+                .extend(cfg.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<String>>());
         }
 
         // Plugin opts for RPM, contains some extra plugin options, with some special
         // characters like `:`
         if let Some(plugin_opt) = &rpmbuild.plugin_opts {
             rpm_opts.plugin_opts =
-                plugin_opt.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>();
+                plugin_opt.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<String>>();
         }
 
         if rpmb_opts.mock_config.is_none() {
@@ -424,9 +418,9 @@ pub async fn builder(
 ) -> Result<()> {
     // Parse the project manifest
     let config = anda_config::load_from_file(&cli.config.clone())?;
-    trace!("all: {}", all);
-    trace!("project: {:?}", project);
-    trace!("package: {:?}", package);
+    trace!("all: {all}");
+    trace!("project: {project:?}");
+    trace!("package: {package:?}");
     if all {
         for (name, project) in config.project {
             println!("Building project: {}", name);
@@ -447,7 +441,7 @@ pub async fn builder(
                 build_project(cli, project.clone(), package, rpm_opts, flatpak_opts, oci_opts)
                     .await?;
             } else {
-                return Err(Report::msg(format!("Project not found: {}", name)));
+                return Err(Report::msg(format!("Project not found: {name}")));
             }
         } else {
             return Err(Report::msg("No project specified"));

@@ -72,10 +72,10 @@ pub fn build_oci(
 
     builder.build(dockerfile, backend, latest);
 
-    let mut tags = vec![format!("{}:{}", tag, version)];
+    let mut tags = vec![format!("{tag}:{version}")];
 
     if latest {
-        tags.push(format!("{}:latest", tag));
+        tags.push(format!("{tag}:latest"));
     }
     tags
 }

@@ -37,7 +37,7 @@ impl RPMSpec {
         }
         let m = m.unwrap();
         if ver != m[2] {
-            info!("{}: {} —→ {}", self.name, &m[2], ver);
+            info!("{}: {} —→ {ver}", self.name, &m[2]);
             self.f = re.replace(&self.f, format!("Version:{}{ver}\n", &m[1])).to_string();
             self.changed = true;
         }
@@ -45,37 +45,27 @@ impl RPMSpec {
     }
     pub fn define(&mut self, name: &str, val: &str) -> Result<(), Box<EvalAltResult>> {
         let re = regex::Regex::new(r"(?m)%define(\s+)(\S+)(\s+)(\S+)$").unwrap();
-        for cap in re.captures_iter(self.f.as_str()) {
-            if &cap[2] == name {
-                self.f = self
-                    .f
-                    .replace(&cap[0], format!("%define{}{name}{}{val}", &cap[1], &cap[3]).as_str());
-                self.changed = true;
-                return Ok(());
-            }
+        for cap in re.captures_iter(self.f.as_str()).filter(|cap| &cap[2] == name) {
+            self.f = self.f.replace(&cap[0], &format!("%define{}{name}{}{val}", &cap[1], &cap[3]));
+            self.changed = true;
+            return Ok(());
         }
         Err(format!("Can't find `%define {name}` in spec").into())
     }
     pub fn global(&mut self, name: &str, val: &str) -> Result<(), Box<EvalAltResult>> {
         let re = regex::Regex::new(r"(?m)%global(\s+)(\S+)(\s+)(\S+)$").unwrap();
-        for cap in re.captures_iter(self.f.as_str()) {
-            if &cap[2] == name {
-                self.f = self
-                    .f
-                    .replace(&cap[0], format!("%global{}{name}{}{val}", &cap[1], &cap[3]).as_str());
-                self.changed = true;
-                return Ok(());
-            }
+        for cap in re.captures_iter(self.f.as_str()).filter(|cap| &cap[2] == name) {
+            self.f = self.f.replace(&cap[0], &format!("%global{}{name}{}{val}", &cap[1], &cap[3]));
+            self.changed = true;
+            return Ok(());
         }
         Err(format!("Can't find `%global {name}` in spec").into())
     }
     pub fn source(&mut self, i: i64, p: String) -> Result<(), Box<EvalAltResult>> {
         let re = regex::Regex::new(r"Source(\d+):(\s+)([^\n]+)\n").unwrap();
         let mut capw = None;
-        for cap in re.captures_iter(self.f.as_str()) {
-            if cap[1] != i.to_string() {
-                continue;
-            }
+        let si = i.to_string();
+        for cap in re.captures_iter(self.f.as_str()).filter(|cap| cap[1] == si) {
             info!("{}: Source{i}: {p}", self.name);
             capw = Some(cap);
         }
@@ -83,7 +73,7 @@ impl RPMSpec {
             return Err("Can't find source preamble in spec".into());
         }
         let cap = capw.unwrap();
-        self.f = self.f.replace(&cap[0], format!("Source{i}:{}{p}\n", &cap[2]).as_str());
+        self.f = self.f.replace(&cap[0], &format!("Source{i}:{}{p}\n", &cap[2]));
         self.changed = true;
         Ok(())
     }

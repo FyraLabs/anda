@@ -24,17 +24,16 @@ pub mod ar {
 
     #[rhai_fn(return_raw)]
     pub(crate) fn gh(ctx: NativeCallContext, repo: &str) -> RhaiRes<String> {
-        let v: Value =
-            ureq::get(format!("https://api.github.com/repos/{repo}/releases/latest").as_str())
-                .set("Authorization", format!("Bearer {}", env("GITHUB_TOKEN")?).as_str())
-                .set("User-Agent", USER_AGENT)
-                .call()
-                .ehdl(&ctx)?
-                .into_json()
-                .ehdl(&ctx)?;
+        let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/releases/latest"))
+            .set("Authorization", &format!("Bearer {}", env("GITHUB_TOKEN")?))
+            .set("User-Agent", USER_AGENT)
+            .call()
+            .ehdl(&ctx)?
+            .into_json()
+            .ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
         let binding = v["tag_name"].to_owned();
-        let ver = binding.as_str().unwrap_or_default();
+        let ver = binding.as_str().unwrap_or("");
         if let Some(ver) = ver.strip_prefix('v') {
             return Ok(ver.to_string());
         }
@@ -42,17 +41,16 @@ pub mod ar {
     }
     #[rhai_fn(return_raw)]
     pub(crate) fn gh_tag(ctx: NativeCallContext, repo: &str) -> RhaiRes<String> {
-        let v: Value =
-            ureq::get(format!("https://api.github.com/repos/{repo}/tags").as_str())
-                .set("Authorization", format!("Bearer {}", env("GITHUB_TOKEN")?).as_str())
-                .set("User-Agent", USER_AGENT)
-                .call()
-                .ehdl(&ctx)?
-                .into_json()
-                .ehdl(&ctx)?;
+        let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/tags"))
+            .set("Authorization", &format!("Bearer {}", env("GITHUB_TOKEN")?))
+            .set("User-Agent", USER_AGENT)
+            .call()
+            .ehdl(&ctx)?
+            .into_json()
+            .ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
         let binding = v[0]["name"].to_owned();
-        let ver = binding.as_str().unwrap_or_default();
+        let ver = binding.as_str().unwrap_or("");
         if let Some(ver) = ver.strip_prefix('v') {
             return Ok(ver.to_string());
         }
@@ -61,33 +59,33 @@ pub mod ar {
 
     #[rhai_fn(return_raw)]
     pub(crate) fn pypi(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
-        ctx.engine()
-            .eval(format!("get(`https://pypi.org/pypi/{name}/json`).json().info.version").as_str())
+        ctx.engine().eval(&format!("get(`https://pypi.org/pypi/{name}/json`).json().info.version"))
     }
 
     #[rhai_fn(return_raw)]
     pub(crate) fn crates(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
-        ctx.engine().eval(
-            format!(
-                "get(`https://crates.io/api/v1/crates/{name}`).json().crate.max_stable_version"
-            )
-            .as_str(),
-        )
+        ctx.engine().eval(&format!(
+            "get(`https://crates.io/api/v1/crates/{name}`).json().crate.max_stable_version"
+        ))
     }
 
     #[rhai_fn(return_raw)]
-    pub(crate) fn crates_max(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
-        ctx.engine().eval(
-            format!("get(`https://crates.io/api/v1/crates/{name}`).json().crate.max_version")
-                .as_str(),
-        )
+    pub(crate) fn crates_max(
+        ctx: NativeCallContext,
+        name: &str,
+    ) -> Result<String, Box<EvalAltResult>> {
+        ctx.engine().eval(&format!(
+            "get(`https://crates.io/api/v1/crates/{name}`).json().crate.max_version"
+        ))
     }
 
     #[rhai_fn(return_raw)]
-    pub(crate) fn crates_newest(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
+    pub(crate) fn crates_newest(
+        ctx: NativeCallContext,
+        name: &str,
+    ) -> Result<String, Box<EvalAltResult>> {
         ctx.engine().eval(
-            format!("get(`https://crates.io/api/v1/crates/{name}`).json().crate.newest_version")
-                .as_str(),
+            &format!("get(`https://crates.io/api/v1/crates/{name}`).json().crate.newest_version")
         )
     }
 

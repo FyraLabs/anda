@@ -5,7 +5,7 @@ use crate::{
 use lazy_static::lazy_static;
 use regex::Regex;
 use rhai::{plugin::*, Engine, EvalAltResult as RhaiE, NativeCallContext as Ctx, Scope};
-use std::{error::Error, io::BufRead, path::Path};
+use std::{io::BufRead, path::Path};
 use tracing::{debug, error, instrument, trace, warn};
 
 pub(crate) fn rf<T>(ctx: Ctx, res: color_eyre::Result<T>) -> Result<T, Box<RhaiE>>
@@ -102,12 +102,12 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
                 "🭶".repeat(m)
             );
             if !rhai_fn.is_empty() {
-                code += &*format!("\n {lns} └─═ When invoking: {rhai_fn}()");
+                code += &format!("\n {lns} └─═ When invoking: {rhai_fn}()");
             }
             if !fn_src.is_empty() {
-                code += &*format!("\n {lns} └─═ Function source: {fn_src}");
+                code += &format!("\n {lns} └─═ Function source: {fn_src}");
             }
-            code += &*format!("\n {lns} └─═ {}", _gemsg(&nanitozo));
+            code += &format!("\n {lns} └─═ {}", _gemsg(&nanitozo));
             code += &hint(&sl, &lns, &nanitozo, rhai_fn).unwrap_or_default();
             let c = code.matches('└').count();
             if c > 0 {
@@ -186,7 +186,7 @@ fn hint(sl: &String, lns: &String, nanitozo: &TbErr, rhai_fn: &str) -> Option<St
                     first = false;
                     continue;
                 }
-                s += &*format!("\n{left}...: {l}");
+                s += &format!("\n{left}...: {l}");
             }
             return Some(s);
         };

@@ -8,6 +8,7 @@ mod oci;
 mod rpm_spec;
 mod update;
 mod util;
+use anda_config::parse_map;
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{Cli, Command};
@@ -44,7 +45,7 @@ async fn main() -> Result<()> {
                 return Err(Report::msg("No project specified, and --all not specified."));
             }
 
-            debug!("{:?}", &all);
+            debug!("{all:?}");
             builder::builder(&cli, rpm_opts, all, project, package, flatpak_opts, oci_opts).await?;
         }
         Command::Clean => {
@@ -71,10 +72,10 @@ async fn main() -> Result<()> {
                     "".to_string()
                 };
 
-                println!("{}{}", project_name, project_alias);
+                println!("{project_name}{project_alias}");
             }
 
-            debug!("{:#?}", &config);
+            debug!("{config:#?}");
         }
         Command::Init { path, yes } => {
             // create a new project
@@ -91,8 +92,8 @@ async fn main() -> Result<()> {
             println!("build_matrix={}", serde_json::to_string(&entries)?);
         }
         Command::Update { labels, filters } => {
-            let labels = util::parse_labels(labels.unwrap_or_default());
-            let filters = util::parse_labels(filters.unwrap_or_default());
+            let labels = parse_map(&labels.unwrap_or_default());
+            let filters = parse_map(&filters.unwrap_or_default());
             update::update_rpms(
                 anda_config::load_from_file(&cli.config).unwrap(),
                 labels.ok_or_else(|| Report::msg("Cannot parse --labels"))?,
@@ -103,7 +104,7 @@ async fn main() -> Result<()> {
             if scripts.is_empty() {
                 return Err(Report::msg("No scripts to run"));
             }
-            let labels = util::parse_labels(labels.unwrap_or_default());
+            let labels = parse_map(&labels.unwrap_or_default());
             update::run_scripts(
                 &scripts,
                 labels.ok_or_else(|| Report::msg("Cannot parse --labels"))?,

@@ -14,15 +14,14 @@ macro_rules! rpmargs {
             "--sources",
             $sources.unwrap_or(""),
             "--resultdir",
-            format!(
+            &format!(
                 "{:?}",
                 tempfile::Builder::new()
                     .prefix("anda-srpm")
                     .tempdir()
                     .expect("Cannot make dir?")
                     .path()
-            )
-            .as_str(),
+            ),
             "--enable-network",
             "--verbose",
         ]

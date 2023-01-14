@@ -40,13 +40,10 @@ impl Manifest {
             self.project.iter().find_map(|(_k, v)| {
                 if let Some(alias) = &v.alias {
                     if alias.contains(&key.to_string()) {
-                        Some(v)
-                    } else {
-                        None
+                        return Some(v);
                     }
-                } else {
-                    None
                 }
+                None
             })
         }
     }
@@ -134,7 +131,7 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
     // recursively merge configs
 
     // get parent path of config file
-    let parent = if path.parent().unwrap().to_str().unwrap() == "" {
+    let parent = if path.parent().unwrap().as_os_str().is_empty() {
         PathBuf::from(".")
     } else {
         path.parent().unwrap().to_path_buf()
@@ -164,7 +161,7 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
         }
     }
 
-    trace!("Loaded config: {:#?}", config);
+    trace!("Loaded config: {config:#?}");
     //let config = config.map_err(ProjectError::HclError);
     generate_alias(&mut config);
 

@@ -116,7 +116,7 @@ impl FlatpakBuilder {
 
     pub async fn bundle(&self, app_id: &str) -> Result<PathBuf> {
         std::fs::create_dir_all(&self.bundles_dir)?;
-        let bundle_path = self.bundles_dir.join(format!("{}.flatpak", app_id));
+        let bundle_path = self.bundles_dir.join(format!("{app_id}.flatpak"));
 
         let mut flatpak = Command::new("flatpak");
 

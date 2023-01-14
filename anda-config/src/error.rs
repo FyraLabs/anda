@@ -25,17 +25,13 @@ impl std::fmt::Display for ProjectError {
             ProjectError::Other(msg) => write!(f, "{}", msg),
             ProjectError::HclError(e) => write!(
                 f,
-                "Error parsing HCL: {}{}",
-                e.to_owned(),
-                e.to_owned()
-                    .location()
-                    .map(|l| format!(" at {}:{}", l.line, l.col))
-                    .unwrap_or_default()
+                "Error parsing HCL: {e}{}",
+                e.location().map(|l| format!(" at {}:{}", l.line, l.col)).unwrap_or_default()
             ),
             ProjectError::Multiple(errors) => {
                 write!(f, "Multiple errors:")?;
                 for error in errors {
-                    write!(f, "\n - {}", error)?;
+                    write!(f, "\n - {error}")?;
                 }
                 Ok(())
             }

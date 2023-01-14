@@ -109,7 +109,7 @@ impl FromStr for RPMBuilder {
         match s {
             "mock" => Ok(RPMBuilder::Mock),
             "rpmbuild" => Ok(RPMBuilder::Rpmbuild),
-            _ => Err(Report::msg(format!("Invalid RPM builder: {}", s))),
+            _ => Err(Report::msg(format!("Invalid RPM builder: {s}"))),
         }
     }
 }
@@ -356,7 +356,7 @@ impl MockBackend {
         }
 
         for (name, value) in self.macros.iter() {
-            cmd.arg("-D").arg(format!("{} {}", name, value));
+            cmd.arg("-D").arg(format!("{name} {value}"));
         }
 
         if self.no_mirror {
@@ -507,7 +507,7 @@ impl RPMBuildBackend {
         }
 
         for (name, value) in self.macros.iter() {
-            cmd.arg("-D").arg(format!("{} {}", name, value));
+            cmd.arg("-D").arg(format!("{name} {value}"));
         }
 
         cmd
@@ -610,7 +610,7 @@ impl RPMSpecBackend for RPMBuildBackend {
 
             if entry.file_name().to_string_lossy().ends_with(".src.rpm") {
                 //rpms.push(entry.path().to_path_buf());
-                debug!("found srpm: {:?}", rpms);
+                debug!("found srpm: {rpms:?}");
 
                 let srpm_dir = self.resultdir.join("rpm/srpm");
                 std::fs::create_dir_all(&srpm_dir)?;

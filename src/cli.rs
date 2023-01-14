@@ -32,7 +32,7 @@ impl FromStr for PackageType {
             "flatpak" => Ok(PackageType::Flatpak),
             "rpm-ostree" => Ok(PackageType::RpmOstree),
             "all" => Ok(PackageType::All),
-            _ => Err(format!("Invalid package type: {}", s)),
+            _ => Err(format!("Invalid package type: {s}")),
         }
     }
 }

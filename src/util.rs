@@ -117,8 +117,8 @@ impl CommandLog for Command {
                 }
             };
 
-            let formatter = format!("{}\t| {}", process, output);
-            println!("{}", formatter);
+            let formatter = format!("{process}\t| {output}");
+            println!("{formatter}");
         }
 
         // handles so we can run both at the same time
@@ -148,7 +148,7 @@ impl CommandLog for Command {
         let stderr_reader = tokio::io::BufReader::new(stderr).lines();
         let mut stderr_lines = stderr_reader;
 
-        debug!("stderr: {:?}", stderr_lines);
+        debug!("stderr: {stderr_lines:?}");
 
         let stderr_handle = tokio::spawn(async move {
             while let Some(line) = stderr_lines.next_line().await.unwrap() {
@@ -183,8 +183,8 @@ impl CommandLog for Command {
                         info!("Command exited successfully");
                         Ok(())
                     } else {
-                        info!("Command exited with status: {}", status);
-                        Err(Report::msg(format!("Command exited with status: {}", status)))
+                        info!("Command exited with status: {status}");
+                        Err(Report::msg(format!("Command exited with status: {status}")))
                     }
                     // info!("Child process finished");
                 }
@@ -329,7 +329,7 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
                         ..Default::default()
                     };
                     counter += 1;
-                    let image_name = format!("docker-{}", counter);
+                    let image_name = format!("docker-{counter}");
                     docker.image.insert(image_name, image);
 
                     let project = Project { docker: Some(docker), ..Default::default() };
@@ -354,21 +354,4 @@ pub(crate) fn convert_filter(filter: log::LevelFilter) -> tracing_subscriber::fi
         log::LevelFilter::Debug => tracing_subscriber::filter::LevelFilter::DEBUG,
         log::LevelFilter::Trace => tracing_subscriber::filter::LevelFilter::TRACE,
     }
-}
-
-pub(crate) fn parse_labels(labels: String) -> Option<BTreeMap<String, String>> {
-    let mut tree = BTreeMap::new();
-    if labels.is_empty() {
-        return Some(tree);
-    }
-    for entry in labels.split(',') {
-        if entry.matches('=').count() != 1 {
-            return None;
-        }
-        let mut sp = entry.split('=');
-        let key = sp.next().unwrap();
-        let val = sp.next().unwrap();
-        tree.insert(key.to_string(), val.to_string());
-    }
-    Some(tree)
 }
