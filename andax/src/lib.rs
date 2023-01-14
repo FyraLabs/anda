@@ -1,9 +1,8 @@
 mod error;
-pub mod io;
-pub mod run;
-pub mod update;
-mod build;
+mod fns;
+mod run;
 
-pub use run::run;
-pub use run::traceback;
+pub use fns::rpm::RPMSpec;
 pub use rhai::Map;
+pub use run::errhdl;
+pub use run::run;

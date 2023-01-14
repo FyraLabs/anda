@@ -1,40 +1,23 @@
 use crate::{
-    error::{AndaxError, AndaxRes, TbErr},
-    io,
-    update::{self, re, rpm, tsunagu},
+    error::{AndaxError as AErr, TbErr},
+    fns as f,
 };
 use lazy_static::lazy_static;
 use regex::Regex;
-use rhai::{plugin::*, Engine, EvalAltResult, NativeCallContext as CallCtx, Scope};
-use std::{
-    collections::BTreeMap,
-    fs::File,
-    io::{BufRead, BufReader},
-    path::Path,
-    rc::Rc,
-};
+use rhai::{plugin::*, Engine, EvalAltResult as RhaiE, NativeCallContext as Ctx, Scope};
+use std::{error::Error, io::BufRead, path::Path};
 use tracing::{debug, error, instrument, trace, warn};
 
-fn json(ctx: CallCtx, a: String) -> Result<rhai::Map, Box<EvalAltResult>> {
-    ctx.engine().parse_json(a, true)
-}
-fn json_arr(ctx: CallCtx, a: String) -> Result<rhai::Array, Box<EvalAltResult>> {
-    serde_json::from_str(&a).ehdl(&ctx)
-}
-fn exit(ctx: CallCtx) -> Result<(), Box<EvalAltResult>> {
-    Err(Box::new(EvalAltResult::ErrorRuntime(Dynamic::from(AndaxError::Exit), ctx.position())))
-}
-
-pub(crate) fn rf<T>(ctx: CallCtx, res: color_eyre::Result<T>) -> Result<T, Box<EvalAltResult>>
+pub(crate) fn rf<T>(ctx: Ctx, res: color_eyre::Result<T>) -> Result<T, Box<RhaiE>>
 where
     T: rhai::Variant + Clone,
 {
     res.map_err(|err| {
-        Box::new(EvalAltResult::ErrorRuntime(
-            Dynamic::from(AndaxError::RustReport(
+        Box::new(RhaiE::ErrorRuntime(
+            Dynamic::from(AErr::RustReport(
                 ctx.fn_name().into(),
                 ctx.source().unwrap_or("").into(),
-                Rc::from(err),
+                std::rc::Rc::from(err),
             )),
             ctx.position(),
         ))
@@ -43,19 +26,15 @@ where
 
 fn gen_en() -> (Engine, Scope<'static>) {
     let mut sc = Scope::new();
-    sc.push("USER_AGENT", tsunagu::USER_AGENT);
+    sc.push("USER_AGENT", f::tsunagu::USER_AGENT);
     sc.push("IS_WIN32", cfg!(windows));
     let mut en = Engine::new();
-    en.register_fn("json", json)
-        .register_fn("json_arr", json_arr)
-        .register_fn("find", |ctx: CallCtx, a, b, c| rf(ctx, re::find(a, b, c)))
-        .register_fn("sub", |ctx: CallCtx, a, b, c| rf(ctx, re::sub(a, b, c)))
-        .register_fn("exit", exit)
-        .register_global_module(exported_module!(io::anda_rhai).into())
-        .register_global_module(exported_module!(update::tsunagu::anda_rhai).into())
-        .register_static_module("rpmbuild", exported_module!(crate::build::anda_rhai).into())
-        .build_type::<update::tsunagu::Req>()
-        .build_type::<rpm::RPMSpec>();
+    en.register_global_module(exported_module!(f::io::ar).into())
+        .register_global_module(exported_module!(f::tsunagu::ar).into())
+        .register_global_module(exported_module!(f::kokoro::ar).into())
+        .register_static_module("rpmbuild", exported_module!(f::build::ar).into())
+        .build_type::<f::tsunagu::Req>()
+        .build_type::<f::rpm::RPMSpec>();
     (en, sc)
 }
 
@@ -63,8 +42,8 @@ fn gen_en() -> (Engine, Scope<'static>) {
 /// used in `_tb()`
 fn _gemsg(nanitozo: &TbErr) -> String {
     match nanitozo {
-        TbErr::Report(o) => format!("From: {o}"),
-        TbErr::Arb(o) => format!("From: {o}"),
+        TbErr::Report(o) => format!("From: {o:#}"),
+        TbErr::Arb(o) => format!("Caused by: {o}"),
         TbErr::Rhai(o) => format!("Rhai: {o}"),
     }
 }
@@ -85,7 +64,7 @@ lazy_static! {
 pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str, fn_src: &str) {
     if let Some((line, col)) = _gpos(pos) {
         // Print code
-        let f = File::open(scr);
+        let f = std::fs::File::open(scr);
         let scr = scr.display();
         macro_rules! die {
             ($var:expr, $msg:expr) => {{
@@ -97,7 +76,7 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
             }};
         }
         let f = die!(f, "{proj}: Cannot open `{scr}`: {}");
-        for (n, sl) in BufReader::new(f).lines().enumerate() {
+        for (n, sl) in std::io::BufReader::new(f).lines().enumerate() {
             if n != line - 1 {
                 continue;
             }
@@ -129,6 +108,7 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
                 code += &*format!("\n {lns} └─═ Function source: {fn_src}");
             }
             code += &*format!("\n {lns} └─═ {}", _gemsg(&nanitozo));
+            code += &hint(&sl, &lns, &nanitozo, rhai_fn).unwrap_or_default();
             let c = code.matches('└').count();
             if c > 0 {
                 code = code.replacen('└', "├", c - 1);
@@ -140,32 +120,23 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
     _tb_fb(proj, scr.display(), nanitozo)
 }
 
-pub fn traceback(name: &str, scr: &Path, err: EvalAltResult) {
+pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
     trace!("{name}: Generating traceback");
     let pos = err.position();
     if let EvalAltResult::ErrorRuntime(ref run_err, pos) = err {
-        match run_err.clone().try_cast::<AndaxError>() {
-            Some(AndaxError::RustReport(rhai_fn, fn_src, oerr)) => {
-                return _tb(
-                    name,
-                    scr,
-                    TbErr::Report(oerr),
-                    pos,
-                    rhai_fn.as_str(),
-                    fn_src.as_str(),
-                );
+        match run_err.clone().try_cast::<AErr>() {
+            Some(AErr::RustReport(rhai_fn, fn_src, oerr)) => {
+                return _tb(name, scr, TbErr::Report(oerr), pos, rhai_fn.as_str(), fn_src.as_str());
             }
-            Some(AndaxError::RustError(rhai_fn, fn_src, oerr)) => {
-                return _tb(
-                    name,
-                    scr,
-                    TbErr::Arb(oerr),
-                    pos,
-                    rhai_fn.as_str(),
-                    fn_src.as_str(),
-                );
+            Some(AErr::RustError(rhai_fn, fn_src, oerr)) => {
+                return _tb(name, scr, TbErr::Arb(oerr), pos, rhai_fn.as_str(), fn_src.as_str());
             }
-            Some(AndaxError::Exit) => {
+            Some(AErr::Exit(b)) => {
+                if b {
+                    warn!("世界を壊している。\n{}", crate::error::EARTH);
+                    error!("生存係為咗喵？打程式幾好呀。仲喵要咁憤世嫉俗喎。還掂おこちゃま戦争係政治家嘅事……");
+                    trace!("あなたは世界の終わりにずんだを食べるのだ");
+                }
                 return debug!("Exit from rhai at: {pos}");
             }
             None => {}
@@ -177,7 +148,7 @@ pub fn traceback(name: &str, scr: &Path, err: EvalAltResult) {
 pub fn run<'a>(
     name: &'a str,
     scr: &'a Path,
-    labels: BTreeMap<String, String>,
+    labels: std::collections::BTreeMap<String, String>,
     f: impl FnOnce(&mut Scope<'a>),
 ) -> Option<Scope<'a>> {
     let (en, mut sc) = gen_en();
@@ -196,8 +167,58 @@ fn exec<'a>(name: &'a str, scr: &'a Path, mut sc: Scope<'a>, en: Engine) -> Opti
     match en.run_file_with_scope(&mut sc, scr.to_path_buf()) {
         Ok(()) => Some(sc),
         Err(err) => {
-            traceback(name, scr, *err);
+            errhdl(name, scr, *err);
             None
         }
+    }
+}
+
+fn hint(sl: &String, lns: &String, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> {
+    macro_rules! h {
+        ($s:expr) => {
+            let left = " ".repeat(7 + lns.len());
+            let mut s = String::new();
+            let mut first = true;
+            for l in $s.lines() {
+                let l = l.trim();
+                if first {
+                    s = format!("\n {lns} └─═ Hint: {l}");
+                    first = false;
+                    continue;
+                }
+                s += &*format!("\n{left}...: {l}");
+            }
+            return Some(s);
+        };
+    }
+    match nanitozo {
+        TbErr::Arb(err) => {
+            let s = format!("{err}");
+            if rhai_fn == "gh"
+                && s.starts_with("https://api.github.com/repos/")
+                && s.ends_with("/releases/latest: status code 404")
+            {
+                h!("Check if the repo is valid. Only releases are supported; use gh_tag() for tags.");
+            }
+            None
+        }
+        TbErr::Report(report) => None,
+        TbErr::Rhai(err) => match err {
+            EvalAltResult::ErrorRuntime(d, _) => {
+                if d.is_string() {
+                    let s = d.clone().into_string().expect("sting.");
+                    if s == "env(`GITHUB_TOKEN`) not present" {
+                        h!(
+                            r#"gh() requires the environment variable `GITHUB_TOKEN` to be set as a Github token so as to avoid rate-limits:
+                        https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting
+                        To create a Github token, see:
+                        https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"#
+                        );
+                    }
+                }
+                None
+            }
+            _ => None,
+        },
     }
 }

@@ -30,14 +30,7 @@ async fn main() -> Result<()> {
     let cmd = cli.command.to_owned();
 
     match cmd {
-        Command::Build {
-            all,
-            project,
-            package,
-            rpm_opts,
-            flatpak_opts,
-            oci_opts,
-        } => {
+        Command::Build { all, project, package, rpm_opts, flatpak_opts, oci_opts } => {
             if project.is_none() && !all {
                 // print help
                 let mut app = Cli::command();
@@ -48,22 +41,11 @@ async fn main() -> Result<()> {
                     .display_name("anda-build")
                     .name("anda-build");
                 a.print_help().unwrap();
-                return Err(Report::msg(
-                    "No project specified, and --all not specified.",
-                ));
+                return Err(Report::msg("No project specified, and --all not specified."));
             }
 
             debug!("{:?}", &all);
-            builder::builder(
-                &cli,
-                rpm_opts,
-                all,
-                project,
-                package,
-                flatpak_opts,
-                oci_opts,
-            )
-            .await?;
+            builder::builder(&cli, rpm_opts, all, project, package, flatpak_opts, oci_opts).await?;
         }
         Command::Clean => {
             println!("Cleaning up build directory");
@@ -119,7 +101,7 @@ async fn main() -> Result<()> {
         }
         Command::Run { scripts, labels } => {
             if scripts.is_empty() {
-                return Err(Report::msg("No scripts to run"))
+                return Err(Report::msg("No scripts to run"));
             }
             let labels = util::parse_labels(labels.unwrap_or_default());
             update::run_scripts(

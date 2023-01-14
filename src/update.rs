@@ -1,10 +1,13 @@
 use anda_config::Manifest;
-use andax::{run, update::rpm::RPMSpec};
+use andax::{run, RPMSpec};
 use color_eyre::Result;
-use std::{collections::BTreeMap, thread};
+use std::{
+    collections::BTreeMap,
+    thread::{self, Builder},
+};
 use tracing::{debug, error, instrument, trace};
 
-#[instrument]
+#[instrument(skip(cfg))]
 pub fn update_rpms(
     cfg: Manifest,
     lbls: BTreeMap<String, String>,
@@ -26,7 +29,7 @@ pub fn update_rpms(
             }
             let fls = fls.clone();
             let proj = proj.to_owned();
-            handlers.push(thread::Builder::new().name(name.clone()).spawn(move || {
+            handlers.push(Builder::new().name(name.clone()).spawn(move || {
                 let th = thread::current();
                 let name = th.name().expect("No name for andax thread??");
                 let scr = proj.update.expect("No update script? How did I get here??");
@@ -72,15 +75,11 @@ pub fn run_scripts(scripts: &[String], labels: BTreeMap<String, String>) -> Resu
     for scr in scripts {
         trace!(scr, "Th start");
         let lbls = labels.clone();
-        handlers.push(
-            thread::Builder::new()
-                .name(scr.to_string())
-                .spawn(move || {
-                    let th = thread::current();
-                    let name = th.name().expect("No name for andax thread??");
-                    run(name, &std::path::PathBuf::from(name), lbls, |_| {});
-                })?,
-        );
+        handlers.push(Builder::new().name(scr.to_string()).spawn(move || {
+            let th = thread::current();
+            let name = th.name().expect("No name for andax thread??");
+            run(name, &std::path::PathBuf::from(name), lbls, |_| {});
+        })?);
     }
 
     debug!("Joining {} threads", handlers.len());

@@ -28,12 +28,7 @@ pub struct OCIBuilder {
 
 impl OCIBuilder {
     pub fn new(context: String, tag: String, version: String) -> Self {
-        Self {
-            context,
-            tag,
-            version,
-            label: Vec::new(),
-        }
+        Self { context, tag, version, label: Vec::new() }
     }
 
     pub fn add_label(&mut self, label: String) {
@@ -73,10 +68,7 @@ pub fn build_oci(
     context: String,
 ) -> Vec<String> {
     let mut builder = OCIBuilder::new(context, tag.clone(), version.clone());
-    builder.add_label(format!(
-        "com.fyralabs.anda.version={}",
-        env!("CARGO_PKG_VERSION")
-    ));
+    builder.add_label(format!("com.fyralabs.anda.version={}", env!("CARGO_PKG_VERSION")));
 
     builder.build(dockerfile, backend, latest);
 

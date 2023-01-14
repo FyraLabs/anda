@@ -83,9 +83,8 @@ impl FlatpakBuilder {
             .map_err(color_eyre::Report::msg)?;
 
         // create the flatpak output folders
-        let output_dir = env::current_dir()?
-            .join(".flatpak-builder/build")
-            .join(&flatpak_meta.app_id);
+        let output_dir =
+            env::current_dir()?.join(".flatpak-builder/build").join(&flatpak_meta.app_id);
         std::fs::create_dir_all(&output_dir)?;
         std::fs::create_dir_all(&self.output_repo)?;
 

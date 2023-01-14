@@ -53,26 +53,18 @@ pub fn fetch_build_entries(config: Manifest) -> Result<Vec<BuildEntry>> {
             let spec_contents = read_to_string(spec)?;
             for cap in regex.captures_iter(spec_contents.as_str()) {
                 arches.append(
-                    &mut cap[2]
-                        .split(' ')
-                        .map(|arch| arch.to_string())
-                        .collect::<Vec<String>>(),
+                    &mut cap[2].split(' ').map(|arch| arch.to_string()).collect::<Vec<String>>(),
                 );
             }
 
             if arches.is_empty()
-                || arches
-                    .iter()
-                    .any(|arch| arch == "noarch" || arch.starts_with('%'))
+                || arches.iter().any(|arch| arch == "noarch" || arch.starts_with('%'))
             {
                 arches = default_arches.clone();
             }
 
             for arch in arches {
-                entries.push(BuildEntry {
-                    pkg: name.clone(),
-                    arch,
-                });
+                entries.push(BuildEntry { pkg: name.clone(), arch });
             }
         }
     }
@@ -100,22 +92,11 @@ impl CommandLog for Command {
     async fn log(&mut self) -> Result<()> {
         // let cmd_name = self;
         // make process name a constant string that we can reuse every time we call print_log
-        let process = self
-            .as_std()
-            .get_program()
-            .to_owned()
-            .into_string()
-            .unwrap();
-        let args = self
-            .as_std()
-            .get_args()
-            .map(|a| a.to_str().unwrap())
-            .collect::<Vec<&str>>()
-            .join(" ");
+        let process = self.as_std().get_program().to_owned().into_string().unwrap();
+        let args =
+            self.as_std().get_args().map(|a| a.to_str().unwrap()).collect::<Vec<&str>>().join(" ");
         debug!("Running command: {process} {args}",);
-        let c = self
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped());
+        let c = self.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
 
         // copy self
 
@@ -255,15 +236,7 @@ pub fn get_changed_files(path: &Path) -> Option<Vec<String>> {
     let mut changed_files = vec![];
     diff.foreach(
         &mut |delta, _| {
-            changed_files.push(
-                delta
-                    .new_file()
-                    .path()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-            );
+            changed_files.push(delta.new_file().path().unwrap().to_str().unwrap().to_string());
             true
         },
         None,
@@ -295,10 +268,7 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
         std::fs::create_dir(path)?;
     }
 
-    let mut config = Manifest {
-        project: BTreeMap::new(),
-        config: Default::default(),
-    };
+    let mut config = Manifest { project: BTreeMap::new(), config: Default::default() };
 
     // use ignore to scan for files
     let walk = ignore::WalkBuilder::new(path).build();
@@ -326,10 +296,7 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
                     if add_spec {
                         let project_name = path.file_stem().unwrap().to_str().unwrap();
                         let project = Project {
-                            rpm: Some(RpmBuild {
-                                spec: path.to_path_buf(),
-                                ..Default::default()
-                            }),
+                            rpm: Some(RpmBuild { spec: path.to_path_buf(), ..Default::default() }),
                             ..Default::default()
                         };
                         config.project.insert(project_name.to_string(), project);
@@ -339,12 +306,7 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
 
             let mut counter = 0;
             if path.extension().unwrap_or_default().eq("dockerfile")
-                || path
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_str()
-                    .unwrap()
-                    .eq("Dockerfile")
+                || path.file_name().unwrap_or_default().to_str().unwrap().eq("Dockerfile")
             {
                 let add_oci: bool = {
                     if yes {
@@ -360,9 +322,7 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
                 if add_oci {
                     // create a new project called docker
 
-                    let mut docker = Docker {
-                        ..Default::default()
-                    };
+                    let mut docker = Docker { ..Default::default() };
 
                     let image = DockerImage {
                         dockerfile: Some(path.display().to_string()),
@@ -372,10 +332,7 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
                     let image_name = format!("docker-{}", counter);
                     docker.image.insert(image_name, image);
 
-                    let project = Project {
-                        docker: Some(docker),
-                        ..Default::default()
-                    };
+                    let project = Project { docker: Some(docker), ..Default::default() };
 
                     // increment counter
                     config.project.insert("docker".to_string(), project);

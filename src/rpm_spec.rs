@@ -8,13 +8,13 @@ use clap::clap_derive::ValueEnum;
 use tempfile::TempDir;
 
 use crate::util::CommandLog;
-use color_eyre::{Result, Report};
 use async_trait::async_trait;
-use tracing::{debug, info};
+use color_eyre::{Report, Result};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use tokio::process::Command;
+use tracing::{debug, info};
 
 #[derive(Clone, Debug)]
 pub struct RPMOptions {
@@ -209,8 +209,7 @@ pub trait RPMExtraOptions {
 
     /// Defines a macro
     fn def_macro(&mut self, name: &str, value: &str) {
-        self.macros_mut()
-            .insert(name.to_string(), value.to_string());
+        self.macros_mut().insert(name.to_string(), value.to_string());
     }
     /// Undefines a macro
     fn undef_macro(&mut self, name: &str) {
@@ -424,11 +423,7 @@ impl RPMSpecBackend for MockBackend {
     async fn build_rpm(&self, spec: &Path) -> Result<Vec<PathBuf>> {
         let mut cmd = self.mock();
         let tmp = tempfile::Builder::new().prefix("anda-rpm").tempdir()?;
-        cmd.arg("--rebuild")
-            .arg(spec)
-            .arg("--enable-network")
-            .arg("--resultdir")
-            .arg(tmp.path());
+        cmd.arg("--rebuild").arg(spec).arg("--enable-network").arg("--resultdir").arg(tmp.path());
 
         cmd.log().await?;
 
@@ -497,13 +492,7 @@ impl RPMExtraOptions for RPMBuildBackend {
 
 impl RPMBuildBackend {
     pub fn new(sources: PathBuf, resultdir: PathBuf) -> Self {
-        Self {
-            sources,
-            resultdir,
-            with: Vec::new(),
-            without: Vec::new(),
-            macros: BTreeMap::new(),
-        }
+        Self { sources, resultdir, with: Vec::new(), without: Vec::new(), macros: BTreeMap::new() }
     }
 
     pub fn rpmbuild(&self) -> Command {
@@ -534,10 +523,7 @@ impl RPMSpecBackend for RPMBuildBackend {
         cmd.arg("-br")
             .arg(spec)
             .arg("--define")
-            .arg(format!(
-                "_sourcedir {}",
-                self.sources.canonicalize()?.display()
-            ))
+            .arg(format!("_sourcedir {}", self.sources.canonicalize()?.display()))
             .arg("--define")
             .arg(format!("_srcrpmdir {}", tmp.path().display()));
 
@@ -572,10 +558,7 @@ impl RPMSpecBackend for RPMBuildBackend {
         cmd.arg("-bb")
             .arg(spec)
             .arg("--define")
-            .arg(format!(
-                "_sourcedir {}",
-                self.sources.canonicalize()?.display()
-            ))
+            .arg(format!("_sourcedir {}", self.sources.canonicalize()?.display()))
             .arg("--define")
             .arg(format!("_rpmdir {}", tmp.path().display()));
 
@@ -610,10 +593,7 @@ impl RPMSpecBackend for RPMBuildBackend {
         cmd.arg("-ba")
             .arg(spec)
             .arg("--define")
-            .arg(format!(
-                "_sourcedir {}",
-                self.sources.canonicalize()?.display()
-            ))
+            .arg(format!("_sourcedir {}", self.sources.canonicalize()?.display()))
             .arg("--define")
             .arg(format!("_srcrpmdir {}", tmp.path().display()))
             .arg("--define")

@@ -1,6 +1,6 @@
-use std::rc::Rc;
 use rhai::EvalAltResult;
 use smartstring::{LazyCompact, SmartString};
+use std::rc::Rc;
 
 type SStr = SmartString<LazyCompact>;
 
@@ -9,7 +9,7 @@ pub enum AndaxError {
     // rhai_fn, fn_src, E
     RustReport(SStr, SStr, Rc<color_eyre::Report>),
     RustError(SStr, SStr, Rc<dyn std::error::Error>),
-    Exit
+    Exit(bool),
 }
 pub enum TbErr {
     Report(Rc<color_eyre::Report>),
@@ -67,3 +67,32 @@ impl_ehdl!(Result<T, std::string::FromUtf8Error>);
 impl_ehdl!(std::io::Result<T>);
 impl_ehdl!(Result<T, ureq::Error>);
 impl_ehdl!(Result<T, serde_json::Error>);
+impl_ehdl!(Result<T, regex::Error>);
+impl_ehdl!(Result<T, std::num::TryFromIntError>);
+
+pub(crate) const EARTH: &str = r#"
+.    .    *  .   .  .   .  *     .  .        . .   .     .  *   .     .  .   .
+   *  .    .    *  .     .         .    * .     .  *  .    .   .   *   . .    .
+. *      .   .    .  .     .  *      .      .        .     .-o--.   .    *  .
+ .  .        .     .     .      .    .     *      *   .   :O o O :      .     .
+____   *   .    .      .   .           .  .   .      .    : O. Oo;    .   .
+ `. ````.---...___      .      *    .      .       .   * . `-.O-'  .     * . .
+   \_    ;   \`.-'```--..__.       .    .      * .     .       .     .        .
+   ,'_,-' _,-'             ``--._    .   *   .   .  .       .   *   .     .  .
+   -'  ,-'                       `-._ *     .       .   *  .           .    .
+    ,-'            _,-._            ,`-. .    .   .     .      .     *    .   .
+    '--.     _ _.._`-.  `-._        |   `_   .      *  .    .   .     .  .    .
+        ;  ,' ' _  `._`._   `.      `,-''  `-.     .    .     .    .      .  .
+     ,-'   \    `;.   `. ;`   `._  _/\___     `.       .    *     .    . *
+     \      \ ,  `-'    )        `':_  ; \      `. . *     .        .    .    *
+      \    _; `       ,;               __;        `. .           .   .     . .
+       '-.;        __,  `   _,-'-.--'''  \-:        `.   *   .    .  .   *   .
+          )`-..---'   `---''              \ `.        . .   .  .       . .  .
+        .'                                 `. `.       `  .    *   .      .  .
+       /                                     `. `.      ` *          .       .
+      /                                        `. `.     '      .   .     *
+     /                                           `. `.   _'.  .       .  .    .
+    |                                              `._\-'  '     .        .  .
+    |                                                 `.__, \  *     .   . *. .
+    |                                                      \ \.    .         .
+    |                                                       \ \ .     * jrei  *"#;

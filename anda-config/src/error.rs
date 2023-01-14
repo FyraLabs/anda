@@ -43,6 +43,4 @@ impl std::fmt::Display for ProjectError {
     }
 }
 
-impl std::error::Error for ProjectError {
-    
-}
+impl std::error::Error for ProjectError {}

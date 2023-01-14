@@ -23,9 +23,7 @@ pub fn hcl_context() -> Context<'static> {
     let c = GLOBAL_CONTEXT.get_or_init(|| {
         dotenv::dotenv().ok();
         let mut ctx = Context::new();
-        let env_func = FuncDef::builder()
-            .param(hcl::eval::ParamType::String)
-            .build(env_func);
+        let env_func = FuncDef::builder().param(hcl::eval::ParamType::String).build(env_func);
         ctx.declare_func("env", env_func);
 
         let env = std::env::vars().collect::<BTreeMap<String, String>>();

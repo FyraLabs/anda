@@ -33,12 +33,11 @@ macro_rules! rpmargs {
 }
 
 #[export_module]
-#[allow(dead_code)]
-pub mod anda_rhai {
-    fn cmd_srpm(spec: &str, sources: Option<&str>) -> Vec<String> {
+pub mod ar {
+    pub(crate) fn cmd_srpm(spec: &str, sources: Option<&str>) -> Vec<String> {
         rpmargs!("--buildsrpm", spec, sources)
     }
-    fn cmd_rpm(spec: &str, sources: Option<&str>) -> Vec<String> {
+    pub(crate) fn cmd_rpm(spec: &str, sources: Option<&str>) -> Vec<String> {
         rpmargs!("--rebuild", spec, sources)
     }
 }

@@ -1,7 +1,10 @@
 use chrono::{DateTime, FixedOffset, NaiveDate};
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
-use std::{collections::BTreeMap, fmt::{Display, Formatter}};
+use std::{
+    collections::BTreeMap,
+    fmt::{Display, Formatter},
+};
 
 use serde::{Deserializer, Serializer};
 
@@ -119,9 +122,7 @@ struct ChangelogEntry {
 
 impl Changelog {
     fn new() -> Changelog {
-        Changelog {
-            entries: Vec::new(),
-        }
+        Changelog { entries: Vec::new() }
     }
 
     fn parse(input: &str) -> Changelog {
@@ -142,10 +143,12 @@ impl Changelog {
                     // println!("parts: {:?}", parts);
                     // example of parts: Dec 06 2022 root - 1.2.0-1
                     // get the date
-                    let date_string = parts.split_whitespace().take(4).collect::<Vec<&str>>().join(" ");
+                    let date_string =
+                        parts.split_whitespace().take(4).collect::<Vec<&str>>().join(" ");
                     // println!("date_string: {:?}", date_string);
                     // add filler time to the date string because our string isnt enough to parse
-                    current_entry.date = NaiveDate::parse_from_str(&date_string, "%a %b %d %Y").unwrap();
+                    current_entry.date =
+                        NaiveDate::parse_from_str(&date_string, "%a %b %d %Y").unwrap();
                     // get the author.
                     // we need to split the string by the date string and then take all the elements before -
                     let (author, version) = parts.split_once(" - ").unwrap();
@@ -199,9 +202,7 @@ impl ChangelogEntry {
     }
 
     fn is_empty(&self) -> bool {
-        self.date == NaiveDate::MIN
-            && self.author.is_empty()
-            && self.text.is_empty()
+        self.date == NaiveDate::MIN && self.author.is_empty() && self.text.is_empty()
     }
 }
 

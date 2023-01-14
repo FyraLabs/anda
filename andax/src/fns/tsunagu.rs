@@ -1,17 +1,16 @@
 use crate::{error::AndaxRes, run::rf};
-use rhai::{plugin::*, CustomType, EvalAltResult};
+use rhai::{plugin::*, CustomType};
 use serde_json::Value;
-use tracing::debug;
+use std::env::VarError;
+use tracing::trace;
 
 type RhaiRes<T> = Result<T, Box<EvalAltResult>>;
 
 pub(crate) const USER_AGENT: &str = "andax";
 #[export_module]
-pub mod anda_rhai {
-    use std::env::VarError;
-
+pub mod ar {
     #[rhai_fn(return_raw)]
-    pub fn get(ctx: NativeCallContext, url: &str) -> RhaiRes<String> {
+    pub(crate) fn get(ctx: NativeCallContext, url: &str) -> RhaiRes<String> {
         ureq::AgentBuilder::new()
             .redirects(0)
             .build()
@@ -24,20 +23,35 @@ pub mod anda_rhai {
     }
 
     #[rhai_fn(return_raw)]
-    pub fn gh(ctx: NativeCallContext, repo: &str) -> RhaiRes<String> {
+    pub(crate) fn gh(ctx: NativeCallContext, repo: &str) -> RhaiRes<String> {
         let v: Value =
-            ureq::get(format!("https://api.github.com/repos/{}/releases/latest", repo).as_str())
-                .set(
-                    "Authorization",
-                    format!("Bearer {}", env("GITHUB_TOKEN")?).as_str(),
-                )
+            ureq::get(format!("https://api.github.com/repos/{repo}/releases/latest").as_str())
+                .set("Authorization", format!("Bearer {}", env("GITHUB_TOKEN")?).as_str())
                 .set("User-Agent", USER_AGENT)
                 .call()
                 .ehdl(&ctx)?
                 .into_json()
                 .ehdl(&ctx)?;
-        debug!("Got json from {repo}:\n{v}");
+        trace!("Got json from {repo}:\n{v}");
         let binding = v["tag_name"].to_owned();
+        let ver = binding.as_str().unwrap_or_default();
+        if let Some(ver) = ver.strip_prefix('v') {
+            return Ok(ver.to_string());
+        }
+        Ok(ver.to_string())
+    }
+    #[rhai_fn(return_raw)]
+    pub(crate) fn gh_tag(ctx: NativeCallContext, repo: &str) -> RhaiRes<String> {
+        let v: Value =
+            ureq::get(format!("https://api.github.com/repos/{repo}/tags").as_str())
+                .set("Authorization", format!("Bearer {}", env("GITHUB_TOKEN")?).as_str())
+                .set("User-Agent", USER_AGENT)
+                .call()
+                .ehdl(&ctx)?
+                .into_json()
+                .ehdl(&ctx)?;
+        trace!("Got json from {repo}:\n{v}");
+        let binding = v[0]["name"].to_owned();
         let ver = binding.as_str().unwrap_or_default();
         if let Some(ver) = ver.strip_prefix('v') {
             return Ok(ver.to_string());
@@ -46,13 +60,13 @@ pub mod anda_rhai {
     }
 
     #[rhai_fn(return_raw)]
-    pub fn pypi(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
+    pub(crate) fn pypi(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
         ctx.engine()
             .eval(format!("get(`https://pypi.org/pypi/{name}/json`).json().info.version").as_str())
     }
 
     #[rhai_fn(return_raw)]
-    pub fn crates(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
+    pub(crate) fn crates(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
         ctx.engine().eval(
             format!(
                 "get(`https://crates.io/api/v1/crates/{name}`).json().crate.max_stable_version"
@@ -62,7 +76,7 @@ pub mod anda_rhai {
     }
 
     #[rhai_fn(return_raw)]
-    pub fn crates_max(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
+    pub(crate) fn crates_max(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
         ctx.engine().eval(
             format!("get(`https://crates.io/api/v1/crates/{name}`).json().crate.max_version")
                 .as_str(),
@@ -70,7 +84,7 @@ pub mod anda_rhai {
     }
 
     #[rhai_fn(return_raw)]
-    pub fn crates_newest(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
+    pub(crate) fn crates_newest(ctx: NativeCallContext, name: &str) -> Result<String, Box<EvalAltResult>> {
         ctx.engine().eval(
             format!("get(`https://crates.io/api/v1/crates/{name}`).json().crate.newest_version")
                 .as_str(),
@@ -107,17 +121,11 @@ impl CustomType for Req {
 
 impl Req {
     pub fn new(url: String) -> Self {
-        Self {
-            url,
-            headers: vec![],
-            redirects: 0,
-        }
+        Self { url, headers: vec![], redirects: 0 }
     }
     pub fn get(self) -> color_eyre::Result<String> {
-        let r = ureq::AgentBuilder::new()
-            .redirects(self.redirects.try_into()?)
-            .build()
-            .get(&self.url);
+        let r =
+            ureq::AgentBuilder::new().redirects(self.redirects.try_into()?).build().get(&self.url);
         let mut r = r.set("User-Agent", USER_AGENT);
         for (k, v) in self.headers {
             r = r.set(k.as_str(), v.as_str());

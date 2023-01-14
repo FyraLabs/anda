@@ -38,9 +38,7 @@ impl RPMSpec {
         let m = m.unwrap();
         if ver != m[2] {
             info!("{}: {} —→ {}", self.name, &m[2], ver);
-            self.f = re
-                .replace(&self.f, format!("Version:{}{ver}\n", &m[1]))
-                .to_string();
+            self.f = re.replace(&self.f, format!("Version:{}{ver}\n", &m[1])).to_string();
             self.changed = true;
         }
         Ok(())
@@ -49,7 +47,9 @@ impl RPMSpec {
         let re = regex::Regex::new(r"(?m)%define(\s+)(\S+)(\s+)(\S+)$").unwrap();
         for cap in re.captures_iter(self.f.as_str()) {
             if &cap[2] == name {
-                self.f = self.f.replace(&cap[0], format!("%define{}{name}{}{val}", &cap[1], &cap[3]).as_str());
+                self.f = self
+                    .f
+                    .replace(&cap[0], format!("%define{}{name}{}{val}", &cap[1], &cap[3]).as_str());
                 self.changed = true;
                 return Ok(());
             }
@@ -60,7 +60,9 @@ impl RPMSpec {
         let re = regex::Regex::new(r"(?m)%global(\s+)(\S+)(\s+)(\S+)$").unwrap();
         for cap in re.captures_iter(self.f.as_str()) {
             if &cap[2] == name {
-                self.f = self.f.replace(&cap[0], format!("%global{}{name}{}{val}", &cap[1], &cap[3]).as_str());
+                self.f = self
+                    .f
+                    .replace(&cap[0], format!("%global{}{name}{}{val}", &cap[1], &cap[3]).as_str());
                 self.changed = true;
                 return Ok(());
             }
@@ -81,9 +83,7 @@ impl RPMSpec {
             return Err("Can't find source preamble in spec".into());
         }
         let cap = capw.unwrap();
-        self.f = self
-            .f
-            .replace(&cap[0], format!("Source{i}:{}{p}\n", &cap[2]).as_str());
+        self.f = self.f.replace(&cap[0], format!("Source{i}:{}{p}\n", &cap[2]).as_str());
         self.changed = true;
         Ok(())
     }
@@ -108,6 +108,8 @@ impl CustomType for RPMSpec {
             .with_name("Rpm")
             .with_fn("version", Self::version)
             .with_fn("source", Self::source)
+            .with_fn("define", Self::define)
+            .with_fn("global", Self::global)
             .with_get_set("f", Self::get, Self::set);
     }
 }

@@ -29,13 +29,7 @@ pub struct Config {
 
 impl Manifest {
     pub fn find_key_for_value(&self, value: &Project) -> Option<&String> {
-        self.project.iter().find_map(|(key, val)| {
-            if val == value {
-                Some(key)
-            } else {
-                None
-            }
-        })
+        self.project.iter().find_map(|(key, val)| if val == value { Some(key) } else { None })
     }
 
     pub fn get_project(&self, key: &str) -> Option<&Project> {
@@ -68,6 +62,7 @@ pub struct Project {
     pub post_script: Option<PathBuf>,
     pub env: Option<BTreeMap<String, String>>,
     pub alias: Option<Vec<String>>,
+    pub scripts: Option<Vec<PathBuf>>,
     #[serde(default)]
     pub labels: BTreeMap<String, String>,
     pub update: Option<PathBuf>,
@@ -152,12 +147,7 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
         let entry = entry.unwrap();
 
         // check if path is same path as config file
-        if entry
-            .path()
-            .strip_prefix("./")
-            .expect("Fail to strip `./` (absolute paths?)")
-            == path
-        {
+        if entry.path().strip_prefix("./").expect("Fail to strip `./` (absolute paths?)") == path {
             continue;
         }
 
@@ -167,14 +157,7 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
 
             let nested_config = prefix_config(
                 load_from_string(&readfile)?,
-                &entry
-                    .path()
-                    .parent()
-                    .unwrap()
-                    .strip_prefix("./")
-                    .unwrap()
-                    .display()
-                    .to_string(),
+                &entry.path().parent().unwrap().strip_prefix("./").unwrap().display().to_string(),
             );
             // merge the btreemap
             config.project.extend(nested_config.project);
@@ -222,6 +205,12 @@ pub fn prefix_config(config: Manifest, prefix: &str) -> Manifest {
         default!(new_project, pre_script, "pre.rhai");
         default!(new_project, post_script, "pre.rhai");
 
+        if let Some(scripts) = &mut new_project.scripts {
+            for scr in scripts {
+                *scr = PathBuf::from(format!("{prefix}/{}", scr.display()));
+            }
+        }
+
         new_config.project.remove(project_name);
         new_config.project.insert(new_project_name, new_project);
     }
@@ -246,16 +235,10 @@ pub fn generate_alias(config: &mut Manifest) {
         if config.config.strip_prefix.is_some() || config.config.strip_suffix.is_some() {
             let mut new_name = name.clone();
             if let Some(strip_prefix) = &config.config.strip_prefix {
-                new_name = new_name
-                    .strip_prefix(strip_prefix)
-                    .unwrap_or(&new_name)
-                    .to_string();
+                new_name = new_name.strip_prefix(strip_prefix).unwrap_or(&new_name).to_string();
             }
             if let Some(strip_suffix) = &config.config.strip_suffix {
-                new_name = new_name
-                    .strip_suffix(strip_suffix)
-                    .unwrap_or(&new_name)
-                    .to_string();
+                new_name = new_name.strip_suffix(strip_suffix).unwrap_or(&new_name).to_string();
             }
 
             if name.clone() != new_name {
@@ -318,11 +301,8 @@ mod test_parser {
 
         assert_eq!(parse_map("foo=bar=baz"), Some(multieq));
 
-        let multi: BTreeMap<String, String> = [
-            ("foo".to_string(), "bar".to_string()),
-            ("baz".to_string(), "qux".to_string()),
-        ]
-        .into();
+        let multi: BTreeMap<String, String> =
+            [("foo".to_string(), "bar".to_string()), ("baz".to_string(), "qux".to_string())].into();
 
         assert_eq!(parse_map("foo=bar,baz=qux"), Some(multi));
     }

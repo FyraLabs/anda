@@ -4,13 +4,14 @@ use crate::{
     flatpak::{FlatpakArtifact, FlatpakBuilder},
     oci::{build_oci, OCIBackend},
     rpm_spec::{RPMBuilder, RPMExtraOptions, RPMOptions},
+    update::run_scripts,
     util::{get_commit_id_cwd, get_date},
 };
 use anda_config::{Docker, Flatpak, Project, RpmBuild};
 use cmd_lib::run_cmd;
 use color_eyre::{eyre::eyre, eyre::Context, Report, Result};
 use std::path::{Path, PathBuf};
-use tracing::{debug, error, trace};
+use tracing::{debug, error, info, trace};
 
 pub async fn build_rpm(
     opts: RPMOptions,
@@ -169,14 +170,9 @@ pub async fn build_rpm_call(
         );
     }
 
-    let art = build_rpm(
-        opts.clone(),
-        &rpmbuild.spec,
-        rpm_builder,
-        &cli.target_dir,
-        rpmb_opts.clone(),
-    )
-    .await?;
+    let art =
+        build_rpm(opts.clone(), &rpmbuild.spec, rpm_builder, &cli.target_dir, rpmb_opts.clone())
+            .await?;
 
     // run post-build script
     if let Some(post_script) = &rpmbuild.post_script {
@@ -210,9 +206,8 @@ pub async fn build_flatpak_call(
         );
     }
 
-    let art = build_flatpak(&cli.target_dir, &flatpak.manifest, flatpak_opts.to_owned())
-        .await
-        .unwrap();
+    let art =
+        build_flatpak(&cli.target_dir, &flatpak.manifest, flatpak_opts.to_owned()).await.unwrap();
 
     for artifact in art {
         artifact_store.add(artifact.to_string(), PackageType::Flatpak);
@@ -246,11 +241,7 @@ pub fn build_oci_call(
             image.dockerfile.as_ref().unwrap().to_string(),
             image.tag_latest.unwrap_or(false),
             tag.to_string(),
-            image
-                .version
-                .as_ref()
-                .unwrap_or(&"latest".to_string())
-                .to_string(),
+            image.version.as_ref().unwrap_or(&"latest".to_string()).to_string(),
             image.context.clone(),
         );
 
@@ -282,9 +273,7 @@ pub async fn build_project(
         }
         rpm_opts.no_mirror = rpmb_opts.no_mirrors;
         rpm_opts.def_macro("_disable_source_fetch", "0");
-        rpm_opts
-            .config_opts
-            .push("external_buildrequires=True".to_string());
+        rpm_opts.config_opts.push("external_buildrequires=True".to_string());
 
         // Enable SCM sources
         if let Some(bool) = rpmbuild.enable_scm {
@@ -293,29 +282,23 @@ pub async fn build_project(
 
         // load SCM options
         if let Some(scm_opt) = &rpmbuild.scm_opts {
-            rpm_opts.scm_opts = scm_opt
-                .iter()
-                .map(|(k, v)| format!("{}={}", k, v))
-                .collect::<Vec<String>>();
+            rpm_opts.scm_opts =
+                scm_opt.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>();
         }
 
         // load extra config options
 
         if let Some(cfg) = &rpmbuild.config {
-            rpm_opts.config_opts.extend(
-                cfg.iter()
-                    .map(|(k, v)| format!("{}={}", k, v))
-                    .collect::<Vec<String>>(),
-            );
+            rpm_opts
+                .config_opts
+                .extend(cfg.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>());
         }
 
         // Plugin opts for RPM, contains some extra plugin options, with some special
         // characters like `:`
         if let Some(plugin_opt) = &rpmbuild.plugin_opts {
-            rpm_opts.plugin_opts = plugin_opt
-                .iter()
-                .map(|(k, v)| format!("{}={}", k, v))
-                .collect::<Vec<String>>();
+            rpm_opts.plugin_opts =
+                plugin_opt.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>();
         }
 
         if rpmb_opts.mock_config.is_none() {
@@ -357,6 +340,17 @@ pub async fn build_project(
             if let Some(docker) = &project.docker {
                 build_oci_call(OCIBackend::Docker, cli, docker, &mut artifacts)
                     .with_context(|| "Failed to build Docker images".to_string())?;
+            }
+            if let Some(scripts) = &project.scripts {
+                info!("Running build scripts");
+                run_scripts(
+                    scripts
+                        .iter()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .collect::<Vec<String>>()
+                        .as_slice(),
+                    project.labels,
+                )?;
             }
         }
         PackageType::Rpm => {
@@ -450,15 +444,8 @@ pub async fn builder(
         // find project named project
         if let Some(name) = project {
             if let Some(project) = config.get_project(&name) {
-                build_project(
-                    cli,
-                    project.clone(),
-                    package,
-                    rpm_opts,
-                    flatpak_opts,
-                    oci_opts,
-                )
-                .await?;
+                build_project(cli, project.clone(), package, rpm_opts, flatpak_opts, oci_opts)
+                    .await?;
             } else {
                 return Err(Report::msg(format!("Project not found: {}", name)));
             }

@@ -199,7 +199,7 @@ pub enum Command {
         filters: Option<String>,
     },
 
-    /// Run .anda scripts
+    /// Run .rhai scripts
     Run {
         scripts: Vec<String>,
         #[clap(short, long)]
