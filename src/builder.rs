@@ -9,7 +9,7 @@ use crate::{
 };
 use anda_config::{Docker, Flatpak, Project, RpmBuild};
 use cmd_lib::run_cmd;
-use color_eyre::{eyre::eyre, eyre::Context, Report, Result};
+use color_eyre::{eyre::eyre, eyre::Context, Result};
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace};
 
@@ -340,7 +340,7 @@ pub async fn build_project(
                 run_scripts(
                     scripts
                         .iter()
-                        .map(|p| p.to_string_lossy())
+                        .map(|p| p.to_string_lossy().to_string())
                         .collect::<Vec<String>>()
                         .as_slice(),
                     project.labels,

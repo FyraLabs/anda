@@ -12,7 +12,7 @@ use anda_config::parse_map;
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{Cli, Command};
-use color_eyre::{Report, Result};
+use color_eyre::{eyre::eyre, Result};
 use std::io;
 use tracing::debug;
 
@@ -105,10 +105,7 @@ async fn main() -> Result<()> {
                 return Err(eyre!("No scripts to run"));
             }
             let labels = parse_map(&labels.unwrap_or_default());
-            update::run_scripts(
-                &scripts,
-                labels.ok_or_else(|| eyre!("Cannot parse --labels"))?,
-            )?;
+            update::run_scripts(&scripts, labels.ok_or_else(|| eyre!("Cannot parse --labels"))?)?;
         }
     }
     Ok(())

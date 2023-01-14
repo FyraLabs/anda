@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, fs::read_to_string, path::Path};
 use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
 use async_trait::async_trait;
 use cmd_lib::log;
-use color_eyre::{Report, Result};
+use color_eyre::{Result, eyre::eyre};
 use console::style;
 use lazy_static::lazy_static;
 use log::{debug, info};

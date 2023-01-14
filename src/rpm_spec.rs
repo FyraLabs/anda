@@ -9,7 +9,7 @@ use tempfile::TempDir;
 
 use crate::util::CommandLog;
 use async_trait::async_trait;
-use color_eyre::{Report, Result};
+use color_eyre::{Report, Result, eyre::eyre};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
