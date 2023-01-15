@@ -149,7 +149,7 @@ pub async fn build_rpm_call(
     rpmbuild: &RpmBuild,
     mut rpm_builder: RPMBuilder,
     artifact_store: &mut Artifacts,
-    mut rpmb_opts: RpmOpts,
+    rpmb_opts: &RpmOpts,
 ) -> Result<()> {
     // run pre-build script
     if let Some(pre_script) = &rpmbuild.pre_script {
@@ -157,22 +157,18 @@ pub async fn build_rpm_call(
             rpmbuild.spec.as_os_str().to_str().unwrap_or(""),
             pre_script,
             opts,
-            rpm_builder,
-            rpmb_opts
-        );
+            rpm_builder);
     }
 
     let art =
-        build_rpm(&mut opts, &rpmbuild.spec, rpm_builder, &cli.target_dir, &rpmb_opts).await?;
+        build_rpm(&mut opts, &rpmbuild.spec, rpm_builder, &cli.target_dir, rpmb_opts).await?;
 
     // `opts` is consumed in build_rpm()/build()
     if let Some(post_script) = &rpmbuild.post_script {
         script!(
             rpmbuild.spec.as_os_str().to_str().unwrap_or(""),
             post_script,
-            rpm_builder,
-            rpmb_opts
-        );
+            rpm_builder);
     }
 
     for artifact in art {
@@ -220,13 +216,12 @@ pub fn build_oci_call(
         OCIBackend::Podman => PackageType::Podman,
     };
 
-    for (tag, image) in &mut manifest.image {
-        let image = std::mem::take(image);
+    for (tag, image) in std::mem::take(&mut manifest.image).into_iter() {
         let art = build_oci(
             backend,
             image.dockerfile.unwrap(),
             image.tag_latest.unwrap_or(false),
-            tag.clone(),
+            tag,
             image.version.unwrap_or("latest".to_string()),
             image.context,
         );
@@ -307,7 +302,7 @@ pub async fn build_project(
                     rpmbuild,
                     rpmb_opts.rpm_builder.into(),
                     &mut artifacts,
-                    rpmb_opts.clone(),
+                    rpmb_opts,
                 )
                 .await
                 .with_context(|| "Failed to build RPMs".to_string())?;
@@ -347,7 +342,7 @@ pub async fn build_project(
                     rpmbuild,
                     rpmb_opts.rpm_builder.into(),
                     &mut artifacts,
-                    rpmb_opts.clone(),
+                    rpmb_opts,
                 )
                 .await
                 .with_context(|| "Failed to build RPMs".to_string())?;
