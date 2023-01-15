@@ -180,7 +180,7 @@ fn exec<'a>(name: &'a str, scr: &'a Path, mut sc: Scope<'a>, en: Engine) -> Opti
     }
 }
 
-fn hint(sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> {
+fn hint(_sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> {
     macro_rules! h {
         ($s:expr) => {
             let left = " ".repeat(7 + lns.len());
@@ -209,7 +209,7 @@ fn hint(sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> 
             }
             None
         }
-        TbErr::Report(report) => None,
+        TbErr::Report(_report) => None,
         TbErr::Rhai(err) => match err {
             EvalAltResult::ErrorRuntime(d, _) => {
                 if d.is_string() {

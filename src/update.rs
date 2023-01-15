@@ -17,8 +17,8 @@ pub fn update(
     'p: for (name, mut proj) in cfg.project.into_iter() {
         if let Some(scr) = &proj.update {
             trace!(name, scr = scr.to_str(), "Th start");
-            let mut lbls = lbls.clone();
-            lbls.extend(std::mem::take(&mut proj.labels));
+            let mut lbls = std::mem::take(&mut proj.labels);
+            lbls.extend(lbls.clone());
             for (k, v) in &fls {
                 if let Some(val) = lbls.get(k) {
                     if val == v {
