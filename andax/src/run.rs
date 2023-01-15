@@ -1,5 +1,8 @@
 use crate::{
-    error::{AndaxError as AErr, TbErr},
+    error::{
+        AndaxError as AErr,
+        TbErr::{self, *},
+    },
     fns as f,
 };
 use lazy_static::lazy_static;
@@ -42,9 +45,9 @@ fn gen_en() -> (Engine, Scope<'static>) {
 /// used in `_tb()`
 fn _gemsg(nanitozo: &TbErr) -> String {
     match nanitozo {
-        TbErr::Report(o) => format!("From: {o:#}"),
-        TbErr::Arb(o) => format!("Caused by: {o}"),
-        TbErr::Rhai(o) => format!("Rhai: {o}"),
+        Report(o) => format!("From: {o:#}"),
+        Arb(o) => format!("Caused by: {o}"),
+        Rhai(o) => format!("Rhai: {o}"),
     }
 }
 
@@ -125,17 +128,10 @@ pub fn errhdl(name: &str, scr: &Path, mut err: EvalAltResult) {
     if let EvalAltResult::ErrorRuntime(run_err, pos) = err.borrow_mut() {
         match std::mem::take(run_err).try_cast::<AErr>() {
             Some(AErr::RustReport(rhai_fn, fn_src, oerr)) => {
-                return _tb(
-                    name,
-                    scr,
-                    TbErr::Report(oerr),
-                    *pos,
-                    rhai_fn.as_str(),
-                    fn_src.as_str(),
-                );
+                return _tb(name, scr, Report(oerr), *pos, rhai_fn.as_str(), fn_src.as_str());
             }
             Some(AErr::RustError(rhai_fn, fn_src, oerr)) => {
-                return _tb(name, scr, TbErr::Arb(oerr), *pos, rhai_fn.as_str(), fn_src.as_str());
+                return _tb(name, scr, Arb(oerr), *pos, rhai_fn.as_str(), fn_src.as_str());
             }
             Some(AErr::Exit(b)) => {
                 if b {
@@ -149,7 +145,7 @@ pub fn errhdl(name: &str, scr: &Path, mut err: EvalAltResult) {
         }
     }
     let pos = err.position();
-    _tb(name, scr, TbErr::Rhai(err), pos, "", "");
+    _tb(name, scr, Rhai(err), pos, "", "");
 }
 
 pub fn run<'a>(
@@ -180,7 +176,9 @@ fn exec<'a>(name: &'a str, scr: &'a Path, mut sc: Scope<'a>, en: Engine) -> Opti
     }
 }
 
-fn hint(_sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> {
+#[instrument(skip(sl, lns, nanitozo, rhai_fn))]
+fn hint(sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> {
+    trace!("Matching hints");
     macro_rules! h {
         ($s:expr) => {
             let left = " ".repeat(7 + lns.len());
@@ -199,7 +197,10 @@ fn hint(_sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String>
         };
     }
     match nanitozo {
-        TbErr::Arb(err) => {
+        Arb(err) => {
+            if let Some(err) = (**err).downcast_ref::<EvalAltResult>() {
+                return hint_ear(sl, lns, err, rhai_fn);
+            }
             let s = format!("{err}");
             if rhai_fn == "gh"
                 && s.starts_with("https://api.github.com/repos/")
@@ -209,23 +210,59 @@ fn hint(_sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String>
             }
             None
         }
-        TbErr::Report(_report) => None,
-        TbErr::Rhai(err) => match err {
-            EvalAltResult::ErrorRuntime(d, _) => {
-                if d.is_string() {
-                    let s = d.clone().into_string().expect("sting.");
-                    if s == "env(`GITHUB_TOKEN`) not present" {
-                        h!(
-                            r#"gh() requires the environment variable `GITHUB_TOKEN` to be set as a Github token so as to avoid rate-limits:
+        Report(report) => {
+            if let Some(err) = report.source() {
+                if let Some(err) = err.downcast_ref::<EvalAltResult>() {
+                    return hint_ear(sl, lns, err, rhai_fn);
+                }
+            }
+            None
+        }
+        Rhai(err) => hint_ear(sl, lns, err, rhai_fn),
+    }
+}
+
+fn hint_ear(sl: &str, lns: &str, ear: &EvalAltResult, _rhai_fn: &str) -> Option<String> {
+    trace!("Hinting for EvalAltResult");
+    macro_rules! h {
+        ($s:expr) => {
+            let left = " ".repeat(7 + lns.len());
+            let mut s = String::new();
+            let mut first = true;
+            for l in $s.lines() {
+                let l = l.trim();
+                if first {
+                    s = format!("\n {lns} └─═ Hint: {l}");
+                    first = false;
+                    continue;
+                }
+                s += &format!("\n{left}...: {l}");
+            }
+            return Some(s);
+        };
+    }
+    use EvalAltResult::*;
+    match ear {
+        ErrorRuntime(d, _) => {
+            if d.is_string() {
+                let s = d.clone().into_string().expect("sting.");
+                if s == "env(`GITHUB_TOKEN`) not present" {
+                    h!(
+                        r#"gh() requires the environment variable `GITHUB_TOKEN` to be set as a Github token so as to avoid rate-limits:
                         https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting
                         To create a Github token, see:
                         https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"#
-                        );
-                    }
+                    );
                 }
-                None
             }
-            _ => None,
-        },
+        }
+        ErrorMismatchOutputType(req, actual, _) => {
+            if sl.contains("json(") && req == "map" && actual == "array" {
+                h!("If the json root is an array `[]`, use json_arr() instead.");
+            }
+        }
+        _ => {}
     }
+    trace!("No hints");
+    None
 }

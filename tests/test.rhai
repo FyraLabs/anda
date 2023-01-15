@@ -5,7 +5,7 @@
 // rpm.version(obj.str());
 // rpm.f = sub("2.2.2", "3.3.3", rpm.f);
 
-//rpm.version(gh("Bonandry/adwaita-plus"));
+// print(gh("Bonandry/adwaita-plus"));
 // print(env("PATH"));
 
 // rpm.version("0.3.63");

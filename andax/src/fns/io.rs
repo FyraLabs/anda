@@ -1,6 +1,7 @@
 use crate::error::AndaxRes;
 use rhai::{plugin::*, EvalAltResult};
 use std::process::Command;
+use tracing::{debug, instrument};
 
 macro_rules! _sh_out {
     ($ctx:expr, $o:expr) => {
@@ -39,24 +40,33 @@ type T = Result<(i32, String, String), Box<EvalAltResult>>;
 /// We will let rhai handle all the nasty things.
 #[export_module]
 pub mod ar {
+
     /// run a command using `cmd` on Windows and `sh` on other systems
+    #[instrument(skip(ctx))]
     #[rhai_fn(return_raw, name = "sh")]
     pub(crate) fn shell(ctx: NativeCallContext, cmd: &str) -> T {
+        debug!("Running in shell");
         _sh_out!(&ctx, _cmd!(cmd).output().ehdl(&ctx)?)
     }
     /// run a command using `cmd` on Windows and `sh` on other systems in working dir
+    #[instrument(skip(ctx))]
     #[rhai_fn(return_raw, name = "sh")]
     pub(crate) fn shell_cwd(ctx: NativeCallContext, cmd: &str, cwd: &str) -> T {
+        debug!("Running in shell");
         _sh_out!(&ctx, _cmd!(cmd).current_dir(cwd).output().ehdl(&ctx)?)
     }
     /// run an executable
+    #[instrument(skip(ctx))]
     #[rhai_fn(return_raw, name = "sh")]
     pub(crate) fn sh(ctx: NativeCallContext, cmd: Vec<&str>) -> T {
+        debug!("Running executable");
         _sh_out!(&ctx, Command::new(cmd[0]).args(&cmd[1..]).output().ehdl(&ctx)?)
     }
     /// run an executable in working directory
+    #[instrument(skip(ctx))]
     #[rhai_fn(return_raw, name = "sh")]
     pub(crate) fn sh_cwd(ctx: NativeCallContext, cmd: Vec<&str>, cwd: &str) -> T {
+        debug!("Running executable");
         _sh_out!(&ctx, Command::new(cmd[0]).args(&cmd[1..]).current_dir(cwd).output().ehdl(&ctx)?)
     }
     /// list files and folders in directory

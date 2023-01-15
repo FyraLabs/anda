@@ -27,7 +27,7 @@ pub mod ar {
         let captures = Regex::new(r).ehdl(&ctx)?.captures(text);
         let cap = captures.ok_or_else(|| format!("Can't match regex: {r}\nText: {text}"))?;
         Ok(cap
-            .get(rf(ctx, group.try_into().map_err(|e| color_eyre::Report::new(e)))?)
+            .get(rf(ctx, group.try_into().map_err(color_eyre::Report::new))?)
             .ok_or_else(|| format!("Can't get group: {r}\nText: {text}"))?
             .as_str()
             .into())

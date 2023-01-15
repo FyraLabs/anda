@@ -45,7 +45,7 @@ impl RPMSpec {
     }
     pub fn define(&mut self, name: &str, val: &str) -> Result<(), Box<EvalAltResult>> {
         let re = regex::Regex::new(r"(?m)%define(\s+)(\S+)(\s+)(\S+)$").unwrap();
-        for cap in re.captures_iter(self.f.as_str()).filter(|cap| &cap[2] == name) {
+        if let Some(cap) = re.captures_iter(self.f.as_str()).find(|cap| &cap[2] == name) {
             self.f = self.f.replace(&cap[0], &format!("%define{}{name}{}{val}", &cap[1], &cap[3]));
             self.changed = true;
             return Ok(());
@@ -54,7 +54,7 @@ impl RPMSpec {
     }
     pub fn global(&mut self, name: &str, val: &str) -> Result<(), Box<EvalAltResult>> {
         let re = regex::Regex::new(r"(?m)%global(\s+)(\S+)(\s+)(\S+)$").unwrap();
-        for cap in re.captures_iter(self.f.as_str()).filter(|cap| &cap[2] == name) {
+        if let Some(cap) = re.captures_iter(self.f.as_str()).find(|cap| &cap[2] == name) {
             self.f = self.f.replace(&cap[0], &format!("%global{}{name}{}{val}", &cap[1], &cap[3]));
             self.changed = true;
             return Ok(());

@@ -2,7 +2,7 @@ use crate::{error::AndaxRes, run::rf};
 use rhai::{plugin::*, CustomType};
 use serde_json::Value;
 use std::env::VarError;
-use tracing::trace;
+use tracing::{debug, instrument, trace};
 
 type Res<T> = Result<T, Box<EvalAltResult>>;
 
@@ -22,6 +22,7 @@ pub mod ar {
             .ehdl(&ctx)
     }
 
+    #[instrument(skip(ctx))]
     #[rhai_fn(return_raw)]
     pub(crate) fn gh(ctx: NativeCallContext, repo: &str) -> Res<String> {
         let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/releases/latest"))
@@ -35,10 +36,12 @@ pub mod ar {
         let binding = &v["tag_name"];
         let ver = binding.as_str().unwrap_or("");
         if let Some(ver) = ver.strip_prefix('v') {
+            debug!("Stripped `v` prefix");
             return Ok(ver.to_string());
         }
         Ok(ver.to_string())
     }
+    #[instrument(skip(ctx))]
     #[rhai_fn(return_raw)]
     pub(crate) fn gh_tag(ctx: NativeCallContext, repo: &str) -> Res<String> {
         let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/tags"))
@@ -52,6 +55,7 @@ pub mod ar {
         let binding = &v[0]["name"];
         let ver = binding.as_str().unwrap_or("");
         if let Some(ver) = ver.strip_prefix('v') {
+            debug!("Stripped `v` prefix");
             return Ok(ver.to_string());
         }
         Ok(ver.to_string())

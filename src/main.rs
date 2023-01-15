@@ -14,7 +14,7 @@ use clap_complete::generate;
 use cli::{Cli, Command};
 use color_eyre::{eyre::eyre, Result};
 use std::{collections::BTreeMap, io, mem::take};
-use tracing::debug;
+use tracing::{debug, trace};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -22,12 +22,14 @@ async fn main() -> Result<()> {
     let mut app = Cli::command();
     app.build();
 
+    tracing_log::LogTracer::init()?;
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(util::convert_filter(cli.verbose.log_level_filter()))
         .event_format(tracing_subscriber::fmt::format().pretty())
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
+    trace!("Matching subcommand");
     match cli.command {
         Command::Build {
             all,
@@ -52,7 +54,7 @@ async fn main() -> Result<()> {
             let oci_opts = take(oci_opts);
             let rpm_opts = take(rpm_opts);
             debug!("{all:?}");
-            builder::builder(&mut cli, rpm_opts, all, project, package, flatpak_opts, oci_opts)
+            builder::builder(&cli, rpm_opts, all, project, package, flatpak_opts, oci_opts)
                 .await?;
         }
         Command::Clean => {

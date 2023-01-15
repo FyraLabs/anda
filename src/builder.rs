@@ -10,7 +10,10 @@ use crate::{
 use anda_config::{Docker, Flatpak, Project, RpmBuild};
 use cmd_lib::run_cmd;
 use color_eyre::{eyre::eyre, eyre::Context, Result};
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 use tracing::{debug, error, info, trace};
 
 pub async fn build_rpm(
@@ -59,17 +62,21 @@ pub async fn build_rpm(
         let commit_id = get_commit_id_cwd();
 
         let date = get_date();
+        let mut tmp = String::new();
 
         let autogitversion = commit_id
             .as_ref()
-            .map(|commit| format!("{date}.{}", commit.chars().take(8).collect::<String>()))
-            .unwrap_or(date.clone());
+            .map(|commit| {
+                tmp = format!("{date}.{}", commit.chars().take(8).collect::<String>());
+                &tmp
+            })
+            .unwrap_or(&date);
 
         // limit to 16 chars
 
-        opts.def_macro("autogitversion", &autogitversion);
+        opts.def_macro("autogitversion", autogitversion);
 
-        opts.def_macro("autogitcommit", &commit_id.unwrap_or("unknown".into()));
+        opts.def_macro("autogitcommit", &commit_id.unwrap_or_else(|| "unknown".into()));
 
         opts.def_macro("autogitdate", &date);
     }
@@ -153,22 +160,38 @@ pub async fn build_rpm_call(
 ) -> Result<()> {
     // run pre-build script
     if let Some(pre_script) = &rpmbuild.pre_script {
-        script!(
-            rpmbuild.spec.as_os_str().to_str().unwrap_or(""),
-            pre_script,
-            opts,
-            rpm_builder);
+        if pre_script.extension().unwrap_or_default() == ".rhai" {
+            script!(
+                rpmbuild.spec.as_os_str().to_str().unwrap_or(""),
+                pre_script,
+                opts,
+                rpm_builder
+            );
+        } else {
+            let p = Command::new("sh").arg("-c").arg(pre_script).status()?;
+            if !p.success() {
+                return Err(eyre!(p));
+            }
+        }
     }
 
-    let art =
-        build_rpm(&mut opts, &rpmbuild.spec, rpm_builder, &cli.target_dir, rpmb_opts).await?;
+    let art = build_rpm(&mut opts, &rpmbuild.spec, rpm_builder, &cli.target_dir, rpmb_opts).await?;
 
     // `opts` is consumed in build_rpm()/build()
     if let Some(post_script) = &rpmbuild.post_script {
-        script!(
-            rpmbuild.spec.as_os_str().to_str().unwrap_or(""),
-            post_script,
-            rpm_builder);
+        if post_script.extension().unwrap_or_default() == ".rhai" {
+            script!(
+                rpmbuild.spec.as_os_str().to_str().unwrap_or(""),
+                post_script,
+                opts,
+                rpm_builder
+            );
+        } else {
+            let p = Command::new("sh").arg("-c").arg(post_script).status()?;
+            if !p.success() {
+                return Err(eyre!(p));
+            }
+        }
     }
 
     for artifact in art {
@@ -222,7 +245,7 @@ pub fn build_oci_call(
             image.dockerfile.unwrap(),
             image.tag_latest.unwrap_or(false),
             tag,
-            image.version.unwrap_or("latest".to_string()),
+            image.version.unwrap_or_else(|| "latest".to_string()),
             image.context,
         );
 
