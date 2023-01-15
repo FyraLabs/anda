@@ -28,22 +28,23 @@ completion         builds shell completions
     )
 }
 
+/// WARN: Consumes subcommands
 fn gen_manpage(cmd: Rc<Command>, man_dir: &Path) {
-    let name = cmd.get_display_name().unwrap_or_else(|| cmd.get_name()).to_owned();
+    let name = cmd.get_display_name().unwrap_or_else(|| cmd.get_name());
     if name.starts_with("anda-help") {
         return;
     }
     let mut out = File::create(man_dir.join(format!("{name}.1"))).unwrap();
     {
-        let owned_name: &'static str = Box::leak(name.into_boxed_str());
-        let man_cmd = (*cmd).clone().name(owned_name);
+        let owned_name: &'static str = Box::leak(name);
+        let man_cmd = cmd.clone().name(owned_name);
         clap_mangen::Man::new(man_cmd).render(&mut out).unwrap();
     }
     out.flush().unwrap();
 
-    for sub in cmd.get_subcommands() {
+    for sub in cmd.get_subcommands_mut() {
         // let sub = sub.clone().display_name("anda-b");
-        gen_manpage(Rc::new((*sub).clone()), man_dir)
+        gen_manpage(Rc::new(std::mem::take(sub)), man_dir)
     }
 }
 

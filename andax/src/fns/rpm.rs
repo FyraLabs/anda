@@ -29,14 +29,14 @@ impl RPMSpec {
             spec: spec.into(),
         }
     }
-    pub fn version(&mut self, ver: String) -> Result<(), Box<EvalAltResult>> {
+    pub fn version(&mut self, ver: &str) -> Result<(), Box<EvalAltResult>> {
         let re = regex::Regex::new(r"Version:(\s+)([\.\d]+)\n").unwrap();
         let m = re.captures(self.f.as_str());
         if m.is_none() {
             return Err("Can't find version preamble in spec".into());
         }
         let m = m.unwrap();
-        if ver != m[2] {
+        if ver != &m[2] {
             info!("{}: {} —→ {ver}", self.name, &m[2]);
             self.f = re.replace(&self.f, format!("Version:{}{ver}\n", &m[1])).to_string();
             self.changed = true;
@@ -61,7 +61,7 @@ impl RPMSpec {
         }
         Err(format!("Can't find `%global {name}` in spec").into())
     }
-    pub fn source(&mut self, i: i64, p: String) -> Result<(), Box<EvalAltResult>> {
+    pub fn source(&mut self, i: i64, p: &str) -> Result<(), Box<EvalAltResult>> {
         let re = regex::Regex::new(r"Source(\d+):(\s+)([^\n]+)\n").unwrap();
         let mut capw = None;
         let si = i.to_string();

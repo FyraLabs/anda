@@ -5,7 +5,7 @@ use crate::{
 use lazy_static::lazy_static;
 use regex::Regex;
 use rhai::{plugin::*, Engine, EvalAltResult as RhaiE, NativeCallContext as Ctx, Scope};
-use std::{io::BufRead, path::Path};
+use std::{borrow::BorrowMut, io::BufRead, path::Path};
 use tracing::{debug, error, instrument, trace, warn};
 
 pub(crate) fn rf<T>(ctx: Ctx, res: color_eyre::Result<T>) -> Result<T, Box<RhaiE>>
@@ -120,16 +120,22 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
     _tb_fb(proj, scr.display(), nanitozo)
 }
 
-pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
+pub fn errhdl(name: &str, scr: &Path, mut err: EvalAltResult) {
     trace!("{name}: Generating traceback");
-    let pos = err.position();
-    if let EvalAltResult::ErrorRuntime(ref run_err, pos) = err {
-        match run_err.clone().try_cast::<AErr>() {
+    if let EvalAltResult::ErrorRuntime(run_err, pos) = err.borrow_mut() {
+        match std::mem::take(run_err).try_cast::<AErr>() {
             Some(AErr::RustReport(rhai_fn, fn_src, oerr)) => {
-                return _tb(name, scr, TbErr::Report(oerr), pos, rhai_fn.as_str(), fn_src.as_str());
+                return _tb(
+                    name,
+                    scr,
+                    TbErr::Report(oerr),
+                    *pos,
+                    rhai_fn.as_str(),
+                    fn_src.as_str(),
+                );
             }
             Some(AErr::RustError(rhai_fn, fn_src, oerr)) => {
-                return _tb(name, scr, TbErr::Arb(oerr), pos, rhai_fn.as_str(), fn_src.as_str());
+                return _tb(name, scr, TbErr::Arb(oerr), *pos, rhai_fn.as_str(), fn_src.as_str());
             }
             Some(AErr::Exit(b)) => {
                 if b {
@@ -142,6 +148,7 @@ pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
             None => {}
         }
     }
+    let pos = err.position();
     _tb(name, scr, TbErr::Rhai(err), pos, "", "");
 }
 
@@ -173,7 +180,7 @@ fn exec<'a>(name: &'a str, scr: &'a Path, mut sc: Scope<'a>, en: Engine) -> Opti
     }
 }
 
-fn hint(sl: &String, lns: &String, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> {
+fn hint(sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> {
     macro_rules! h {
         ($s:expr) => {
             let left = " ".repeat(7 + lns.len());

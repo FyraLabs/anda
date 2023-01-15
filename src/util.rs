@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, fs::read_to_string, path::Path};
 use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
 use async_trait::async_trait;
 use cmd_lib::log;
-use color_eyre::{Result, eyre::eyre};
+use color_eyre::{eyre::eyre, Result};
 use console::style;
 use lazy_static::lazy_static;
 use log::{debug, info};
@@ -102,7 +102,7 @@ impl CommandLog for Command {
 
         let mut output = c.spawn().unwrap();
 
-        fn print_log(process: &str, output: String, out: ConsoleOut) {
+        fn print_log(process: &str, output: &str, out: ConsoleOut) {
             // check if no_color is set
             let no_color = std::env::var("NO_COLOR").is_ok();
 
@@ -134,7 +134,7 @@ impl CommandLog for Command {
         let t = process.clone();
         let stdout_handle = tokio::spawn(async move {
             while let Some(line) = stdout_lines.next_line().await.unwrap() {
-                print_log(&t, line, ConsoleOut::Stdout);
+                print_log(&t, &line, ConsoleOut::Stdout);
             }
             Ok(())
         });
@@ -152,7 +152,7 @@ impl CommandLog for Command {
 
         let stderr_handle = tokio::spawn(async move {
             while let Some(line) = stderr_lines.next_line().await.unwrap() {
-                print_log(&process, line, ConsoleOut::Stderr);
+                print_log(&process, &line, ConsoleOut::Stderr);
             }
             Ok(())
         });

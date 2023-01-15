@@ -32,7 +32,7 @@ pub mod ar {
             .into_json()
             .ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
-        let binding = v["tag_name"].to_owned();
+        let binding = &v["tag_name"];
         let ver = binding.as_str().unwrap_or("");
         if let Some(ver) = ver.strip_prefix('v') {
             return Ok(ver.to_string());
@@ -49,7 +49,7 @@ pub mod ar {
             .into_json()
             .ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
-        let binding = v[0]["name"].to_owned();
+        let binding = &v[0]["name"];
         let ver = binding.as_str().unwrap_or("");
         if let Some(ver) = ver.strip_prefix('v') {
             return Ok(ver.to_string());

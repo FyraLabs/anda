@@ -166,14 +166,14 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
     check_config(config)
 }
 
-pub fn prefix_config(config: Manifest, prefix: &str) -> Manifest {
+pub fn prefix_config(mut config: Manifest, prefix: &str) -> Manifest {
     let mut new_config = config.clone();
 
-    for (project_name, project) in config.project.iter() {
+    for (project_name, project) in config.project.iter_mut() {
         // set project name to prefix
         let new_project_name = format!("{prefix}/{project_name}");
         // modify project data
-        let mut new_project = project.clone();
+        let mut new_project = std::mem::take(project);
 
         macro_rules! default {
             ($o:expr, $attr:ident, $d:expr) => {
@@ -214,15 +214,15 @@ pub fn prefix_config(config: Manifest, prefix: &str) -> Manifest {
 }
 
 pub fn generate_alias(config: &mut Manifest) {
-    fn append_vec(vec: &mut Option<Vec<String>>, value: &str) {
+    fn append_vec(vec: &mut Option<Vec<String>>, value: String) {
         if let Some(vec) = vec {
-            if vec.contains(&value.to_string()) {
+            if vec.contains(&value) {
                 return;
             }
 
-            vec.push(value.to_string());
+            vec.push(value);
         } else {
-            *vec = Some(vec![value.to_string()]);
+            *vec = Some(vec![value]);
         }
     }
 
@@ -236,8 +236,8 @@ pub fn generate_alias(config: &mut Manifest) {
                 new_name = new_name.strip_suffix(strip_suffix).unwrap_or(&new_name).to_string();
             }
 
-            if name.clone() != new_name {
-                append_vec(&mut project.alias, &new_name);
+            if name != &new_name {
+                append_vec(&mut project.alias, new_name);
             }
         }
     }

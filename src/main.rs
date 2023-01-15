@@ -13,12 +13,12 @@ use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{Cli, Command};
 use color_eyre::{eyre::eyre, Result};
-use std::io;
+use std::{collections::BTreeMap, io, mem::take};
 use tracing::debug;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
     let mut app = Cli::command();
     app.build();
 
@@ -28,25 +28,32 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
-    let cmd = cli.command.to_owned();
-
-    match cmd {
-        Command::Build { all, project, package, rpm_opts, flatpak_opts, oci_opts } => {
+    match cli.command {
+        Command::Build {
+            all,
+            ref mut project,
+            ref mut package,
+            ref mut rpm_opts,
+            ref mut flatpak_opts,
+            ref mut oci_opts,
+        } => {
             if project.is_none() && !all {
                 // print help
                 let mut app = Cli::command();
-                let mut a = app
-                    .find_subcommand_mut("build")
-                    .unwrap()
-                    .clone()
-                    .display_name("anda-build")
-                    .name("anda-build");
+                let a = app.find_subcommand_mut("build").unwrap();
+                let mut a = take(a).display_name("anda-build").name("anda-build");
                 a.print_help().unwrap();
                 return Err(eyre!("No project specified, and --all not specified."));
             }
 
+            let project = take(project);
+            let package = std::mem::replace(package, cli::PackageType::Rpm);
+            let flatpak_opts = take(flatpak_opts);
+            let oci_opts = take(oci_opts);
+            let rpm_opts = take(rpm_opts);
             debug!("{all:?}");
-            builder::builder(&cli, rpm_opts, all, project, package, flatpak_opts, oci_opts).await?;
+            builder::builder(&mut cli, rpm_opts, all, project, package, flatpak_opts, oci_opts)
+                .await?;
         }
         Command::Clean => {
             println!("Cleaning up build directory");
@@ -94,7 +101,7 @@ async fn main() -> Result<()> {
         Command::Update { labels, filters } => {
             let labels = parse_map(&labels.unwrap_or_default());
             let filters = parse_map(&filters.unwrap_or_default());
-            update::update_rpms(
+            update::update(
                 anda_config::load_from_file(&cli.config).unwrap(),
                 labels.ok_or_else(|| eyre!("Cannot parse --labels"))?,
                 filters.ok_or_else(|| eyre!("Cannot parse --labels"))?,
@@ -104,8 +111,12 @@ async fn main() -> Result<()> {
             if scripts.is_empty() {
                 return Err(eyre!("No scripts to run"));
             }
-            let labels = parse_map(&labels.unwrap_or_default());
-            update::run_scripts(&scripts, labels.ok_or_else(|| eyre!("Cannot parse --labels"))?)?;
+            let labels = if let Some(lbls) = labels {
+                parse_map(&lbls).ok_or_else(|| eyre!("Cannot parse --labels"))?
+            } else {
+                BTreeMap::new()
+            };
+            update::run_scripts(&scripts, labels)?;
         }
     }
     Ok(())

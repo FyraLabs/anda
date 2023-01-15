@@ -9,10 +9,10 @@ use tempfile::TempDir;
 
 use crate::util::CommandLog;
 use async_trait::async_trait;
-use color_eyre::{Report, Result, eyre::eyre};
-use std::collections::BTreeMap;
+use color_eyre::{eyre::eyre, Report, Result};
+use std::mem::take;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::{collections::BTreeMap, str::FromStr};
 use tokio::process::Command;
 use tracing::{debug, info};
 
@@ -124,57 +124,49 @@ impl From<crate::cli::RPMBuilder> for RPMBuilder {
 }
 
 impl RPMBuilder {
-    pub async fn build(&self, spec: &Path, options: &RPMOptions) -> Result<Vec<PathBuf>> {
+    /// WARN: this will consume `options`!
+    pub async fn build(&self, spec: &Path, options: &mut RPMOptions) -> Result<Vec<PathBuf>> {
         if let RPMBuilder::Mock = self {
             let mut mock = MockBackend::new(
-                options.mock_config.clone(),
-                options.sources.clone(),
-                options.resultdir.clone(),
+                take(&mut options.mock_config),
+                take(&mut options.sources),
+                take(&mut options.resultdir),
             );
-
-            for extra_repo in options.extra_repos.iter().flatten() {
-                mock.add_extra_repo(extra_repo.clone());
+            for extra_repo in options.extra_repos.iter_mut().flatten() {
+                mock.add_extra_repo(take(extra_repo));
             }
-
             for (k, v) in options.macros.iter() {
                 mock.def_macro(k, v);
             }
-
-            for with_flags in options.with.iter() {
-                mock.with_flags_mut().push(with_flags.clone());
+            for with_flags in options.with.iter_mut() {
+                mock.with_flags_mut().push(take(with_flags));
             }
-
-            for without_flags in options.without.iter() {
-                mock.without_flags_mut().push(without_flags.clone());
+            for without_flags in options.without.iter_mut() {
+                mock.without_flags_mut().push(take(without_flags));
             }
-
-            for config_opt in options.config_opts.iter() {
-                mock.add_config_opt(config_opt.clone());
+            for config_opt in options.config_opts.iter_mut() {
+                mock.add_config_opt(take(config_opt));
             }
-
             mock.no_mirror(options.no_mirror);
-
             mock.enable_scm(options.scm_enable);
-
-            mock.extend_scm_opts(options.scm_opts.clone());
-
-            mock.plugin_opts(options.plugin_opts.clone());
+            mock.extend_scm_opts(take(&mut options.scm_opts));
+            mock.plugin_opts(take(&mut options.plugin_opts));
 
             mock.build(spec).await
         } else {
             let mut rpmbuild =
-                RPMBuildBackend::new(options.sources.clone(), options.resultdir.clone());
+                RPMBuildBackend::new(take(&mut options.sources), take(&mut options.resultdir));
 
             for (k, v) in options.macros.iter() {
                 rpmbuild.def_macro(k, v);
             }
 
-            for with_flags in options.with.iter() {
-                rpmbuild.with_flags_mut().push(with_flags.clone());
+            for with_flags in options.with.iter_mut() {
+                rpmbuild.with_flags_mut().push(take(with_flags));
             }
 
-            for without_flags in options.without.iter() {
-                rpmbuild.without_flags_mut().push(without_flags.clone());
+            for without_flags in options.without.iter_mut() {
+                rpmbuild.without_flags_mut().push(take(without_flags));
             }
 
             rpmbuild.build(spec).await

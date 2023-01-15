@@ -5,8 +5,9 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 use std::{path::PathBuf, str::FromStr};
 
-#[derive(ValueEnum, Debug, Clone, Copy)]
+#[derive(ValueEnum, Debug, Clone, Copy, Default)]
 pub enum RPMBuilder {
+    #[default]
     Mock,
     Rpmbuild,
 }
@@ -64,7 +65,7 @@ pub struct Cli {
     pub target_dir: PathBuf,
 }
 
-#[derive(Args, Debug, Clone)]
+#[derive(Args, Debug, Clone, Default)]
 #[clap(help_template = "Flatpak Builder Options")]
 pub struct FlatpakOpts {
     /// Flatpak: Extra source directory
@@ -82,7 +83,7 @@ pub struct FlatpakOpts {
     pub flatpak_dont_delete_build_dir: bool,
 }
 
-#[derive(Args, Debug, Clone)]
+#[derive(Args, Debug, Clone, Default)]
 #[clap(help_template = "OCI Builder Options")]
 pub struct OciOpts {
     /// OCI: Labels to add to the image
@@ -98,7 +99,7 @@ pub struct OciOpts {
     pub compress: bool,
 }
 
-#[derive(Args, Debug, Clone)]
+#[derive(Args, Debug, Clone, Default)]
 #[clap(help_template = "RPM Options")]
 pub struct RpmOpts {
     /// RPM: Do not mirror repositories.
