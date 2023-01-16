@@ -451,7 +451,11 @@ pub(crate) fn define_macro(mc: Option<Context>, name: &str, lvl: u8) -> Result<(
 }
 
 pub(crate) fn pop_macro(mc: Option<Context>, name: &str) -> Result<()> {
-	todo!()
+	let mc = mc.unwrap_or(_dummy_context());
+	let mc = mc.lock().map_err(|e| eyre!(e.to_string()))?;
+	mc.table.remove(name);
+
+	Ok(())
 }
 
 pub(crate) fn macro_is_defined(mc: Option<Context>, name: &str) -> Result<bool> {
