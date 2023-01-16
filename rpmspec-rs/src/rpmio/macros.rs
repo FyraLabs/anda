@@ -138,7 +138,7 @@ impl MacroBuf {
 			..Default::default()
 		}
 	}
-	fn init(&mut self, med: MacroExpansionData) -> Result<(), MacroErr> {
+	fn init(&mut self, med: &mut MacroExpansionData) -> Result<(), MacroErr> {
 		self.depth += 1;
 		if self.depth > MAX_MACRO_DEPTH {
 			mbErr!(self, true, "Too many levels of recursion in macro expansion. It is likely caused by recursive macro declaration.");
@@ -172,8 +172,8 @@ impl MacroBuf {
 	fn do_dnl(&self, me: Entry) {
 		todo!()
 	}
-	fn do_shell_escape(&self, cmd: &str) {
-		let buf = String::new();
+	fn do_shell_escape(&mut self, cmd: &str) {
+		let mut buf = String::new();
 		if self.expand_this(cmd, &mut buf) {
 			return;
 		}
@@ -226,7 +226,7 @@ impl MacroBuf {
 		}
 		Ok(())
 	}
-	fn expand_this(&self, src: &str, target: &mut String) -> bool {
+	fn expand_this(&mut self, src: &str, target: &mut String) -> bool {
 		let mut umb = self.clone();
 		umb.buf = "".to_string();
 		if expandMacro(Some(&umb), src) {
