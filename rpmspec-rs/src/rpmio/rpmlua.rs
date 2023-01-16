@@ -19,7 +19,8 @@ mod lua_rpm {
 	use rlua::{Context, ExternalError, Result};
 
 	use crate::rpmio::macros::{
-		_dummy_context, define_macro, expand_macros, macro_is_defined, pop_macro, macro_is_parametric, load_macro_file,
+		_dummy_context, define_macro, expand_macros, load_macro_file, macro_is_defined,
+		macro_is_parametric, pop_macro,
 	};
 
 	use super::repl::repl;
@@ -53,8 +54,7 @@ mod lua_rpm {
 		Ok(())
 	}
 	pub(crate) fn isdefined(_: Context, name: String) -> Result<(bool, bool)> {
-		let a =
-		if let Ok(true) = macro_is_defined(None, &name) {
+		let a = if let Ok(true) = macro_is_defined(None, &name) {
 			true
 		} else {
 			false

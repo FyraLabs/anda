@@ -17,8 +17,10 @@ use crate::{
 use color_eyre::{eyre::eyre, Report, Result};
 use std::{
 	collections::{BTreeMap, HashMap},
+	fs::File,
 	io::{stderr, BufRead, BufReader, Write},
-	sync::{Arc, Mutex, MutexGuard}, fs::File,
+	string,
+	sync::{Arc, Mutex, MutexGuard},
 };
 use tracing::{debug, error, info, warn};
 
@@ -108,8 +110,8 @@ const RMIL_MACROFILES: i16 = -13;
 
 macro_rules! mbErr {
 	($mb:expr, $error:expr, $fmt:expr, $($ap:tt)*) => {{
-		let emsg = format!($fmt, $ap);
-		let pfx = SaiGaai::rpmExpand([
+		let emsg = format!($fmt, $($ap,)*);
+		let pfx = rpm_expand([
 			"%{?__file_name:%{__file_name}: }",
 			"%{?__file_lineno:line %{__file_lineno}: }",
 		]);
@@ -446,6 +448,116 @@ pub(crate) fn find_macro_end(s: &str) -> usize {
 		s.len() - ss.len()
 	}
 }
+macro_rules! copyname {
+	($ne:ident, $s:ident, $c:ident) => {
+		let _s = $s.trim_start();
+		$s = _s.trim_start_matches(|_c: char| {
+			$c = _c;
+			_c.is_ascii_alphanumeric() || _c == '_'
+		});
+		$ne = &$ne[_s.len() - $s.len()..];
+		drop(_s);
+	};
+}
+macro_rules! copyopts {
+	($oe:ident, $s:ident, $c:ident) => {
+		let _s = $s.trim_start();
+		$s = _s.trim_start_matches(|_c: char| {
+			$c = _c;
+			_c != ')'
+		});
+		$oe = &$oe[_s.len() - $s.len()..];
+		drop(_s);
+	};
+}
+
+pub(crate) fn do_define(
+	mb: MacroBuf, se: &str, lvl: u16, expandbody: bool, parsed: usize,
+) -> usize {
+	let mut start = se;
+	let mut s = se;
+	let mut buf = String::new();
+	let mut n: &str = &buf;
+	let mut ne = n;
+	let mut o = "";
+	let mut oe = "";
+	let (mut b, mut be, mut ebody) = ("", "", "");
+	let mut c = '\0';
+	let mut oc = ')';
+	let mut sbody = "";
+	let mut rc = true; // -> assume failure
+	copyname!(ne, s, c);
+
+	macro_rules! exit {
+		() => {
+			if rc {
+				mb.error = true;
+			}
+			if parsed != 0 {
+				parsed += start.len() - se.len();
+			}
+			return parsed;
+		};
+	}
+
+	// -> copy opts (if present)
+	let oe = &ne[1..];
+	if s.starts_with('(') {
+		s = &s[1..]; // -> skip (
+		if s.contains(')') {
+			o = oe;
+			copyopts!(oe, s, oc);
+			s = &s[1..];
+		} else {
+			mbErr!(mb, true, "Macro %{n} has unterminated opts");
+			exit!();
+		}
+	}
+	be = &oe[1..];
+	b = be;
+	sbody = s;
+	s = s.trim_start();
+	if parsed != 0 {
+		b = s;
+		be = &b[b.len()..];
+		s = &s[s.len()..];
+	} else if c == '{' {
+		let _se = matchchar(s, '{', '}');
+		if _se == 0 {
+			mbErr!(mb, true, "Macro %{n} has unterminated body");
+			se = s;
+			exit!();
+		}
+		s = &s[1..];
+		b = &s[s.len() - se.len() - 1..];
+		be = &be[b.len()..];
+		s = se;
+	} else {
+		let mut bc;
+		let mut pc;
+		let mut xc;
+		loop {
+			if s.trim().is_empty() {
+				break;
+			}
+			match s.chars().nth(0) {
+				Some('\\') => {
+					match s.chars().nth(1) {
+						None => {},
+						_ => s = &s[1..],
+					}
+				},
+				Some('%') => {
+					match s.chars().nth(1).unwrap_or('\0') {
+						'{' => {be[..1] = s[..1]; be = &be[]}
+					} // www
+				}
+			}
+		}
+		todo!();
+	}
+	exit!();
+}
 pub(crate) fn define_macro(mc: Option<Context>, name: &str, lvl: u8) -> Result<()> {
 	let mc = mc.unwrap_or(_dummy_context());
 	let mc = mc.lock().map_err(|e| eyre!(e.to_string()))?;
@@ -465,7 +577,7 @@ pub(crate) fn pop_macro(mc: Option<Context>, name: &str) -> Result<()> {
 
 pub(crate) fn macro_is_defined(mc: Option<Context>, name: &str) -> Result<bool> {
 	let mc = mc.unwrap_or(_dummy_context());
-	let ctx = mc.lock().map_err(|e|eyre!(e.to_string()))?;
+	let ctx = mc.lock().map_err(|e| eyre!(e.to_string()))?;
 	Ok(SaiGaai::new().find_entry(mc, name).is_ok())
 }
 
@@ -485,7 +597,9 @@ pub(crate) fn load_macro_file(mc: Option<Context>, name: &str) -> Result<i32> {
 	let mc_lock = mc.unwrap_or(_dummy_context());
 	let ctx = mc_lock.lock().map_err(|e| eyre!(e.to_string()))?;
 	let fd = File::open(name);
-	if fd.is_err() { return Ok(-1) }
+	if fd.is_err() {
+		return Ok(-1);
+	}
 	let fd = fd.unwrap();
 	push_macro(mc, "__file_name", "", name, RMIL_MACROFILES, ME_LITERAL);
 
