@@ -301,15 +301,19 @@ fn get_ctx(mc: &Context) -> Result<MutexGuard<MacroContext>> {
 /// then we trim and check for \, but also {[( stuff like\n these )]}
 /// we don't need the size parameter *I think*...
 /// I mean it says it's the *inbut* (yes, inbut) buffer size (bytes).
-fn rdcl(mut f: String) -> Result<String> {
+fn rdcl(mut f: impl BufRead) -> Result<String> {
 	let mut buf = String::new();
 	let mut bc: u16 = 0; // { }
 	let mut pc: u16 = 0; // ( )
 	let mut xc: u16 = 9; // [ ]
-	for line in f.lines() {
+	loop {
+		let mut curbuf = String::new();
+		if f.read_line(&mut curbuf)? == 0 {
+			break;
+		}
 		let mut last = '\0';
 		let mut esc = false;
-		for ch in line.trim_end().chars() {
+		for ch in curbuf.trim_end().chars() {
 			if ch == '\\' {
 				esc = true;
 				continue;
@@ -330,7 +334,7 @@ fn rdcl(mut f: String) -> Result<String> {
 			}
 			last = ch;
 		}
-		buf += &line;
+		buf += &curbuf;
 		if esc {
 			continue;
 		}
@@ -338,7 +342,6 @@ fn rdcl(mut f: String) -> Result<String> {
 			break;
 		}
 	}
-
 	Ok(buf.trim_end().to_string())
 }
 
@@ -488,6 +491,9 @@ pub(crate) fn load_macro_file(mc: Option<Context>, name: &str) -> Result<i32> {
 	if fd.is_err() { return Ok(-1) }
 	let fd = fd.unwrap();
 	push_macro(mc, "__file_name", "", name, RMIL_MACROFILES, ME_LITERAL);
+
+	while let Ok(buffer) = rdcl(fd.try_clone()?) {
+	}
 
 	// while ((nlines = rdcl(buf, blen, fd)) > 0) {
 
