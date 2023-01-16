@@ -24,6 +24,9 @@ mod lua_rpm {
 	pub(crate) fn b64encode(_: Context, arg: impl AsRef<[u8]>) -> Result<String> {
 		Ok(STANDARD.encode(arg))
 	}
+	pub(crate) fn call(_: Context, arg: String) {
+		todo!()
+	}
 	pub(crate) fn define(_: Context, name: String) -> Result<()> {
 		define_macro(None, &name, 0).map_err(|_| "error defining macro".to_lua_err())
 	}
@@ -44,8 +47,23 @@ mod lua_rpm {
 	pub(crate) fn isdefined(_: Context, name: String) {
 		todo!()
 	}
+	pub(crate) fn load(_: Context, arg: String) {
+		todo!()
+	}
+	pub(crate) fn redirect2null(_: Context, arg: i32) {
+		todo!()
+	}
+	pub(crate) fn register(_: Context, arg: String) {
+		todo!()
+	}
 	pub(crate) fn undefine(_: Context, name: String) -> Result<()> {
 		pop_macro(None, &name).map_err(|_| "error undefining macro".to_lua_err())
+	}
+	pub(crate) fn unregister(_: Context, arg: String) {
+		todo!()
+	}
+	pub(crate) fn vercmp(_: Context, s1: String, s2: String) {
+		todo!()
 	}
 }
 
