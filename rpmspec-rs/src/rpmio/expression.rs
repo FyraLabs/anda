@@ -67,6 +67,7 @@ impl From<String> for RPMVer {
 }
 #[derive(Debug, PartialEq)]
 enum Token {
+	Unknown,  // 0
 	EOF,
 	Add,
 	Minus,
@@ -550,7 +551,7 @@ fn rpm_expr_str_flags(expr: &str, flags: i8) -> Option<String> {
 	let mut state = ParseState {
 		p: expr.into(),
 		s: expr.into(),
-		next_token: 0,
+		next_token: Token::Unknown,
 		token_value: Value::Nil,
 		flags,
 	};
