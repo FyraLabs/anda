@@ -14,7 +14,7 @@ use crate::{
 	spec::Macro,
 	utils::popen,
 };
-use color_eyre::{eyre::eyre, Result, Report};
+use color_eyre::{eyre::eyre, Report, Result};
 use std::{
 	collections::{BTreeMap, HashMap},
 	io::{stderr, BufRead, BufReader, Write},
@@ -112,7 +112,7 @@ macro_rules! mbErr {
 	}};
 	($mb:expr, $error:expr, $fmt:expr) => {{
 		let emsg = format!($fmt);
-		let pfx = SaiGaai::rpm_expand([
+		let pfx = rpm_expand([
 			"%{?__file_name:%{__file_name}: }",
 			"%{?__file_lineno:line %{__file_lineno}: }",
 		]);
@@ -226,7 +226,7 @@ impl MacroBuf {
 	fn expand_this(&self, src: &str, target: &mut String) -> bool {
 		let mut umb = self.clone();
 		umb.buf = "".to_string();
-		if SaiGaai::expandMacro(&umb, src) {
+		if expandMacro(Some(&umb), src) {
 			self.error = true;
 		}
 		*target = umb.buf;
@@ -248,15 +248,9 @@ impl SaiGaai {
 			line: 0,
 		}
 	}
-	fn expand_macro(src: &str) -> Result<()> {
-		Ok(())
-	}
-	fn get_ctx(mc: &Context) -> Result<MutexGuard<MacroContext>> {
-		Ok(mc.lock().expect("Can't lock mc"))
-	}
 	fn find_entry(&self, mc: Context, name: String) -> Result<Entry> {
 		// original code use binary search
-		let ctx = Self::get_ctx(&mc)?;
+		let ctx = get_ctx(&mc)?;
 		Ok(ctx
 			.table
 			.get(&name)
@@ -266,7 +260,7 @@ impl SaiGaai {
 	fn new_entry(&self, mc: Context, key: String, value: Entry) -> Result<()> {
 		// no need extend macro table
 		// instead get it out of the mutex
-		let mut ctx = Self::get_ctx(&mc)?;
+		let mut ctx = get_ctx(&mc)?;
 		ctx.n += 1;
 		if let Some(x) = ctx.table.insert(key, value) {
 			// For debugging. Actually it's normal,
@@ -275,140 +269,146 @@ impl SaiGaai {
 		}
 		Ok(())
 	}
+}
+fn expand_macro(src: &str) -> Result<()> {
+	Ok(())
+}
+fn get_ctx(mc: &Context) -> Result<MutexGuard<MacroContext>> {
+	Ok(mc.lock().expect("Can't lock mc"))
+}
 
-	/// -> fgets(3) analogue that reads \ continuations. Last newline always trimmed.
-	///
-	/// in this case, we probably prefer a bufread to throw newlines to us.
-	/// then we trim and check for \, but also {[( stuff like\n these )]}
-	/// we don't need the size parameter *I think*...
-	/// I mean it says it's the *inbut* (yes, inbut) buffer size (bytes).
-	fn rdcl(mut f: impl BufRead) -> Result<String> {
-		let mut buf = String::new();
-		let mut bc: u16 = 0; // { }
-		let mut pc: u16 = 0; // ( )
-		let mut xc: u16 = 9; // [ ]
-		loop {
-			let mut curbuf = String::new();
-			if f.read_line(&mut curbuf)? == 0 {
-				break;
-			}
-			let mut last = '\0';
-			let mut esc = false;
-			for ch in curbuf.trim_end().chars() {
-				if ch == '\\' {
-					esc = true;
-					continue;
-				}
-				esc = false;
-				if last == '%' && ch == '%' {
-					last = '%';
-					continue;
-				}
-				match ch {
-					'{' => bc += 1,
-					'(' => pc += 1,
-					'[' => xc += 1,
-					'}' => bc -= 1,
-					')' => pc -= 1,
-					']' => xc -= 1,
-					_ => {}
-				}
-				last = ch;
-			}
-			buf += &curbuf;
-			if esc {
+/// -> fgets(3) analogue that reads \ continuations. Last newline always trimmed.
+///
+/// in this case, we probably prefer a bufread to throw newlines to us.
+/// then we trim and check for \, but also {[( stuff like\n these )]}
+/// we don't need the size parameter *I think*...
+/// I mean it says it's the *inbut* (yes, inbut) buffer size (bytes).
+fn rdcl(mut f: impl BufRead) -> Result<String> {
+	let mut buf = String::new();
+	let mut bc: u16 = 0; // { }
+	let mut pc: u16 = 0; // ( )
+	let mut xc: u16 = 9; // [ ]
+	loop {
+		let mut curbuf = String::new();
+		if f.read_line(&mut curbuf)? == 0 {
+			break;
+		}
+		let mut last = '\0';
+		let mut esc = false;
+		for ch in curbuf.trim_end().chars() {
+			if ch == '\\' {
+				esc = true;
 				continue;
 			}
-			if bc + pc + xc == 0 {
-				break;
+			esc = false;
+			if last == '%' && ch == '%' {
+				last = '%';
+				continue;
 			}
+			match ch {
+				'{' => bc += 1,
+				'(' => pc += 1,
+				'[' => xc += 1,
+				'}' => bc -= 1,
+				')' => pc -= 1,
+				']' => xc -= 1,
+				_ => {}
+			}
+			last = ch;
 		}
-		Ok(buf.trim_end().to_string())
+		buf += &curbuf;
+		if esc {
+			continue;
+		}
+		if bc + pc + xc == 0 {
+			break;
+		}
 	}
+	Ok(buf.trim_end().to_string())
+}
 
-	/// => Return length of text between `pl` and `pr` inclusive.
-	///
-	/// -> Return text between `pl` and matching `pr` characters.
-	///
-	/// Nyu reinvented the wheel.
-	/// NOTE: expect `pl` to be first char
-	fn matchchar(text: &str, pl: char, pr: char) -> usize {
-		let mut lvl = 0;
-		let mut skip = false;
-		for (i, c) in text.chars().enumerate() {
-			if skip {
-				skip = false;
-				continue;
-			}
-			if c == '\\' {
-				skip = true;
-				continue;
-			}
-			if c == pr {
-				// why rust nu ++ and -- ???
-				lvl -= 1;
-				if lvl <= 0 {
-					return i + 1;
-				}
-			} else if c == pl {
-				lvl += 1;
-			}
+/// => Return length of text between `pl` and `pr` inclusive.
+///
+/// -> Return text between `pl` and matching `pr` characters.
+///
+/// Nyu reinvented the wheel.
+/// NOTE: expect `pl` to be first char
+fn matchchar(text: &str, pl: char, pr: char) -> usize {
+	let mut lvl = 0;
+	let mut skip = false;
+	for (i, c) in text.chars().enumerate() {
+		if skip {
+			skip = false;
+			continue;
 		}
-		0
+		if c == '\\' {
+			skip = true;
+			continue;
+		}
+		if c == pr {
+			// why rust nu ++ and -- ???
+			lvl -= 1;
+			if lvl <= 0 {
+				return i + 1;
+			}
+		} else if c == pl {
+			lvl += 1;
+		}
 	}
+	0
+}
 
-	/// -> Pre-print macro expression to be expanded.
-	///
-	/// we use &str instead of ptr
-	///
-	/// WARN `t` and `te` should take until EOS
-	fn print_macro(mb: MacroBuf, mut s: &str, se: &str) -> Result<()> {
-		if se.len() >= s.len() {
-			let mut stderr = stderr().lock();
-			stderr.write_fmt(format_args!(
-				"{:>3}>{}(empty)\n",
-				mb.depth,
-				" ".repeat((2 * mb.depth + 1).into())
-			))?;
-			return Ok(());
-		}
-
-		// it has a s-- check for '{', we don't. skip!
-
-		// -> Print only to first EOF/EOS
-		let senl: &str = match se.split_once('\n') {
-			Some((a, b)) => a,
-			None => se,
-		};
-
-		// -> Sub. caret (^) at EO-macro pos.
+/// -> Pre-print macro expression to be expanded.
+///
+/// we use &str instead of ptr
+///
+/// WARN `t` and `te` should take until EOS
+fn print_macro(mb: MacroBuf, mut s: &str, se: &str) -> Result<()> {
+	if se.len() >= s.len() {
 		let mut stderr = stderr().lock();
-		let x = s.to_string();
 		stderr.write_fmt(format_args!(
-			"{:>3}>{}%{}^",
+			"{:>3}>{}(empty)\n",
 			mb.depth,
-			" ".repeat((2 * mb.depth + 1).into()),
-			&x[0..(se.len() - s.len()) - 1]
+			" ".repeat((2 * mb.depth + 1).into())
 		))?;
-		if se.len() > 1 && (senl.len() - (se.len() + 1)) > 0 {
-			// from se+1, with len senl - (se+1)
-			stderr.write_fmt(format_args!("{}", &se[1..(senl.len() - (se.len() + 1))]))?;
-		}
-		stderr.write_all(b"\n")?;
-		Ok(())
+		return Ok(());
 	}
-	// They kinda have a lot of malloc and stuff
-	fn rpm_expand<'a>(args: impl AsRef<[&'a str]>) -> String {
-		let pe = args.as_ref().join("");
-		let mc = MacroContext::new();
-		todo!()
+
+	// it has a s-- check for '{', we don't. skip!
+
+	// -> Print only to first EOF/EOS
+	let senl: &str = match se.split_once('\n') {
+		Some((a, b)) => a,
+		None => se,
+	};
+
+	// -> Sub. caret (^) at EO-macro pos.
+	let mut stderr = stderr().lock();
+	let x = s.to_string();
+	stderr.write_fmt(format_args!(
+		"{:>3}>{}%{}^",
+		mb.depth,
+		" ".repeat((2 * mb.depth + 1).into()),
+		&x[0..(se.len() - s.len()) - 1]
+	))?;
+	if se.len() > 1 && (senl.len() - (se.len() + 1)) > 0 {
+		// from se+1, with len senl - (se+1)
+		stderr.write_fmt(format_args!("{}", &se[1..(senl.len() - (se.len() + 1))]))?;
 	}
-	fn doExpandMacros(mc: MacroContext, src: String, flags: u32) -> Result<(String, u16)> {
-		todo!()
-	}
-	pub(crate) fn expandMacro(mb: Option<&MacroBuf>, src: &str) -> bool {
-		todo!()
-	}
+	stderr.write_all(b"\n")?;
+	Ok(())
+}
+// They kinda have a lot of malloc and stuff
+fn rpm_expand<'a>(args: impl AsRef<[&'a str]>) -> String {
+	let pe = args.as_ref().join("");
+	let mc = MacroContext::new();
+	todo!()
+}
+fn doExpandMacros(mc: MacroContext, src: String, flags: u32) -> Result<(String, u16)> {
+	todo!()
+}
+pub(crate) fn expandMacro(mb: Option<&MacroBuf>, src: &str) -> bool {
+	todo!()
 }
 
 /// -> Find end of macro call
@@ -434,7 +434,7 @@ pub(crate) fn findMacroEnd(s: &str) -> usize {
 		s.len() - ss.len()
 	}
 }
-pub(crate) fn define_macro(mc: Context, name: &str, lvl: u8) -> Result<()>{
+pub(crate) fn define_macro(mc: Context, name: &str, lvl: u8) -> Result<()> {
 	let mc = mc.lock().map_err(Report::new)?;
 	let mb = MacroBuf::new(mc.clone(), 0);
 	todo!();
