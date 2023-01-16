@@ -422,11 +422,11 @@ fn do_expand_macros(mc: MacroContext, src: String, flags: u32) -> Result<(String
 /// => Find length between
 pub(crate) fn find_macro_end(s: &str) -> usize {
 	if s.starts_with('(') {
-		SaiGaai::matchchar(s, '(', ')')
+		matchchar(s, '(', ')')
 	} else if s.starts_with('{') {
-		SaiGaai::matchchar(s, '{', '}')
+		matchchar(s, '{', '}')
 	} else if s.starts_with('[') {
-		SaiGaai::matchchar(s, '[', ']')
+		matchchar(s, '[', ']')
 	} else {
 		let mut ss = s.trim_start_matches(|p| p == '?' || p == '!');
 		if ss.starts_with('-') {
