@@ -1,7 +1,7 @@
 use smartstring::alias::CompactString;
-use tracing::{debug, instrument,error};
+use tracing::{debug, error, instrument};
 
-use super::macros::SaiGaai;
+use super::{macros::{findMacroEnd, SaiGaai}, rpmhook::RPMHookArgs};
 
 const RPMEXPR_EXPAND: i8 = 1 << 0;
 const RPMEXPR_DISCARD: i8 = 1 << 31; // internal, discard result
@@ -10,16 +10,18 @@ const RPMEXPR_DISCARD: i8 = 1 << 31; // internal, discard result
 struct ParseState {
 	s: String,          // expr string
 	p: String,          // cur. pos. in expr str
-	next_token: Token,     // cur. lookahead token
+	next_token: Token,  // cur. lookahead token
 	token_value: Value, // valid when TOK_INTEGER or TOK_STRING
 	flags: i8,
 }
-#[derive(Debug)]
-enum Value {
+#[derive(Debug, Default)]
+pub(crate) enum Value {
 	String(String),
-	Int(u64), // nyeshu
+	Int(i64), // nyeshu
 	Rpmver(RPMVer),
-	None,
+	Bool(bool), // they didn't have this for some absurd unknown reasons
+	#[default]
+	Nil,
 }
 #[derive(Debug, Default)]
 struct RPMVer {
@@ -35,9 +37,12 @@ impl From<String> for RPMVer {
 		let epoch: CompactString;
 		let version: CompactString;
 		let release: CompactString;
-		let (a, _) = rv.arena.split_once(|a: char| !a.is_ascii_digit()).unwrap_or(("", ""));
+		let (a, _) = rv
+			.arena
+			.split_once(|a: char| !a.is_ascii_digit())
+			.unwrap_or(("", ""));
 		let s = rv.arena.chars().nth(a.len()).unwrap_or('\0'); // epoch terminator
-		let last= rv.arena.split('-').last().unwrap_or("");
+		let last = rv.arena.split('-').last().unwrap_or("");
 		let se = &rv.arena[rv.arena.len() - last.len() - 1..]; // version terminator
 		if s == ':' {
 			epoch = rv.arena.into();
@@ -104,22 +109,23 @@ impl Token {
 			NEq => "!=",
 			LT => "<",
 			LE => "<=",
-			GE => ">=",	 
-			NOT => "!",	 
-			LOGICAL_AND => "&&",	 
-			LOGICAL_OR => "||",	 
-			TERNARY_COND => "?",	 
-			TERNARY_ALT => ":",	
-			VERSION => "V",	
-			COMMA => ",",	
-			FUNCTION => "f( ",	
+			GE => ">=",
+			NOT => "!",
+			LOGICAL_AND => "&&",
+			LOGICAL_OR => "||",
+			TERNARY_COND => "?",
+			TERNARY_ALT => ":",
+			VERSION => "V",
+			COMMA => ",",
+			FUNCTION => "f( ",
 		}
 	}
 }
 
+/// true: error!!!
 fn rdToken(state: &ParseState) -> bool {
 	let token;
-	let v = Value::None;
+	let v = Value::Nil;
 	let ps = state.p;
 	let expand = (state.flags & RPMEXPR_EXPAND) != 0;
 
@@ -142,9 +148,8 @@ fn rdToken(state: &ParseState) -> bool {
 					p = &p[1..];
 					Token::Eq
 				} else {
-					todo!()
-					// exprErr(state, "syntax error while parsing ==", p+2);
-					RPMEXPR_DISCARD		// goto err;
+					exprErr(state, "syntax error while parsing ==", &p[2..]);
+					return true;
 				}
 			}
 			'!' => {
@@ -176,9 +181,8 @@ fn rdToken(state: &ParseState) -> bool {
 					p = &p[1..];
 					Token::LogicalAnd
 				} else {
-					todo!()
-					// exprErr(state, "syntax error while parsing &&", p+2);
-					// goto err;
+					exprErr(state, "syntax error while parsing &&", &p[2..]);
+					return true;
 				}
 			}
 			'|' => {
@@ -186,9 +190,8 @@ fn rdToken(state: &ParseState) -> bool {
 					p = &p[1..];
 					Token::LogicalOr
 				} else {
-					todo!()
-					// exprErr(state, "syntax error while parsing ||", p+2);
-					// goto err;
+					exprErr(state, "syntax error while parsing ||", &p[2..]);
+					return true;
 				}
 			}
 			'?' => Token::TenaryCond,
@@ -205,24 +208,30 @@ fn rdToken(state: &ParseState) -> bool {
 						}
 					}
 					let tmp = getValuebuf(state, p, ts);
-					if tmp.is_empty() {return false;}
+					if tmp.is_empty() {
+						return false;
+					}
 					// -> make sure expanded buf only contains digits
 					if expand && !wellformedInteger(&tmp) {
 						if let Some(c) = tmp.chars().nth(0) {
 							if c.is_ascii_alphabetic() {
-								exprErr(state, "macro expansion returned a bare word, please use \"...\"", &p[1..]);
+								exprErr(
+									state,
+									"macro expansion returned a bare word, please use \"...\"",
+									&p[1..],
+								);
 							}
 						} else {
 							exprErr(state, "macro expansion did not return an integer", &p[1..]);
 						}
 						error!("expanded string: {tmp}");
 					}
-					p = &p[ts-1..];
+					p = &p[ts - 1..];
 					v = Value::Int(tmp.parse().expect("can't conv str (known int) to int"));
 					Token::Integer
 				} else if p.starts_with('\"') || (p.starts_with("v\"")) {
 					let tmp;
-					let ts;
+					let ts: usize;
 					let qtok;
 					if p.starts_with('v') {
 						qtok = Token::Version;
@@ -231,8 +240,6 @@ fn rdToken(state: &ParseState) -> bool {
 						qtok = Token::String;
 						p = &p[1..];
 					}
-
-
 					let mut ts: usize;
 					while let Some(ch) = p.chars().nth(ts) {
 						if ch == '%' && expand {
@@ -242,7 +249,7 @@ fn rdToken(state: &ParseState) -> bool {
 						}
 					}
 					if p.chars().nth(ts) != Some('\"') {
-						exprErr(state, "unterminated string in expression", &p[ts+1..]);
+						exprErr(state, "unterminated string in expression", &p[ts + 1..]);
 						// goto err
 					}
 					tmp = getValuebuf(state, p, ts);
@@ -253,7 +260,11 @@ fn rdToken(state: &ParseState) -> bool {
 					if qtok == Token::String {
 						v = Value::String(tmp);
 					} else {
-						let rpmver = RPMVer::from(if (state.flags & RPMEXPR_DISCARD) == 0 {tmp} else {"0".into()});
+						let rpmver = RPMVer::from(if (state.flags & RPMEXPR_DISCARD) == 0 {
+							tmp
+						} else {
+							"0".into()
+						});
 						if rpmver.v.is_empty() {
 							exprErr(state, "invalid version", &p[1..]);
 							return true;
@@ -263,18 +274,28 @@ fn rdToken(state: &ParseState) -> bool {
 					Token::String
 				} else if p.chars().nth(0).unwrap_or('\0').is_ascii_alphabetic() {
 					let pe = isFunctionCall(p);
-					if let Some(pe) = pe {
-						if pe.startswith('(') {
-							v = Value::String(p[..p.len()-pe.len()].to_string());
+					if !pe.is_empty() {
+						// todo is this check useless?
+						if pe.starts_with('(') {
+							v = Value::String(p[..p.len() - pe.len()].to_string());
 							p = pe;
 							Token::Function
 						} else {
-							exprErr(state, "bare words are no longer supported, please use \"...\"", &p[1..]);
-					return true;
+							exprErr(
+								state,
+								"bare words are no longer supported, please use \"...\"",
+								&p[1..],
+							);
+							return true;
 						}
 					} else {
-					exprErr(state, "bare words are no longer supported, please use \"...\"", &p[1..]);
-					return true;}
+						exprErr(
+							state,
+							"bare words are no longer supported, please use \"...\"",
+							&p[1..],
+						);
+						return true;
+					}
 				} else {
 					exprErr(state, "parse error in expression", &p[1..]);
 					return true;
@@ -290,6 +311,32 @@ fn rdToken(state: &ParseState) -> bool {
 	false
 }
 
+fn skipMacro(p: &str, ts: usize) -> usize {
+	if p.starts_with('%') {
+		ts + 1
+	} else {
+		let pe = findMacroEnd(&p[ts..]);
+		let pe = &p[pe..];
+		if pe.is_empty() {
+			p.len()
+		} else {
+			p.len() - pe.len()
+		}
+	}
+}
+fn isFunctionCall(p: &str) -> &str {
+	if !p.starts_with(|p: char| p.is_ascii_alphabetic()) && p.chars().nth(1) != Some('_') {
+		""
+	} else {
+		let p = p.trim_start_matches(|p: char| p.is_ascii_alphanumeric() || "_.:".contains(p));
+		if p.starts_with('(') {
+			p
+		} else {
+			""
+		}
+	}
+}
+
 #[deprecated(note = "manually create Value::Int")]
 fn valueMakeInteger() {}
 
@@ -297,9 +344,9 @@ fn wellformedInteger(mut p: &str) -> bool {
 	if p.starts_with('-') {
 		p = &p[1..];
 	}
-	for c in p.chars() { 
+	for c in p.chars() {
 		if !c.is_ascii_digit() {
-			return false
+			return false;
 		}
 	}
 	true
@@ -317,32 +364,101 @@ fn getValuebuf(state: &ParseState, p: &str, mut size: usize) -> String {
 		todo!();
 		tmp2
 	} else {
-	tmp}
+		tmp
+	}
 }
 #[instrument]
 fn doPrimary(state: &ParseState) -> Value {
 	let p = state.p;
 	debug!("start");
 	use Token::*;
-	todo!();
-	match state.next_token {
-		Function => {
-			let v = doFunction(state);
+	let v = match state.next_token {
+		Function => doFunction(state),
+		OpenP => {
+			if rdToken(state) {
+				Value::Nil
+			} else {
+				let v = doTenary(state);
+				if state.next_token != CloseP {
+					exprErr(state, "unmatched (", &p);
+					Value::Nil
+				} else if rdToken(state) {
+					Value::Nil
+				} else {
+					v
+				}
+			}
 		}
+		Integer | String => {
+			let v = state.token_value;
+			if rdToken(state) {
+				Value::Nil
+			} else {
+				v
+			}
+		}
+		Minus => {
+			if rdToken(state) {
+				Value::Nil
+			} else {
+				let v = doPrimary(state);
+				if let Value::Int(i) = v {
+					Value::Int(-i)
+				} else {
+					exprErr(state, "- only on numbers", &p);
+					Value::Nil
+				}
+			}
+		}
+		Not => {
+			if rdToken(state) {
+				Value::Nil
+			} else {
+				let v = doPrimary(state);
+				if let Value::Nil = v {
+					Value::Nil
+				} else {
+					Value::Bool(boolifyValue(v))
+				}
+			}
+		}
+		EOF => {
+			exprErr(state, "unexpected end of expression", &state.p);
+			Value::Nil
+		}
+		_ => {
+			exprErr(state, "syntax error in expression", &state.p);
+			Value::Nil
+		}
+	};
+	debug!("{v:?}");
+	v
+}
+
+fn boolifyValue(v: Value) -> bool {
+	if let Value::Int(i) = v {
+		i != 0
+	} else if let Value::String(s) = v {
+		!s.is_empty()
+	} else {
+		false
 	}
 }
 
 #[instrument]
 fn doFunction(state: &ParseState) -> Value {
 	let vname = state.token_value;
-	let mut v = Value::None;
+	let mut v = Value::Nil;
 	if rdToken(state) {
-		return Value::None
+		return Value::Nil;
 	}
 	let mut varg: Vec<Value> = vec![];
-	let mut narg=  0;
+	let mut narg = 0;
 	while state.next_token != Token::CloseP {
-		if let Some(a) = doTenary(state) {
+		let a = doTenary(state);
+		if let Value::Nil = a {
+			return Value::Nil;
+		} else {
 			varg[narg] = a;
 			narg += 1;
 			if state.next_token == Token::CloseP {
@@ -350,21 +466,19 @@ fn doFunction(state: &ParseState) -> Value {
 			}
 			if state.next_token != Token::Comma {
 				exprErr(state, "syntax error in expression", &state.p);
-				return Value::None
+				return Value::Nil;
 			}
 			if rdToken(state) {
-				return Value::None
+				return Value::Nil;
 			}
 			if state.next_token == Token::CloseP {
 				exprErr(state, "syntax error in expression", &state.p);
-				return Value::None
+				return Value::Nil;
 			}
-		} else {
-			return Value::None
 		}
 	}
-	if rdToken(state) { 
-		return Value::None
+	if rdToken(state) {
+		return Value::Nil;
 	}
 	// -> Do the call
 	if let Value::String(s) = vname {
@@ -387,20 +501,20 @@ fn doLuaFunction(state: &ParseState, name: &str, argc: usize, argv: Vec<Value>) 
 	let i;
 
 	if (state.flags & RPMEXPR_DISCARD) != 0 {
-		return valueMakeString("");
+		return Value::String("".into());
 	}
+	let args = argv;
+	
 }
 
 #[instrument]
 fn doMultiplyDivide(state: &ParseState) -> Value {
 	debug!("start");
-	
 }
 
 #[instrument]
 fn doAddSubtract(state: &ParseState) -> Value {
 	debug!("start");
-
 }
 
 #[instrument]
@@ -408,13 +522,12 @@ fn doRelational(state: &ParseState) -> Value {
 	debug!("start");
 }
 
-
 fn doLogical(state: &ParseState) -> Value {
 	let oldflags = state.flags;
 	debug!("doLogical()");
 }
 
-fn doTenary(state: &ParseState) -> Option<Value> {
+fn doTenary(state: &ParseState) -> Value {
 	let oldflags = state.flags;
 }
 
@@ -438,8 +551,10 @@ fn rpmExprStrFlags(expr: &str, flags: i8) -> Option<String> {
 		p: expr.into(),
 		s: expr.into(),
 		next_token: 0,
-		token_value: Value::None,
+		token_value: Value::Nil,
 		flags,
 	};
-	if rdToken(&state) {return None;}
+	if rdToken(&state) {
+		return None;
+	}
 }

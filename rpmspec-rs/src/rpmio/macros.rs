@@ -14,7 +14,7 @@ use crate::{
 	spec::Macro,
 	utils::popen,
 };
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{eyre::eyre, Result, Report};
 use std::{
 	collections::{BTreeMap, HashMap},
 	io::{stderr, BufRead, BufReader, Write},
@@ -36,7 +36,7 @@ struct Entry {
 	arena: String,           // String arena
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct MacroContext {
 	// in the original C code, Entry[] was used.
 	// we switched to BTreeMap to improve find_entry() perf.
@@ -177,7 +177,11 @@ impl MacroBuf {
 		if let Some(stdout) = popen(&buf) {
 			self.appends(stdout.trim_end_matches(|c| c == '\n' || c == '\r'));
 		} else {
-			mbErr!(self, true, "Failed to open shell expansion pipe for command: {buf}");
+			mbErr!(
+				self,
+				true,
+				"Failed to open shell expansion pipe for command: {buf}"
+			);
 			// idk what is %m, can't find refs
 		}
 	}
@@ -405,6 +409,37 @@ impl SaiGaai {
 	pub(crate) fn expandMacro(mb: Option<&MacroBuf>, src: &str) -> bool {
 		todo!()
 	}
+}
+
+/// -> Find end of macro call
+/// => Find length between
+pub(crate) fn findMacroEnd(s: &str) -> usize {
+	if s.starts_with('(') {
+		SaiGaai::matchchar(s, '(', ')')
+	} else if s.starts_with('{') {
+		SaiGaai::matchchar(s, '{', '}')
+	} else if s.starts_with('[') {
+		SaiGaai::matchchar(s, '[', ']')
+	} else {
+		let mut ss = s.trim_start_matches(|p| p == '?' || p == '!');
+		if ss.starts_with('-') {
+			ss = &ss[1..];
+		}
+		ss = ss.trim_start_matches(|p: char| p.is_ascii_alphanumeric() || p == '_');
+		if ss.starts_with("**") {
+			ss = &ss[2..];
+		} else if ss.starts_with(|p| p == '*' || p == '#') {
+			ss = &ss[1..];
+		}
+		s.len() - ss.len()
+	}
+}
+pub(crate) fn define_macro(mc: Context, name: &str, lvl: u8) -> Result<()>{
+	let mc = mc.lock().map_err(Report::new)?;
+	let mb = MacroBuf::new(mc.clone(), 0);
+	todo!();
+	// doDefine(mb, name, lvl, 0) -> parsed
+	// return mb.error
 }
 
 // todo move to rpmlog
