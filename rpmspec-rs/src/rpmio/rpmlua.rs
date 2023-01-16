@@ -1,3 +1,5 @@
+mod repl;
+
 /// Handlers for Lua \
 /// FYI RPM spec has tight integration with Lua \
 ///
@@ -17,6 +19,8 @@ mod lua_rpm {
 	use rlua::{Context, ExternalError, Result};
 
 	use crate::rpmio::macros::{_dummy_context, define_macro, expand_macros};
+
+use super::repl::repl;
 
 	pub(crate) fn b64decode(_: Context, arg: String) -> Result<Vec<u8>> {
 		Ok(STANDARD.decode(arg).map_err(|e| e.to_lua_err())?)
@@ -38,8 +42,10 @@ mod lua_rpm {
 	pub(crate) fn expand(_: Context, arg: String) -> Result<String> {
 		expand_macros(_dummy_context(), &arg, 0).map_err(|e| e.to_lua_err())
 	}
-	pub(crate) fn interactive() {
-		todo!();
+	pub(crate) fn interactive(ctx: Context) -> Result<()> {
+		repl(); // lazy
+		// todo mimic
+		Ok(())
 	}
 }
 
@@ -67,5 +73,5 @@ pub(crate) fn new() -> Result<Lua, rlua::Error> {
 		rpm.set("unsplitargs", ctx.create_function(lua_rpm::unsplitargs)?)?;
 		Ok(())
 	})?;
-	lua
+	Ok(lua)
 }
