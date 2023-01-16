@@ -33,7 +33,7 @@ struct Entry {
 	func: Option<Func>,			// Macro function (builtin macros)
 	nargs: u8,					// No. required args
 	flags: i16,					// Macro state bits
-	level: u8,					// Scoping level
+	level: i16,					// Scoping level
 	arena: String,				// String arena
 }
 
@@ -104,6 +104,7 @@ const ME_USED: i16		= 1 << 1;
 const ME_LITERAL: i16	= 1 << 2;
 const ME_PARSE: i16		= 1 << 3;
 const ME_FUNC: i16		= 1 << 4;
+const RMIL_MACROFILES: i16 = -13;
 
 macro_rules! mbErr {
 	($mb:expr, $error:expr, $fmt:expr, $($ap:tt)*) => {{
@@ -300,19 +301,15 @@ fn get_ctx(mc: &Context) -> Result<MutexGuard<MacroContext>> {
 /// then we trim and check for \, but also {[( stuff like\n these )]}
 /// we don't need the size parameter *I think*...
 /// I mean it says it's the *inbut* (yes, inbut) buffer size (bytes).
-fn rdcl(mut f: impl BufRead) -> Result<String> {
+fn rdcl(mut f: String) -> Result<String> {
 	let mut buf = String::new();
 	let mut bc: u16 = 0; // { }
 	let mut pc: u16 = 0; // ( )
 	let mut xc: u16 = 9; // [ ]
-	loop {
-		let mut curbuf = String::new();
-		if f.read_line(&mut curbuf)? == 0 {
-			break;
-		}
+	for line in f.lines() {
 		let mut last = '\0';
 		let mut esc = false;
-		for ch in curbuf.trim_end().chars() {
+		for ch in line.trim_end().chars() {
 			if ch == '\\' {
 				esc = true;
 				continue;
@@ -333,7 +330,7 @@ fn rdcl(mut f: impl BufRead) -> Result<String> {
 			}
 			last = ch;
 		}
-		buf += &curbuf;
+		buf += &line;
 		if esc {
 			continue;
 		}
@@ -341,6 +338,7 @@ fn rdcl(mut f: impl BufRead) -> Result<String> {
 			break;
 		}
 	}
+
 	Ok(buf.trim_end().to_string())
 }
 
@@ -484,17 +482,19 @@ pub(crate) fn macro_is_parametric(mc: Option<Context>, name: &str) -> Result<boo
 }
 
 pub(crate) fn load_macro_file(mc: Option<Context>, name: &str) -> Result<i32> {
-	let mc = mc.unwrap_or(_dummy_context());
-	let ctx = mc.lock().map_err(|e| eyre!(e.to_string()))?;
+	let mc_lock = mc.unwrap_or(_dummy_context());
+	let ctx = mc_lock.lock().map_err(|e| eyre!(e.to_string()))?;
 	let fd = File::open(name);
 	if fd.is_err() { return Ok(-1) }
 	let fd = fd.unwrap();
-	todo!();
-	// push_macro
+	push_macro(mc, "__file_name", "", name, RMIL_MACROFILES, ME_LITERAL);
 
+	// while ((nlines = rdcl(buf, blen, fd)) > 0) {
+
+	todo!();
 }
 
-pub(crate) fn push_macro_any(mc: Option<Context>, n: &str, o: &str, b: &str, f: Option<MacroFunc>, nargs: u8, lvl: u8, flags: i16) {
+pub(crate) fn push_macro_any(mc: Option<Context>, n: &str, o: &str, b: &str, f: Option<MacroFunc>, nargs: u8, lvl: i16, flags: i16) {
 	let mut me = Entry::default();
 	let olen = o.len();
 	let blen = b.len();
@@ -538,7 +538,7 @@ pub(crate) fn push_macro_any(mc: Option<Context>, n: &str, o: &str, b: &str, f: 
 }
 
 #[inline]
-pub(crate) fn push_macro(mc: Option<Context>, n: &str, o: &str, b: &str, lvl: u8, flags: i16) {
+pub(crate) fn push_macro(mc: Option<Context>, n: &str, o: &str, b: &str, lvl: i16, flags: i16) {
 	push_macro_any(mc, n, o, b, None, 0, lvl, flags);
 }
 
