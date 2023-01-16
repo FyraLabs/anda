@@ -231,7 +231,7 @@ impl MacroBuf {
 	fn expand_this(&mut self, src: &str, target: &mut String) -> bool {
 		let mut umb = self.clone();
 		umb.buf = "".to_string();
-		if expandMacro(Some(&umb), src) {
+		if expand_macro(Some(&umb), src) {
 			self.error = true;
 		}
 		*target = umb.buf;

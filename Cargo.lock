@@ -1013,6 +1013,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46a58d1d356c6597d08cde02c2f09d785b09e28711837b1ed667dc652c08a694"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "libc",
+ "static_assertions",
+]
+
+[[package]]
 name = "num"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1307,7 +1319,7 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9acbc6c5a5b029fe58342f58445acb00ccfe24624e538894bc2f04ce112980ba"
 dependencies = [
- "rustyline",
+ "rustyline 9.1.2",
 ]
 
 [[package]]
@@ -1425,6 +1437,7 @@ dependencies = [
  "pest_derive",
  "regex",
  "rlua",
+ "rustyline 10.1.0",
  "serde",
  "smartstring",
  "tracing",
@@ -1468,6 +1481,29 @@ dependencies = [
  "radix_trie",
  "scopeguard",
  "smallvec",
+ "unicode-segmentation",
+ "unicode-width",
+ "utf8parse",
+ "winapi",
+]
+
+[[package]]
+name = "rustyline"
+version = "10.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fc2d30f0bb29c4308f902d4a147b2d6cb022b59771463d9785f37e21f544df7"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "clipboard-win",
+ "dirs-next",
+ "fd-lock",
+ "libc",
+ "log",
+ "memchr",
+ "nix 0.26.1",
+ "radix_trie",
+ "scopeguard",
  "unicode-segmentation",
  "unicode-width",
  "utf8parse",
