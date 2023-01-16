@@ -14,6 +14,7 @@ mod spec;
 mod parse;
 mod error;
 mod rpmio;
+mod utils;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right
