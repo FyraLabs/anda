@@ -450,6 +450,10 @@ pub(crate) fn define_macro(mc: Option<Context>, name: &str, lvl: u8) -> Result<(
 	// return mb.error
 }
 
+pub(crate) fn pop_macro(mc: Option<Context>, name: &str) -> Result<()> {
+	todo!()
+}
+
 // todo move to rpmlog
 enum RPMLogLvl {
 	EMERG,
