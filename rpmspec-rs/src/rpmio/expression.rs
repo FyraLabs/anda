@@ -1,7 +1,7 @@
 use smartstring::alias::CompactString;
 use tracing::{debug, error, instrument};
 
-use super::{macros::{findMacroEnd, SaiGaai}, rpmhook::RPMHookArgs};
+use super::{macros::{find_macro_end, SaiGaai}, rpmhook::RPMHookArgs};
 
 const RPMEXPR_EXPAND: i8 = 1 << 0;
 const RPMEXPR_DISCARD: i8 = 1 << 31; // internal, discard result
@@ -315,7 +315,7 @@ fn skipMacro(p: &str, ts: usize) -> usize {
 	if p.starts_with('%') {
 		ts + 1
 	} else {
-		let pe = findMacroEnd(&p[ts..]);
+		let pe = find_macro_end(&p[ts..]);
 		let pe = &p[pe..];
 		if pe.is_empty() {
 			p.len()

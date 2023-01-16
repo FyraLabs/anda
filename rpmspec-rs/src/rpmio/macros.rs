@@ -275,7 +275,7 @@ impl SaiGaai {
 		Ok(())
 	}
 }
-pub(crate) fn expand_macro(src: &str) -> Result<()> {
+pub(crate) fn expand_macro(buf: Option<&MacroBuf>, src: &str) -> Result<()> {
 	todo!()
 }
 // -> rpmExpandMacros(mc, sbuf, obuf, flags)
@@ -414,13 +414,13 @@ fn rpm_expand<'a>(args: impl AsRef<[&'a str]>) -> String {
 	let mc = MacroContext::new();
 	todo!()
 }
-fn doExpandMacros(mc: MacroContext, src: String, flags: u32) -> Result<(String, u16)> {
+fn do_expand_macros(mc: MacroContext, src: String, flags: u32) -> Result<(String, u16)> {
 	todo!()
 }
 
 /// -> Find end of macro call
 /// => Find length between
-pub(crate) fn findMacroEnd(s: &str) -> usize {
+pub(crate) fn find_macro_end(s: &str) -> usize {
 	if s.starts_with('(') {
 		SaiGaai::matchchar(s, '(', ')')
 	} else if s.starts_with('{') {
