@@ -150,14 +150,16 @@ impl MacroBuf {
 		med.etrace = self.etrace;
 		Ok(())
 	}
-	fn fini(&mut self, me: Entry, med: MacroExpansionData) {
+	fn fini(&mut self, me: Entry, med: MacroExpansionData) -> Result<()> {
 		self.buf = self.buf[..=self.tpos].to_string();
 		self.depth -= 1;
 		// if is verbose (assume yes for now)
 		self.etrace = true;
-		self.print_expansion(Some(me), &self.buf[med.tpos..], &self.buf[self.tpos..]);
+		self.print_expansion(Some(me), &self.buf[med.tpos..], &self.buf[self.tpos..])?;
 		self.mtrace = med.mtrace;
 		self.etrace = med.etrace;
+
+		Ok(())
 	}
 	fn append(&mut self, c: char) {
 		assert_eq!(self.tpos, self.buf.len());
