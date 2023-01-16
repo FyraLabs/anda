@@ -68,6 +68,9 @@ struct MacroBuf {
 	args: Vec<String>, // Current macro arguments
 	mc: Context,
 }
+pub(crate) fn _dummy_context() -> Context {
+	Arc::from(Mutex::from(MacroContext::new()))
+}
 impl Default for MacroBuf {
 	fn default() -> Self {
 		Self {
@@ -270,8 +273,13 @@ impl SaiGaai {
 		Ok(())
 	}
 }
-fn expand_macro(src: &str) -> Result<()> {
-	Ok(())
+pub(crate) fn expand_macro(src: &str) -> Result<()> {
+	todo!()
+}
+// -> rpmExpandMacros(mc, sbuf, obuf, flags)
+// => expand_macros(mc, sbuf, flags) -> obuf
+pub(crate) fn expand_macros(mc: Context, sbuf: &str, flags: i32) -> Result<String> {
+	todo!()
 }
 fn get_ctx(mc: &Context) -> Result<MutexGuard<MacroContext>> {
 	Ok(mc.lock().expect("Can't lock mc"))
@@ -407,9 +415,6 @@ fn rpm_expand<'a>(args: impl AsRef<[&'a str]>) -> String {
 fn doExpandMacros(mc: MacroContext, src: String, flags: u32) -> Result<(String, u16)> {
 	todo!()
 }
-pub(crate) fn expandMacro(mb: Option<&MacroBuf>, src: &str) -> bool {
-	todo!()
-}
 
 /// -> Find end of macro call
 /// => Find length between
@@ -434,7 +439,8 @@ pub(crate) fn findMacroEnd(s: &str) -> usize {
 		s.len() - ss.len()
 	}
 }
-pub(crate) fn define_macro(mc: Context, name: &str, lvl: u8) -> Result<()> {
+pub(crate) fn define_macro(mc: Option<Context>, name: &str, lvl: u8) -> Result<()> {
+	let mc = mc.unwrap_or(_dummy_context());
 	let mc = mc.lock().map_err(Report::new)?;
 	let mb = MacroBuf::new(mc.clone(), 0);
 	todo!();

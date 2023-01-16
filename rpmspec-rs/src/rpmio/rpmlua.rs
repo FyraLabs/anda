@@ -11,8 +11,12 @@
 use rlua::Lua;
 
 mod lua_rpm {
+	use std::process::Command;
+
 	use base64::{engine::general_purpose::STANDARD, Engine};
 	use rlua::{Context, ExternalError, Result};
+
+	use crate::rpmio::macros::{_dummy_context, define_macro, expand_macros};
 
 	pub(crate) fn b64decode(_: Context, arg: String) -> Result<Vec<u8>> {
 		Ok(STANDARD.decode(arg).map_err(|e| e.to_lua_err())?)
@@ -20,9 +24,22 @@ mod lua_rpm {
 	pub(crate) fn b64encode(_: Context, arg: impl AsRef<[u8]>) -> Result<String> {
 		Ok(STANDARD.encode(arg))
 	}
-	pub(crate) fn define(_: Context, arg: &str) -> Result<()> {
-		if 
-		Ok(())
+	pub(crate) fn define(_: Context, name: String) -> Result<()> {
+		define_macro(None, &name, 0).map_err(|_| "error defining macro".to_lua_err())
+	}
+	pub(crate) fn execute(_: Context, args: Vec<String>) -> Result<i32> {
+		Ok(Command::new(args[0])
+			.args(&args[1..])
+			.status()
+			.map_err(|e| e.to_lua_err())?
+			.code()
+			.unwrap_or(-1))
+	}
+	pub(crate) fn expand(_: Context, arg: String) -> Result<String> {
+		expand_macros(_dummy_context(), &arg, 0).map_err(|e| e.to_lua_err())
+	}
+	pub(crate) fn interactive() {
+		todo!();
 	}
 }
 
