@@ -27,9 +27,6 @@ mod lua_rpm {
 	pub(crate) fn define(_: Context, name: String) -> Result<()> {
 		define_macro(None, &name, 0).map_err(|_| "error defining macro".to_lua_err())
 	}
-	pub(crate) fn undefine(_: Context, name: String) -> Result<()> {
-		pop_macro(None, &name).map_err(|_| "error undefining macro".to_lua_err())
-	}
 	pub(crate) fn execute(_: Context, args: Vec<String>) -> Result<i32> {
 		Ok(Command::new(args[0])
 			.args(&args[1..])
@@ -43,6 +40,12 @@ mod lua_rpm {
 	}
 	pub(crate) fn interactive() {
 		todo!();
+	}
+	pub(crate) fn isdefined(_: Context, name: String) {
+		todo!()
+	}
+	pub(crate) fn undefine(_: Context, name: String) -> Result<()> {
+		pop_macro(None, &name).map_err(|_| "error undefining macro".to_lua_err())
 	}
 }
 

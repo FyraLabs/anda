@@ -454,6 +454,14 @@ pub(crate) fn pop_macro(mc: Option<Context>, name: &str) -> Result<()> {
 	todo!()
 }
 
+pub(crate) fn macro_is_defined(mc: Option<Context>, name: &str) -> Result<bool> {
+	todo!()
+}
+
+pub(crate) fn macro_is_parametric(mc: Option<Context>, name: &str) -> Result<bool> {
+	todo!()
+}
+
 // todo move to rpmlog
 enum RPMLogLvl {
 	EMERG,
