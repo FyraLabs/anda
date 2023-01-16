@@ -34,9 +34,6 @@ impl From<String> for RPMVer {
 	fn from(value: String) -> Self {
 		let mut rv = Self::default();
 		rv.arena = value;
-		let epoch: CompactString;
-		let version: CompactString;
-		let release: CompactString;
 		let (a, _) = rv
 			.arena
 			.split_once(|a: char| !a.is_ascii_digit())
@@ -45,23 +42,20 @@ impl From<String> for RPMVer {
 		let last = rv.arena.split('-').last().unwrap_or("");
 		let se = &rv.arena[rv.arena.len() - last.len() - 1..]; // version terminator
 		if s == ':' {
-			epoch = rv.arena.into();
-			version = CompactString::from(a);
-			if epoch.is_empty() {
-				epoch = CompactString::from("0");
+			rv.e = rv.arena.into();
+			rv.v = CompactString::from(a);
+			if rv.e.is_empty() {
+				rv.e = CompactString::from("0");
 			} else {
-				epoch = CompactString::new();
-				version = rv.arena.into();
+				rv.e = CompactString::new();
+				rv.v = rv.arena.into();
 			}
 			if !se.is_empty() {
-				release = se[1..].into();
+				rv.r = se[1..].into();
 			} else {
-				release = CompactString::new();
+				rv.r = CompactString::new();
 			}
 		}
-		rv.e = epoch;
-		rv.v = version;
-		rv.r = release;
 		rv
 	}
 }

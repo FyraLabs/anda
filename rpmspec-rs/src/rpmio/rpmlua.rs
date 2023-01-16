@@ -18,9 +18,11 @@ mod lua_rpm {
 	use base64::{engine::general_purpose::STANDARD, Engine};
 	use rlua::{Context, ExternalError, Result};
 
-	use crate::rpmio::macros::{_dummy_context, define_macro, expand_macros, pop_macro};
+	use crate::rpmio::macros::{
+		_dummy_context, define_macro, expand_macros, macro_is_defined, pop_macro, macro_is_parametric, load_macro_file,
+	};
 
-use super::repl::repl;
+	use super::repl::repl;
 
 	pub(crate) fn b64decode(_: Context, arg: String) -> Result<Vec<u8>> {
 		Ok(STANDARD.decode(arg).map_err(|e| e.to_lua_err())?)
@@ -50,11 +52,22 @@ use super::repl::repl;
 		// todo mimic
 		Ok(())
 	}
-	pub(crate) fn isdefined(_: Context, name: String) {
-		todo!()
+	pub(crate) fn isdefined(_: Context, name: String) -> Result<(bool, bool)> {
+		let a =
+		if let Ok(true) = macro_is_defined(None, &name) {
+			true
+		} else {
+			false
+		};
+		let b = if let Ok(true) = macro_is_parametric(None, &name) {
+			true
+		} else {
+			false
+		};
+		Ok((a, b))
 	}
-	pub(crate) fn load(_: Context, arg: String) {
-		todo!()
+	pub(crate) fn load(_: Context, arg: String) -> Result<i32> {
+		load_macro_file(None, &arg).map_err(|e| e.to_lua_err())
 	}
 	pub(crate) fn redirect2null(_: Context, arg: i32) {
 		todo!()
@@ -68,7 +81,7 @@ use super::repl::repl;
 	pub(crate) fn unregister(_: Context, arg: String) {
 		todo!()
 	}
-	pub(crate) fn vercmp(_: Context, s1: String, s2: String) {
+	pub(crate) fn vercmp(_: Context, (s1, s2): (String, String)) {
 		todo!()
 	}
 }
@@ -89,7 +102,10 @@ pub(crate) fn new() -> Result<Lua, rlua::Error> {
 		rpm.set("call", ctx.create_function(lua_rpm::call)?)?;
 		rpm.set("interactive", ctx.create_function(lua_rpm::interactive)?)?;
 		rpm.set("execute", ctx.create_function(lua_rpm::execute)?)?;
-		rpm.set("redirect2null", ctx.create_function(lua_rpm::redirect2null)?)?;
+		rpm.set(
+			"redirect2null",
+			ctx.create_function(lua_rpm::redirect2null)?,
+		)?;
 		rpm.set("vercmp", ctx.create_function(lua_rpm::vercmp)?)?;
 		rpm.set("ver", ctx.create_function(lua_rpm::ver_new)?)?;
 		rpm.set("open", ctx.create_function(lua_rpm::open)?)?;

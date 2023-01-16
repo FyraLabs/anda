@@ -18,22 +18,23 @@ use color_eyre::{eyre::eyre, Report, Result};
 use std::{
 	collections::{BTreeMap, HashMap},
 	io::{stderr, BufRead, BufReader, Write},
-	sync::{Arc, Mutex, MutexGuard},
+	sync::{Arc, Mutex, MutexGuard}, fs::File,
 };
 use tracing::{debug, error, info, warn};
 
 type Func = fn(MacroBuf, Entry, Vec<String>, &usize);
-#[derive(Clone)]
+type MacroFunc = Func;
+#[derive(Clone, Default)]
 struct Entry {
-	prev: Option<Box<Self>>, // Macro entry stack
-	name: String,            // Macro name
-	opts: String,            // Macro parameters
-	body: String,            // Macro body
-	func: Func,              // Macro function (builtin macros)
-	nargs: u8,               // No. required args
-	flags: i16,              // Macro state bits
-	level: u16,              // Scoping level
-	arena: String,           // String arena
+	prev: Option<Box<Self>>,	// Macro entry stack
+	name: String,				// Macro name
+	opts: String,				// Macro parameters
+	body: String,				// Macro body
+	func: Option<Func>,			// Macro function (builtin macros)
+	nargs: u8,					// No. required args
+	flags: i16,					// Macro state bits
+	level: u8,					// Scoping level
+	arena: String,				// String arena
 }
 
 #[derive(Default, Clone)]
@@ -97,6 +98,12 @@ struct MacroExpansionData {
 const MAX_MACRO_DEPTH: u8 = 64;
 const PRINT_MACRO_TRACE: bool = false;
 const PRINT_EXPAND_TRACE: bool = false;
+const ME_NONE: i16		= 0;
+const ME_AUTO: i16		= 1 << 0;
+const ME_USED: i16		= 1 << 1;
+const ME_LITERAL: i16	= 1 << 2;
+const ME_PARSE: i16		= 1 << 3;
+const ME_FUNC: i16		= 1 << 4;
 
 macro_rules! mbErr {
 	($mb:expr, $error:expr, $fmt:expr, $($ap:tt)*) => {{
@@ -231,7 +238,7 @@ impl MacroBuf {
 	fn expand_this(&mut self, src: &str, target: &mut String) -> bool {
 		let mut umb = self.clone();
 		umb.buf = "".to_string();
-		if expand_macro(Some(&umb), src) {
+		if let Ok(_) = expand_macro(Some(&umb), src) {
 			self.error = true;
 		}
 		*target = umb.buf;
@@ -253,13 +260,13 @@ impl SaiGaai {
 			line: 0,
 		}
 	}
-	fn find_entry(&self, mc: Context, name: String) -> Result<Entry> {
+	fn find_entry(&self, mc: Context, name: &str) -> Result<Entry> {
 		// original code use binary search
 		let ctx = get_ctx(&mc)?;
 		Ok(ctx
 			.table
-			.get(&name)
-			.ok_or(ParserError::UnknownMacro(self.line, name))?
+			.get(name)
+			.ok_or(ParserError::UnknownMacro(self.line, name.to_string()))?
 			.clone())
 	}
 	fn new_entry(&self, mc: Context, key: String, value: Entry) -> Result<()> {
@@ -443,7 +450,7 @@ pub(crate) fn find_macro_end(s: &str) -> usize {
 }
 pub(crate) fn define_macro(mc: Option<Context>, name: &str, lvl: u8) -> Result<()> {
 	let mc = mc.unwrap_or(_dummy_context());
-	let mc = mc.lock().map_err(Report::new)?;
+	let mc = mc.lock().map_err(|e| eyre!(e.to_string()))?;
 	let mb = MacroBuf::new(mc.clone(), 0);
 	todo!();
 	// doDefine(mb, name, lvl, 0) -> parsed
@@ -459,11 +466,80 @@ pub(crate) fn pop_macro(mc: Option<Context>, name: &str) -> Result<()> {
 }
 
 pub(crate) fn macro_is_defined(mc: Option<Context>, name: &str) -> Result<bool> {
-	todo!()
+	let mc = mc.unwrap_or(_dummy_context());
+	let ctx = mc.lock().map_err(|e|eyre!(e.to_string()))?;
+	Ok(SaiGaai::new().find_entry(mc, name).is_ok())
 }
 
 pub(crate) fn macro_is_parametric(mc: Option<Context>, name: &str) -> Result<bool> {
-	todo!()
+	let mc = mc.unwrap_or(_dummy_context());
+	let ctx = mc.lock().map_err(|e| eyre!(e.to_string()))?;
+	let en = SaiGaai::new().find_entry(mc, name);
+	if let Ok(en) = en {
+		if !en.opts.is_empty() {
+			return Ok(true);
+		}
+	}
+	Ok(false)
+}
+
+pub(crate) fn load_macro_file(mc: Option<Context>, name: &str) -> Result<i32> {
+	let mc = mc.unwrap_or(_dummy_context());
+	let ctx = mc.lock().map_err(|e| eyre!(e.to_string()))?;
+	let fd = File::open(name);
+	if fd.is_err() { return Ok(-1) }
+	let fd = fd.unwrap();
+	todo!();
+	// push_macro
+
+}
+
+pub(crate) fn push_macro_any(mc: Option<Context>, n: &str, o: &str, b: &str, f: Option<MacroFunc>, nargs: u8, lvl: u8, flags: i16) {
+	let me = Entry::default();
+	let olen = o.len();
+	let blen = b.len();
+	let mut p: &str;
+	let mc = mc.unwrap_or(_dummy_context());
+	let mep = SaiGaai::new().find_entry(mc, n);
+	if let Ok(en) = mep {
+		// -> entry with shared name
+		p = &me.arena;
+		me.name = en.name; // -> set name
+	} else {
+		// -> entry with new name
+		let mep = Entry::default();
+		p = &me.arena;
+		me.name = p.to_string(); // -> copy name
+		p = n;
+	}
+	// -> copy body
+	me.body = p.to_string(); // -> copy body
+	if blen != 0 {
+		p = b;
+	} else {
+		// !!
+		// *p = '\0';
+	}
+	p = &p[blen + 1..];
+	if olen != 0 {
+		p = o;
+		me.opts = p.to_string();
+	} else {
+		// me->opts = o ? "" : NULL;
+		me.opts = String::new();
+	}
+	// -> initialize
+	me.func = f;
+	me.nargs = nargs;
+	me.flags = flags;
+	me.flags &= !ME_USED;
+	me.level = lvl;
+	me.prev = mep.ok().map(|a| Box::new(a));
+}
+
+#[inline]
+pub(crate) fn push_macro(mc: Option<Context>, n: &str, o: &str, b: &str, lvl: u8, flags: i16) {
+	push_macro_any(mc, n, o, b, None, 0, lvl, flags);
 }
 
 // todo move to rpmlog
