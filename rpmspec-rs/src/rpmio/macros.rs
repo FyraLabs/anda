@@ -495,7 +495,7 @@ pub(crate) fn load_macro_file(mc: Option<Context>, name: &str) -> Result<i32> {
 }
 
 pub(crate) fn push_macro_any(mc: Option<Context>, n: &str, o: &str, b: &str, f: Option<MacroFunc>, nargs: u8, lvl: u8, flags: i16) {
-	let me = Entry::default();
+	let mut me = Entry::default();
 	let olen = o.len();
 	let blen = b.len();
 	let mut p: &str;
