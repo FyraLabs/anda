@@ -1,7 +1,10 @@
 use smartstring::alias::CompactString;
 use tracing::{debug, error, instrument};
 
-use super::{macros::{find_macro_end, SaiGaai}, rpmhook::RPMHookArgs};
+use super::{
+	macros::{find_macro_end, SaiGaai},
+	rpmhook::RPMHookArgs,
+};
 
 const RPMEXPR_EXPAND: i8 = 1 << 0;
 const RPMEXPR_DISCARD: i8 = 1 << 31; // internal, discard result
@@ -34,10 +37,7 @@ impl From<String> for RPMVer {
 	fn from(value: String) -> Self {
 		let mut rv = Self::default();
 		rv.arena = value;
-		let (a, _) = rv
-			.arena
-			.split_once(|a: char| !a.is_ascii_digit())
-			.unwrap_or(("", ""));
+		let (a, _) = rv.arena.split_once(|a: char| !a.is_ascii_digit()).unwrap_or(("", ""));
 		let s = rv.arena.chars().nth(a.len()).unwrap_or('\0'); // epoch terminator
 		let last = rv.arena.split('-').last().unwrap_or("");
 		let se = &rv.arena[rv.arena.len() - last.len() - 1..]; // version terminator
@@ -61,7 +61,7 @@ impl From<String> for RPMVer {
 }
 #[derive(Debug, PartialEq)]
 enum Token {
-	Unknown,  // 0
+	Unknown, // 0
 	EOF,
 	Add,
 	Minus,
@@ -499,7 +499,6 @@ fn do_lua_function(state: &ParseState, name: &str, argc: usize, argv: Vec<Value>
 		return Value::String("".into());
 	}
 	let args = argv;
-	
 }
 
 #[instrument]

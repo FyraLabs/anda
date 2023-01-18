@@ -9,8 +9,6 @@ pub(crate) struct RPMHookArgs {
 
 impl RPMHookArgs {
 	pub(crate) fn new() -> Self {
-		Self {
-			..Default::default()
-		}
+		Self { ..Default::default() }
 	}
 }

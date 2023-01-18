@@ -55,16 +55,8 @@ mod lua_rpm {
 		Ok(())
 	}
 	pub(crate) fn isdefined(_: Context, name: String) -> Result<(bool, bool)> {
-		let a = if let Ok(true) = macro_is_defined(None, &name) {
-			true
-		} else {
-			false
-		};
-		let b = if let Ok(true) = macro_is_parametric(None, &name) {
-			true
-		} else {
-			false
-		};
+		let a = if let Ok(true) = macro_is_defined(None, &name) { true } else { false };
+		let b = if let Ok(true) = macro_is_parametric(None, &name) { true } else { false };
 		Ok((a, b))
 	}
 	pub(crate) fn load(_: Context, arg: String) -> Result<i32> {
@@ -103,10 +95,7 @@ pub(crate) fn new() -> Result<Lua, rlua::Error> {
 		rpm.set("call", ctx.create_function(lua_rpm::call)?)?;
 		rpm.set("interactive", ctx.create_function(lua_rpm::interactive)?)?;
 		rpm.set("execute", ctx.create_function(lua_rpm::execute)?)?;
-		rpm.set(
-			"redirect2null",
-			ctx.create_function(lua_rpm::redirect2null)?,
-		)?;
+		rpm.set("redirect2null", ctx.create_function(lua_rpm::redirect2null)?)?;
 		rpm.set("vercmp", ctx.create_function(lua_rpm::vercmp)?)?;
 		rpm.set("ver", ctx.create_function(lua_rpm::ver_new)?)?;
 		rpm.set("open", ctx.create_function(lua_rpm::open)?)?;

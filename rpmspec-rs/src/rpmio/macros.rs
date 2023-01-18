@@ -8,21 +8,15 @@
 ///
 /// Without pointers, a lot of functions were subjected to
 /// change (some rewritten, some get to take a shower)
-use crate::{
-	error::{self, ParserError},
-	rpmio::error::MacroErr,
-	spec::Macro,
-	utils::popen,
-};
-use color_eyre::{eyre::eyre, Report, Result};
+use crate::{error::ParserError, rpmio::error::MacroErr, utils::popen};
+use color_eyre::{eyre::eyre, Result};
 use std::{
-	collections::{BTreeMap, HashMap},
+	collections::BTreeMap,
 	fs::File,
-	io::{stderr, BufRead, BufReader, Write, self},
-	string,
-	sync::{Arc, Mutex, MutexGuard}, os::fd::AsRawFd,
+	io::{self, stderr, BufRead, Write},
+	sync::{Arc, Mutex, MutexGuard},
 };
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 type Func = fn(MacroBuf, Entry, Vec<String>, &usize);
 type MacroFunc = Func;
@@ -50,17 +44,14 @@ struct MacroContext {
 }
 impl MacroContext {
 	fn new() -> Self {
-		Self {
-			..Default::default()
-		}
+		Self { ..Default::default() }
 	}
 }
 type Context = Arc<Mutex<MacroContext>>;
 #[derive(Clone)]
 struct MacroBuf {
-	buf: String, // Expansion buffer
-	tpos: usize, // Current position in buf
-	// nb: usize,			// No. bytes remaining in buf
+	buf: String,       // Expansion buffer
+	tpos: usize,       // Current position in buf
 	depth: u8,         // Current expansion depth
 	level: i16,        // Current scoping level
 	error: bool,       // Errors encountered during expansion?
@@ -77,7 +68,7 @@ pub(crate) fn _dummy_context() -> Context {
 impl Default for MacroBuf {
 	fn default() -> Self {
 		Self {
-			mc: Arc::from(Mutex::from(MacroContext::new())),
+			mc: _dummy_context(),
 			buf: String::default(),
 			depth: 0,
 			level: 0,
@@ -88,7 +79,6 @@ impl Default for MacroBuf {
 			args: vec![],
 			error: false,
 			me: None,
-			// nb: 0,
 		}
 	}
 }
@@ -222,11 +212,7 @@ impl MacroBuf {
 		if let Some(stdout) = popen(&buf) {
 			self.appends(stdout.trim_end_matches(|c| c == '\n' || c == '\r'));
 		} else {
-			mbErr!(
-				self,
-				true,
-				"Failed to open shell expansion pipe for command: {buf}"
-			);
+			mbErr!(self, true, "Failed to open shell expansion pipe for command: {buf}");
 			// idk what is %m, can't find refs
 		}
 	}
@@ -299,18 +285,14 @@ impl MacroBuf {
 		&mut self, se: &mut str, lvl: i16, expandbody: bool, parsed: usize,
 	) -> usize {
 		let mut start = se;
+		let mut rc = true; // -> assume failure
 		let mut s = se;
 		let mut buf = String::new();
 		let mut n: &mut str = buf.as_mut();
-		let mut ne = n;
 		let mut o = "";
-		let mut oe = "";
 		let (mut b, mut be, mut ebody) = ("", "", "");
-		let mut c = '\0';
 		let mut oc = ')';
 		let mut sbody = "";
-		let mut rc = true; // -> assume failure
-		copyname!(ne, s, c);
 
 		macro_rules! exit {
 			() => {
@@ -324,8 +306,12 @@ impl MacroBuf {
 			};
 		}
 
+		let mut ne = n;
+		let mut c = '\0';
+		copyname!(ne, s, c);
+		let mut oe = &ne[1..];
+
 		// -> copy opts (if present)
-		let oe = &ne[1..];
 		if s.starts_with('(') {
 			s = s[1..].as_mut(); // -> skip (
 			if s.contains(')') {
@@ -402,14 +388,7 @@ impl MacroBuf {
 		}
 		s = s.trim_start_matches(['\n', '\r']).as_mut();
 		se = s;
-		if !self.valid_name(
-			n,
-			if expandbody {
-				"%global"
-			} else {
-				"%define"
-			},
-		) {
+		if !self.valid_name(n, if expandbody { "%global" } else { "%define" }) {
 			exit!();
 		}
 		if be.len() - b.len() < 1 {
@@ -511,11 +490,15 @@ pub(crate) fn dumpMacroTable(mc: Context, fp: Option<File>) -> io::Result<()> {
 		if !me.body.is_empty() {
 			s += &format!("\t{}", me.body);
 		}
-		fp.write_fmt(format_args!("{:.3}{} {}{s}", me.level, if me.flags & ME_USED == 0 { ':'} else {'='}, me.name))?;
+		fp.write_fmt(format_args!(
+			"{:.3}{} {}{s}",
+			me.level,
+			if me.flags & ME_USED == 0 { ':' } else { '=' },
+			me.name
+		))?;
 	}
 	fp.write_fmt(format_args!("======================== active {} empty 0", mc.n))?;
 	Ok(())
-
 }
 pub(crate) fn expand_macro(buf: Option<&MacroBuf>, src: &str) -> Result<()> {
 	todo!()

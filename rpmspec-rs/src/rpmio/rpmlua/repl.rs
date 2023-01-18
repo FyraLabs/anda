@@ -29,10 +29,7 @@ pub(crate) fn repl() {
 						);
 						break;
 					}
-					Err(Error::SyntaxError {
-						incomplete_input: true,
-						..
-					}) => {
+					Err(Error::SyntaxError { incomplete_input: true, .. }) => {
 						// continue reading input and append it to `line`
 						line.push_str("\n"); // separate input lines
 						prompt = ">> ";
