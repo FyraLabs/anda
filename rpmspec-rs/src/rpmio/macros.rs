@@ -607,6 +607,17 @@ pub(crate) fn load_macro_file(mc: Option<Context>, name: &str) -> Result<i32> {
 	push_macro(mc, "__file_name", "", name, RMIL_MACROFILES, ME_LITERAL);
 
 	while let Ok(buffer) = rdcl(fd.try_clone()?) {
+		let nlines = buffer.lines().count();
+		let lineno = 0;
+
+        let mut chars = buffer.chars();
+        let c = chars.skip_while(|c| c.is_whitespace()).next().unwrap();
+        if c != '%' {
+            continue;
+        }
+
+        // skip the % character
+        chars.next();
 	}
 
 	// while ((nlines = rdcl(buf, blen, fd)) > 0) {
