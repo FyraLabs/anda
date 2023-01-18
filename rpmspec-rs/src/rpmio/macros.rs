@@ -28,15 +28,15 @@ type Func = fn(MacroBuf, Entry, Vec<String>, &usize);
 type MacroFunc = Func;
 #[derive(Clone, Default)]
 struct Entry {
-	prev: Option<Box<Self>>,	// Macro entry stack
-	name: String,				// Macro name
-	opts: String,				// Macro parameters
-	body: String,				// Macro body
-	func: Option<Func>,			// Macro function (builtin macros)
-	nargs: u8,					// No. required args
-	flags: i16,					// Macro state bits
-	level: i16,					// Scoping level
-	arena: String,				// String arena
+	prev: Option<Box<Self>>, // Macro entry stack
+	name: String,            // Macro name
+	opts: String,            // Macro parameters
+	body: String,            // Macro body
+	func: Option<Func>,      // Macro function (builtin macros)
+	nargs: u8,               // No. required args
+	flags: i16,              // Macro state bits
+	level: i16,              // Scoping level
+	arena: String,           // String arena
 }
 
 #[derive(Default, Clone)]
@@ -100,12 +100,12 @@ struct MacroExpansionData {
 const MAX_MACRO_DEPTH: u8 = 64;
 const PRINT_MACRO_TRACE: bool = false;
 const PRINT_EXPAND_TRACE: bool = false;
-const ME_NONE: i16		= 0;
-const ME_AUTO: i16		= 1 << 0;
-const ME_USED: i16		= 1 << 1;
-const ME_LITERAL: i16	= 1 << 2;
-const ME_PARSE: i16		= 1 << 3;
-const ME_FUNC: i16		= 1 << 4;
+const ME_NONE: i16 = 0;
+const ME_AUTO: i16 = 1 << 0;
+const ME_USED: i16 = 1 << 1;
+const ME_LITERAL: i16 = 1 << 2;
+const ME_PARSE: i16 = 1 << 3;
+const ME_FUNC: i16 = 1 << 4;
 const RMIL_MACROFILES: i16 = -13;
 
 macro_rules! mbErr {
@@ -454,33 +454,37 @@ pub(crate) fn find_macro_end(s: &str) -> usize {
 macro_rules! copyname {
 	($ne:ident, $s:ident, $c:ident) => {
 		let _s = $s.trim_start();
-		$s = _s.trim_start_matches(|_c: char| {
-			$c = _c;
-			_c.is_ascii_alphanumeric() || _c == '_'
-		});
-		$ne = &$ne[_s.len() - $s.len()..];
+		$s = _s
+			.trim_start_matches(|_c: char| {
+				$c = _c;
+				_c.is_ascii_alphanumeric() || _c == '_'
+			})
+			.as_mut();
+		$ne = $ne[_s.len() - $s.len()..].as_mut();
 		drop(_s);
 	};
 }
 macro_rules! copyopts {
 	($oe:ident, $s:ident, $c:ident) => {
 		let _s = $s.trim_start();
-		$s = _s.trim_start_matches(|_c: char| {
-			$c = _c;
-			_c != ')'
-		});
+		$s = _s
+			.trim_start_matches(|_c: char| {
+				$c = _c;
+				_c != ')'
+			})
+			.as_mut();
 		$oe = &$oe[_s.len() - $s.len()..];
 		drop(_s);
 	};
 }
 
 pub(crate) fn do_define(
-	mb: MacroBuf, se: &str, lvl: u16, expandbody: bool, parsed: usize,
+	mb: MacroBuf, se: &mut str, lvl: i16, expandbody: bool, parsed: usize,
 ) -> usize {
 	let mut start = se;
 	let mut s = se;
 	let mut buf = String::new();
-	let mut n: &str = &buf;
+	let mut n: &mut str = buf.as_mut();
 	let mut ne = n;
 	let mut o = "";
 	let mut oe = "";
@@ -506,11 +510,11 @@ pub(crate) fn do_define(
 	// -> copy opts (if present)
 	let oe = &ne[1..];
 	if s.starts_with('(') {
-		s = &s[1..]; // -> skip (
+		s = s[1..].as_mut(); // -> skip (
 		if s.contains(')') {
 			o = oe;
 			copyopts!(oe, s, oc);
-			s = &s[1..];
+			s = s[1..].as_mut();
 		} else {
 			mbErr!(mb, true, "Macro %{n} has unterminated opts");
 			exit!();
@@ -519,11 +523,11 @@ pub(crate) fn do_define(
 	be = &oe[1..];
 	b = be;
 	sbody = s;
-	s = s.trim_start();
+	s = s.trim_start().as_mut();
 	if parsed != 0 {
 		b = s;
 		be = &b[b.len()..];
-		s = &s[s.len()..];
+		s = s[s.len()..].as_mut();
 	} else if c == '{' {
 		let _se = matchchar(s, '{', '}');
 		if _se == 0 {
@@ -531,35 +535,108 @@ pub(crate) fn do_define(
 			se = s;
 			exit!();
 		}
-		s = &s[1..];
+		s = s[1..].as_mut();
 		b = &s[s.len() - se.len() - 1..];
 		be = &be[b.len()..];
 		s = se;
 	} else {
-		let mut bc;
-		let mut pc;
-		let mut xc;
+		let (mut bc, mut pc, mut xc) = (0, 0, 0);
 		loop {
 			if s.trim().is_empty() {
 				break;
 			}
-			match s.chars().nth(0) {
-				Some('\\') => {
-					match s.chars().nth(1) {
-						None => {},
-						_ => s = &s[1..],
-					}
-				},
-				Some('%') => {
-					match s.chars().nth(1).unwrap_or('\0') {
-						'{' => {be[..1] = s[..1]; be = &be[]}
-					} // www
-				}
+			macro_rules! sclone {
+				($x:ident) => {{
+					sclone!();
+					$x += 1;
+				}};
+				() => {
+					(be, be, s) = (s, be[1..].as_mut(), s[1..].as_mut())
+				};
 			}
+			match s.chars().nth(0) {
+				Some('\\') => match s.chars().nth(1) {
+					None => {}
+					_ => s = s[1..].as_mut(),
+				},
+				Some('%') => match s.chars().nth(1).unwrap_or('\0') {
+					'{' => sclone!(bc),
+					'(' => sclone!(pc),
+					'[' => sclone!(xc),
+					'%' => sclone!(),
+				},
+				Some('{') if bc > 0 => bc += 1,
+				Some('}') if bc > 0 => bc -= 1,
+				Some('(') if pc > 0 => pc += 1,
+				Some(')') if pc > 0 => pc -= 1,
+				Some('[') if xc > 0 => xc += 1,
+				Some(']') if xc > 0 => xc -= 1,
+			}
+			be = s;
+			sclone!();
 		}
-		todo!();
+		// be = \0
+		if bc > 0 || pc > 0 || xc > 0 {
+			mbErr!(mb, true, "Macro %{n} has unterminated body");
+			se = s;
+			exit!();
+		}
+		be = be.trim_end();
 	}
+	s = s.trim_start_matches(['\n', '\r']).as_mut();
+	se = s;
+	if !valid_name(
+		mb,
+		n,
+		if expandbody {
+			"%global"
+		} else {
+			"%define"
+		},
+	) {
+		exit!();
+	}
+	if be.len() - b.len() < 1 {
+		mbErr!(mb, true, "Macro %{n} has empty body");
+		exit!();
+	}
+	if !sbody.starts_with([' ', '\t'])
+		&& !(sbody.starts_with('\\')
+			&& ['\n', '\r'].contains(&sbody.chars().nth(1).unwrap_or('\0')))
+	{
+		mbErr!(mb, false, "Macro {n} needs whitespace before body");
+	}
+
+	let mut ebody = ebody.to_string();
+
+	if expandbody {
+		if mb.expand_this(b, &mut ebody) {
+			mbErr!(mb, true, "Macro %{n} failed to expand");
+			exit!();
+		}
+		b = &ebody;
+	}
+	push_macro(Some(mb.mc), n, o, b, lvl, ME_NONE);
+	rc = false;
 	exit!();
+}
+pub(crate) fn valid_name(mb: MacroBuf, name: &str, action: &str) -> bool {
+	let rc = 0;
+	let c = name.chars().nth(0).unwrap_or('\0');
+	if !(c.is_ascii_alphabetic() || (c == '_' && name.len() > 1)) {
+		mbErr!(mb, true, "Macro %{name} has illegal name ({action})");
+		return false;
+	}
+
+	let mep = SaiGaai::new().find_entry(mb.mc, name);
+	if mep.is_ok() {
+		let mep = mep.unwrap();
+		if mep.flags & (ME_FUNC | ME_AUTO) != 0 {
+			mbErr!(mb, true, "Macro %{name} is a built-in ({action})");
+			return false;
+		}
+	}
+	true
 }
 pub(crate) fn define_macro(mc: Option<Context>, name: &str, lvl: u8) -> Result<()> {
 	let mc = mc.unwrap_or(_dummy_context());
@@ -610,14 +687,14 @@ pub(crate) fn load_macro_file(mc: Option<Context>, name: &str) -> Result<i32> {
 		let nlines = buffer.lines().count();
 		let lineno = 0;
 
-        let mut chars = buffer.chars();
-        let c = chars.skip_while(|c| c.is_whitespace()).next().unwrap();
-        if c != '%' {
-            continue;
-        }
+		let mut chars = buffer.chars();
+		let c = chars.skip_while(|c| c.is_whitespace()).next().unwrap();
+		if c != '%' {
+			continue;
+		}
 
-        // skip the % character
-        chars.next();
+		// skip the % character
+		chars.next();
 	}
 
 	// while ((nlines = rdcl(buf, blen, fd)) > 0) {
@@ -625,7 +702,10 @@ pub(crate) fn load_macro_file(mc: Option<Context>, name: &str) -> Result<i32> {
 	todo!();
 }
 
-pub(crate) fn push_macro_any(mc: Option<Context>, n: &str, o: &str, b: &str, f: Option<MacroFunc>, nargs: u8, lvl: i16, flags: i16) {
+pub(crate) fn push_macro_any(
+	mc: Option<Context>, n: &str, o: &str, b: &str, f: Option<MacroFunc>, nargs: u8, lvl: i16,
+	flags: i16,
+) {
 	let mut me = Entry::default();
 	let olen = o.len();
 	let blen = b.len();
