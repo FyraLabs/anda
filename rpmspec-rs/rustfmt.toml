@@ -1,4 +1,4 @@
-single_line_if_else_max_width = 0
+use_small_heuristics = "Max"
 edition = "2021"
 merge_derives = true
 match_block_trailing_comma = false

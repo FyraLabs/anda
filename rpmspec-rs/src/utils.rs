@@ -1,11 +1,7 @@
 pub(crate) fn popen(cmd: &str) -> Option<String> {
 	Some(
 		String::from_utf8_lossy(
-			&std::process::Command::new("sh")
-				.args(["-c", cmd])
-				.output()
-				.ok()?
-				.stdout,
+			&std::process::Command::new("sh").args(["-c", cmd]).output().ok()?.stdout,
 		)
 		.to_string(),
 	)
