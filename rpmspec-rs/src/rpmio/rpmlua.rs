@@ -35,7 +35,8 @@ mod lua_rpm {
 		todo!()
 	}
 	pub(crate) fn define(_: Context, name: String) -> Result<()> {
-		define_macro(None, &name, 0).map_err(|_| "error defining macro".to_lua_err())
+		define_macro(None, &name, 0).map_err(|_| "error defining macro".to_lua_err())?;
+		Ok(())
 	}
 	pub(crate) fn execute(_: Context, args: Vec<String>) -> Result<i32> {
 		Ok(Command::new(&args[0])
