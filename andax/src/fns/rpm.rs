@@ -30,10 +30,13 @@ impl RPMSpec {
         }
     }
     pub fn reset_release(&mut self) -> Result<(), Box<EvalAltResult>> {
+        self.release("1")
+    }
+    pub fn release(&mut self, rel: &str) -> Result<(), Box<EvalAltResult>> {
         let re = regex::Regex::new(r"Release:(\s+)([\.\d]+)\n").unwrap();
         let m = re.captures(self.f.as_str());
         if let Some(m) = m {
-            self.f = re.replace(&self.f, format!("Release:{}1%{{?dist}}", &m[1])).to_string();
+            self.f = re.replace(&self.f, format!("Release:{}{rel}%{{?dist}}", &m[1])).to_string();
             self.changed = true;
             return Ok(());
         }
@@ -110,7 +113,8 @@ impl CustomType for RPMSpec {
             .with_fn("source", Self::source)
             .with_fn("define", Self::define)
             .with_fn("global", Self::global)
-            .with_fn("reset_release", Self::reset_release)
+            .with_fn("release", Self::reset_release)
+            .with_fn("release", Self::release)
             .with_get_set("f", Self::get, Self::set);
     }
 }
