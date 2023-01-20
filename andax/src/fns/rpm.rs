@@ -29,17 +29,27 @@ impl RPMSpec {
             spec: spec.into(),
         }
     }
+    pub fn reset_release(&mut self) -> Result<(), Box<EvalAltResult>> {
+        let re = regex::Regex::new(r"Release:(\s+)([\.\d]+)\n").unwrap();
+        let m = re.captures(self.f.as_str());
+        if let Some(m) = m {
+            self.f = re.replace(&self.f, format!("Release:{}1%{{?dist}}", &m[1])).to_string();
+            self.changed = true;
+            return Ok(());
+        }
+        Err("No preamble in spec".into())
+    }
     pub fn version(&mut self, ver: &str) -> Result<(), Box<EvalAltResult>> {
         let re = regex::Regex::new(r"Version:(\s+)([\.\d]+)\n").unwrap();
         let m = re.captures(self.f.as_str());
         if m.is_none() {
-            return Err("Can't find version preamble in spec".into());
+            return Err("No version preamble in spec".into());
         }
-        let m = m.unwrap();
+        let m = unsafe { m.unwrap_unchecked() };
         if ver != &m[2] {
             info!("{}: {} —→ {ver}", self.name, &m[2]);
             self.f = re.replace(&self.f, format!("Version:{}{ver}\n", &m[1])).to_string();
-            self.changed = true;
+            self.reset_release()?;
         }
         Ok(())
     }
@@ -50,7 +60,7 @@ impl RPMSpec {
             self.changed = true;
             return Ok(());
         }
-        Err(format!("Can't find `%define {name}` in spec").into())
+        Err(format!("No `%define {name}` in spec").into())
     }
     pub fn global(&mut self, name: &str, val: &str) -> Result<(), Box<EvalAltResult>> {
         let re = regex::Regex::new(r"(?m)%global(\s+)(\S+)(\s+)(\S+)$").unwrap();
@@ -59,7 +69,7 @@ impl RPMSpec {
             self.changed = true;
             return Ok(());
         }
-        Err(format!("Can't find `%global {name}` in spec").into())
+        Err(format!("No `%global {name}` in spec").into())
     }
     pub fn source(&mut self, i: i64, p: &str) -> Result<(), Box<EvalAltResult>> {
         let re = regex::Regex::new(r"Source(\d+):(\s+)([^\n]+)\n").unwrap();
@@ -70,7 +80,7 @@ impl RPMSpec {
             capw = Some(cap);
         }
         if capw.is_none() {
-            return Err("Can't find source preamble in spec".into());
+            return Err("No source preamble in spec".into());
         }
         let cap = capw.unwrap();
         self.f = self.f.replace(&cap[0], &format!("Source{i}:{}{p}\n", &cap[2]));
@@ -100,6 +110,7 @@ impl CustomType for RPMSpec {
             .with_fn("source", Self::source)
             .with_fn("define", Self::define)
             .with_fn("global", Self::global)
+            .with_fn("reset_release", Self::reset_release)
             .with_get_set("f", Self::get, Self::set);
     }
 }
