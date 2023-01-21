@@ -36,8 +36,12 @@ fn gen_en() -> (Engine, Scope<'static>) {
         .register_global_module(exported_module!(f::tsunagu::ar).into())
         .register_global_module(exported_module!(f::kokoro::ar).into())
         .register_static_module("rpmbuild", exported_module!(f::build::ar).into())
+        .register_static_module("andacfg", exported_module!(f::cfg::ar).into())
         .build_type::<f::tsunagu::Req>()
-        .build_type::<f::rpm::RPMSpec>();
+        .build_type::<f::rpm::RPMSpec>()
+        .register_type::<anda_config::Manifest>()
+        .register_fn("find_key_for_value", anda_config::Manifest::find_key_for_value)
+        .register_fn("get_project", anda_config::Manifest::get_project);
     (en, sc)
 }
 
