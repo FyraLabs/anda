@@ -36,7 +36,7 @@ pub fn fetch_build_entries(config: Manifest) -> Result<Vec<BuildEntry>> {
 
     let mut entries = Vec::new();
 
-    let regex = Regex::new("(BuildArch|ExclusiveArch):\\s+(.+)")?;
+    let regex = Regex::new("(Build|Exclusive)Arch:\\s*(.+)")?;
 
     for (name, project) in config.project {
         if !changed_files

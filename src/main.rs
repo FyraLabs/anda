@@ -18,6 +18,7 @@ use tracing::{debug, trace};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    color_eyre::install()?;
     let mut cli = Cli::parse();
     let mut app = Cli::command();
     app.build();
@@ -44,7 +45,7 @@ async fn main() -> Result<()> {
                 let mut app = Cli::command();
                 let a = app.find_subcommand_mut("build").unwrap();
                 let mut a = take(a).display_name("anda-build").name("anda-build");
-                a.print_help().unwrap();
+                a.print_help()?;
                 return Err(eyre!("No project specified, and --all not specified."));
             }
 
@@ -60,9 +61,9 @@ async fn main() -> Result<()> {
         Command::Clean => {
             println!("Cleaning up build directory");
             let clean = std::fs::remove_dir_all(&cli.target_dir);
-            if clean.is_err() {
+            if let Err(e) = clean {
                 // match the errors
-                match clean.err().unwrap().kind() {
+                match e.kind() {
                     std::io::ErrorKind::NotFound => {}
                     e => {
                         println!("Error cleaning up build directory: {:?}", e);
@@ -72,7 +73,7 @@ async fn main() -> Result<()> {
         }
 
         Command::List => {
-            let config = anda_config::load_from_file(&cli.config).unwrap();
+            let config = anda_config::load_from_file(&cli.config)?;
 
             for (project_name, project) in config.project.iter() {
                 let project_alias = if let Some(alias) = &project.alias {
@@ -84,7 +85,7 @@ async fn main() -> Result<()> {
                 println!("{project_name}{project_alias}");
             }
 
-            debug!("{config:#?}");
+            trace!("{config:#?}");
         }
         Command::Init { path, yes } => {
             // create a new project
@@ -95,7 +96,7 @@ async fn main() -> Result<()> {
             generate(shell, &mut cli::Cli::command(), "anda", &mut io::stdout());
         }
         Command::CI => {
-            let config = anda_config::load_from_file(&cli.config).unwrap();
+            let config = anda_config::load_from_file(&cli.config)?;
             let entries = util::fetch_build_entries(config)?;
 
             println!("build_matrix={}", serde_json::to_string(&entries)?);
@@ -104,7 +105,7 @@ async fn main() -> Result<()> {
             let labels = parse_map(&labels.unwrap_or_default());
             let filters = parse_map(&filters.unwrap_or_default());
             update::update(
-                anda_config::load_from_file(&cli.config).unwrap(),
+                anda_config::load_from_file(&cli.config)?,
                 labels.ok_or_else(|| eyre!("Cannot parse --labels"))?,
                 filters.ok_or_else(|| eyre!("Cannot parse --labels"))?,
             )?;

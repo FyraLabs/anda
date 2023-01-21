@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
-use tracing::{debug, trace};
+use tracing::{debug, instrument, trace};
 
 use crate::error::ProjectError;
 
@@ -117,14 +117,16 @@ pub fn to_string(config: Manifest) -> Result<String, hcl::Error> {
     Ok(config)
 }
 
+#[instrument]
 pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
+    debug!("Reading hcl file: {path:?}");
     let file = fs::read_to_string(path).map_err(|e| match e.kind() {
         ErrorKind::NotFound => ProjectError::NoManifest,
         _ => ProjectError::InvalidManifest(e.to_string()),
     })?;
 
+    debug!("Loading config from {path:?}");
     let mut config = load_from_string(&file)?;
-    debug!("Loading config from {}", path.display());
 
     // recursively merge configs
 
@@ -138,7 +140,7 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
     let walk = ignore::Walk::new(parent);
 
     for entry in walk {
-        // debug!("Loading config from {:?}", entry);
+        trace!("Found {entry:?}");
         let entry = entry.unwrap();
 
         // check if path is same path as config file
@@ -147,6 +149,7 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
         }
 
         if entry.file_type().unwrap().is_file() && entry.path().file_name().unwrap() == "anda.hcl" {
+            debug!("Loading: {entry:?}");
             let readfile = fs::read_to_string(entry.path())
                 .map_err(|e| ProjectError::InvalidManifest(e.to_string()))?;
 
@@ -160,7 +163,6 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
     }
 
     trace!("Loaded config: {config:#?}");
-    //let config = config.map_err(ProjectError::HclError);
     generate_alias(&mut config);
 
     check_config(config)
@@ -243,7 +245,9 @@ pub fn generate_alias(config: &mut Manifest) {
     }
 }
 
+#[instrument]
 pub fn load_from_string(config: &str) -> Result<Manifest, ProjectError> {
+    trace!(config, "Dump config");
     let mut config: Manifest = hcl::eval::from_str(config, &crate::context::hcl_context())?;
 
     generate_alias(&mut config);
