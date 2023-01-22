@@ -1,6 +1,4 @@
-
-
-![Andaman Project](assets/anda-medium.png)
+<img align="left" style="vertical-align: middle" width="120" height="120" src="assets/anda-medium.png" alt="Andaman Project">
 
 # Andaman
 
