@@ -11,4 +11,4 @@
 // rpm.version("0.3.63");
 // rpm.source(0, "https://github.com/Ultramarine-Linux/umpkg/archive/refs/tags/%{version}.tar.gz");
 
-print(labels.contains("a"));
+let manifest = anda::cfg::load_file("/stuff/chubby/terra/anda.hcl");

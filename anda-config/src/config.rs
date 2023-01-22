@@ -139,12 +139,14 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
 
     let walk = ignore::Walk::new(parent);
 
+    let path = path.canonicalize().expect("Invalid path");
+
     for entry in walk {
         trace!("Found {entry:?}");
         let entry = entry.unwrap();
 
-        // check if path is same path as config file
-        if entry.path().strip_prefix("./").expect("Fail to strip `./` (absolute paths?)") == path {
+        // assume entry.path() is canonicalised
+        if entry.path() == path {
             continue;
         }
 
@@ -153,9 +155,11 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
             let readfile = fs::read_to_string(entry.path())
                 .map_err(|e| ProjectError::InvalidManifest(e.to_string()))?;
 
+            let en = entry.path().parent().unwrap();
+
             let nested_config = prefix_config(
                 load_from_string(&readfile)?,
-                &entry.path().parent().unwrap().strip_prefix("./").unwrap().display().to_string(),
+                &en.strip_prefix("./").unwrap_or(en).display().to_string(),
             );
             // merge the btreemap
             config.project.extend(nested_config.project);
