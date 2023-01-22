@@ -17,3 +17,4 @@ color-eyre = "0.6.2"
 smartstring = "1.0.1"
 tempfile = "3.3.0"
 anda-config = { version = "0.1.3", path = "../anda-config" }
+rhai-fs = "0.1.2"

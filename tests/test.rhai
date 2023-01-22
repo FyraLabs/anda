@@ -12,3 +12,4 @@
 // rpm.source(0, "https://github.com/Ultramarine-Linux/umpkg/archive/refs/tags/%{version}.tar.gz");
 
 let manifest = anda::cfg::load_file("/stuff/chubby/terra/anda.hcl");
+print(manifest);
