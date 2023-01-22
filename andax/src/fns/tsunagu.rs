@@ -86,6 +86,11 @@ pub mod ar {
             "get(`https://crates.io/api/v1/crates/{name}`).json().crate.newest_version"
         ))
     }
+    #[rhai_fn(return_raw)]
+    pub(crate) fn npm(ctx: NativeCallContext, name: &str) -> Res<String> {
+        ctx.engine()
+            .eval(&format!("get(`https://registry.npmjs.org/{name}/latest`).json().version"))
+    }
 
     #[rhai_fn(return_raw)]
     pub(crate) fn env(key: &str) -> Res<String> {
