@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use cmd_lib::log;
 use color_eyre::{eyre::eyre, Result};
 use console::style;
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, info};
 use nix::{sys::signal, unistd::Pid};
@@ -15,7 +16,9 @@ use serde::{Deserialize, Serialize};
 use tokio::{io::AsyncBufReadExt, process::Command};
 
 lazy_static! {
-    static ref ARCH_REGEX: Regex = Regex::new("(BuildArch|ExclusiveArch):\\s(.+)").unwrap();
+    static ref BUILDARCH_REGEX: Regex = Regex::new("BuildArch:\\s*(.+)").unwrap();
+    static ref EXCLUSIVEARCH_REGEX: Regex = Regex::new("ExclusiveArch:\\s*(.+)").unwrap();
+    static ref DEFAULT_ARCHES: Vec<String> = vec!["x86_64".to_string(), "aarch64".to_string()];
 }
 
 enum ConsoleOut {
@@ -32,11 +35,7 @@ pub struct BuildEntry {
 pub fn fetch_build_entries(config: Manifest) -> Result<Vec<BuildEntry>> {
     let changed_files = get_changed_files(Path::new(".")).unwrap_or_default();
 
-    let default_arches = vec!["x86_64".to_string(), "aarch64".to_string()];
-
     let mut entries = Vec::new();
-
-    let regex = Regex::new("(Build|Exclusive)Arch:\\s*(.+)")?;
 
     for (name, project) in config.project {
         if !changed_files
@@ -49,18 +48,40 @@ pub fn fetch_build_entries(config: Manifest) -> Result<Vec<BuildEntry>> {
 
         if let Some(rpm) = project.rpm {
             let mut arches: Vec<String> = Vec::new();
+
+            let mut build_arches: Vec<String> = Vec::new();
             let spec = rpm.spec;
             let spec_contents = read_to_string(spec)?;
-            for cap in regex.captures_iter(spec_contents.as_str()) {
-                arches.append(
-                    &mut cap[2].split(' ').map(|arch| arch.to_string()).collect::<Vec<String>>(),
+            for cap in BUILDARCH_REGEX.captures_iter(spec_contents.as_str()) {
+                build_arches.append(
+                    &mut cap[1].split(' ').map(|arch| arch.to_string()).collect::<Vec<String>>(),
                 );
             }
 
-            if arches.is_empty()
-                || arches.iter().any(|arch| arch == "noarch" || arch.starts_with('%'))
+            let mut exclusive_arches: Vec<String> = Vec::new();
+            for cap in EXCLUSIVEARCH_REGEX.captures_iter(spec_contents.as_str()) {
+                exclusive_arches.append(
+                    &mut cap[1].split(' ').map(|arch| arch.to_string()).collect::<Vec<String>>(),
+                );
+            }
+
+            let combined_arches: Vec<String> =
+                build_arches.iter().chain(exclusive_arches.iter()).unique().cloned().collect();
+
+            if combined_arches.is_empty()
+                || combined_arches.iter().any(|arch| arch.starts_with('%'))
             {
-                arches = default_arches.clone();
+                arches = DEFAULT_ARCHES.clone();
+            } else if build_arches.len() == 1 && build_arches[0] == "noarch" {
+                // find a default arch that is in the exclusive arches
+                let arch = DEFAULT_ARCHES
+                    .iter()
+                    .find(|arch| exclusive_arches.len() == 0 || exclusive_arches.contains(arch))
+                    .unwrap();
+
+                arches.push(arch.to_string());
+            } else {
+                arches = combined_arches.iter().filter(|&arch| arch != "noarch").cloned().collect();
             }
 
             for arch in arches {
