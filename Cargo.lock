@@ -41,7 +41,7 @@ dependencies = [
 
 [[package]]
 name = "anda"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "anda-config",
  "andax",
@@ -96,7 +96,7 @@ dependencies = [
 
 [[package]]
 name = "andax"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anda-config",
  "color-eyre",
