@@ -12,16 +12,11 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.arch == 'aarch64' && 'ARM64' || 'ubuntu-latest' }}
     container:
-      image: registry.fedoraproject.org/fedora:37
+      image: ghcr.io/terrapkg/builder:main
       options: --cap-add=SYS_ADMIN --privileged
 
     steps:
-      - name: Install repositories
-        run: |
-          sudo dnf install -y dnf-plugins-core
-          sudo dnf config-manager --add-repo https://github.com/terrapkg/subatomic-repos/raw/main/terra.repo
-          sudo dnf install -y anda-mock-configs subatomic-cli anda mock rpm-build
-
+      - uses: actions/checkout@v2
       - uses: terrapkg/anda-build@main
         with:
           name: "anda-git"
