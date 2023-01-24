@@ -6,16 +6,10 @@ config {
 }
 
 project "test" {
+        pre_script = "tests/hello.sh"
     rpm {
         spec = "tests/umpkg.spec"
-        pre_script = {
-            commands = ["echo \"test\""]
-        }
-        post_script = {
-            commands = [
-                "ls",
-            ]
-        }
+        post_script = "tests/hello.sh"
 
         sources = "tests/"
     }

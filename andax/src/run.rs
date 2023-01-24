@@ -125,7 +125,7 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
             }
             return error!("Script Exception —— {proj}\n{code}");
         }
-        error!("{proj}: nonexistance Exception line {line} in file {scr}");
+        error!("{proj}: Non-existence exception at {scr}:{line}");
     }
     _tb_fb(proj, scr.display(), nanitozo)
 }

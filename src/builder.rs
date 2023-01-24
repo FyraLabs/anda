@@ -271,6 +271,13 @@ pub async fn build_project(
 
     let mut rpm_opts = RPMOptions::new(rpmb_opts.mock_config.clone(), cwd, cli.target_dir.clone());
 
+    if let Some(pre_script) = &project.pre_script {
+        script!(
+            "pre_script",
+            pre_script,
+        );
+    }
+
     if let Some(rpmbuild) = &project.rpm {
         if let Some(srcdir) = &rpmbuild.sources {
             rpm_opts.sources = srcdir.to_path_buf();
@@ -412,6 +419,13 @@ pub async fn build_project(
         };
 
         println!("Built {}: {}", type_string, path);
+    }
+
+    if let Some(post_script) = &project.post_script {
+        script!(
+            "post_script",
+            post_script,
+        );
     }
 
     Ok(())
