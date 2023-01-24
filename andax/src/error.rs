@@ -1,7 +1,7 @@
 use rhai::EvalAltResult;
 use smartstring::{LazyCompact, SmartString};
-use tracing::instrument;
 use std::rc::Rc;
+use tracing::instrument;
 use tracing::trace;
 
 type SStr = SmartString<LazyCompact>;

@@ -7,7 +7,9 @@ use crate::{
 };
 use lazy_static::lazy_static;
 use regex::Regex;
-use rhai::{plugin::*, Engine, EvalAltResult as RhaiE, NativeCallContext as Ctx, Scope, packages::Package};
+use rhai::{
+    packages::Package, plugin::*, Engine, EvalAltResult as RhaiE, NativeCallContext as Ctx, Scope,
+};
 use std::{borrow::BorrowMut, io::BufRead, path::Path};
 use tracing::{debug, error, instrument, trace, warn};
 

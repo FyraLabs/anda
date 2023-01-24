@@ -30,7 +30,10 @@ completion         builds shell completions
 
 /// WARN: Consumes subcommands
 fn gen_manpage(cmd: Rc<Command>, man_dir: &Path) {
-    let name = cmd.get_display_name().map(|s| s.to_string()).unwrap_or_else(|| cmd.clone().get_name().to_string());
+    let name = cmd
+        .get_display_name()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| cmd.clone().get_name().to_string());
     if name.starts_with("anda-help") {
         return;
     }

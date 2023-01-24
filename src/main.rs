@@ -55,8 +55,7 @@ async fn main() -> Result<()> {
             let oci_opts = take(oci_opts);
             let rpm_opts = take(rpm_opts);
             debug!("{all:?}");
-            builder::builder(&cli, rpm_opts, all, project, package, flatpak_opts, oci_opts)
-                .await?;
+            builder::builder(&cli, rpm_opts, all, project, package, flatpak_opts, oci_opts).await?;
         }
         Command::Clean => {
             println!("Cleaning up build directory");
