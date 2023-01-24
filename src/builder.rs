@@ -160,7 +160,7 @@ pub async fn build_rpm_call(
 ) -> Result<()> {
     // run pre-build script
     if let Some(pre_script) = &rpmbuild.pre_script {
-        if pre_script.extension().unwrap_or_default() == ".rhai" {
+        if pre_script.extension().unwrap_or_default() == "rhai" {
             script!(
                 rpmbuild.spec.as_os_str().to_str().unwrap_or(""),
                 pre_script,
@@ -179,7 +179,7 @@ pub async fn build_rpm_call(
 
     // `opts` is consumed in build_rpm()/build()
     if let Some(post_script) = &rpmbuild.post_script {
-        if post_script.extension().unwrap_or_default() == ".rhai" {
+        if post_script.extension().unwrap_or_default() == "rhai" {
             script!(
                 rpmbuild.spec.as_os_str().to_str().unwrap_or(""),
                 post_script,
@@ -272,10 +272,17 @@ pub async fn build_project(
     let mut rpm_opts = RPMOptions::new(rpmb_opts.mock_config.clone(), cwd, cli.target_dir.clone());
 
     if let Some(pre_script) = &project.pre_script {
-        script!(
-            "pre_script",
-            pre_script,
-        );
+        if pre_script.extension().unwrap_or_default() == "rhai" {
+            script!(
+                "pre_script",
+                pre_script,
+            );
+        } else {
+            let p = Command::new("sh").arg("-c").arg(pre_script).status()?;
+            if !p.success() {
+                return Err(eyre!(p));
+            }
+        }
     }
 
     if let Some(rpmbuild) = &project.rpm {
@@ -422,10 +429,17 @@ pub async fn build_project(
     }
 
     if let Some(post_script) = &project.post_script {
-        script!(
-            "post_script",
-            post_script,
-        );
+        if post_script.extension().unwrap_or_default() == "rhai" {
+            script!(
+                "post_script",
+                post_script,
+            );
+        } else {
+            let p = Command::new("sh").arg("-c").arg(post_script).status()?;
+            if !p.success() {
+                return Err(eyre!(p));
+            }
+        }
     }
 
     Ok(())
