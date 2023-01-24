@@ -10,7 +10,7 @@ use regex::Regex;
 use rhai::{
     packages::Package, plugin::*, Engine, EvalAltResult as RhaiE, NativeCallContext as Ctx, Scope,
 };
-use std::{borrow::BorrowMut, io::BufRead, path::Path};
+use std::{io::BufRead, path::Path};
 use tracing::{debug, error, instrument, trace, warn};
 
 pub(crate) fn rf<T>(ctx: Ctx, res: color_eyre::Result<T>) -> Result<T, Box<RhaiE>>
@@ -130,15 +130,15 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
     _tb_fb(proj, scr.display(), nanitozo)
 }
 
-pub fn errhdl(name: &str, scr: &Path, mut err: EvalAltResult) {
+pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
     trace!("{name}: Generating traceback");
-    if let EvalAltResult::ErrorRuntime(run_err, pos) = err.borrow_mut() {
-        match std::mem::take(run_err).try_cast::<AErr>() {
+    if let EvalAltResult::ErrorRuntime(ref run_err, pos) = err {
+        match run_err.clone().try_cast::<AErr>() {
             Some(AErr::RustReport(rhai_fn, fn_src, oerr)) => {
-                return _tb(name, scr, Report(oerr), *pos, rhai_fn.as_str(), fn_src.as_str());
+                return _tb(name, scr, Report(oerr), pos, rhai_fn.as_str(), fn_src.as_str());
             }
             Some(AErr::RustError(rhai_fn, fn_src, oerr)) => {
-                return _tb(name, scr, Arb(oerr), *pos, rhai_fn.as_str(), fn_src.as_str());
+                return _tb(name, scr, Arb(oerr), pos, rhai_fn.as_str(), fn_src.as_str());
             }
             Some(AErr::Exit(b)) => {
                 if b {
@@ -151,6 +151,7 @@ pub fn errhdl(name: &str, scr: &Path, mut err: EvalAltResult) {
             None => {}
         }
     }
+    trace!("Rhai moment: {err:#?}");
     let pos = err.position();
     _tb(name, scr, Rhai(err), pos, "", "");
 }

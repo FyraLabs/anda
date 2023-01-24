@@ -2,7 +2,7 @@ use crate::{error::AndaxRes, run::rf};
 use rhai::{plugin::*, CustomType};
 use serde_json::Value;
 use std::env::VarError;
-use tracing::{debug, instrument, trace};
+use tracing::{debug, trace};
 
 type Res<T> = Result<T, Box<EvalAltResult>>;
 
@@ -22,7 +22,6 @@ pub mod ar {
             .ehdl(&ctx)
     }
 
-    #[instrument(skip(ctx))]
     #[rhai_fn(return_raw)]
     pub(crate) fn gh(ctx: NativeCallContext, repo: &str) -> Res<String> {
         let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/releases/latest"))
@@ -41,7 +40,6 @@ pub mod ar {
         }
         Ok(ver.to_string())
     }
-    #[instrument(skip(ctx))]
     #[rhai_fn(return_raw)]
     pub(crate) fn gh_tag(ctx: NativeCallContext, repo: &str) -> Res<String> {
         let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/tags"))
@@ -94,6 +92,7 @@ pub mod ar {
 
     #[rhai_fn(return_raw)]
     pub(crate) fn env(key: &str) -> Res<String> {
+        trace!("env(`{key}`) = {:?}", std::env::var(key));
         match std::env::var(key) {
             Ok(s) => Ok(s),
             Err(VarError::NotPresent) => Err(format!("env(`{key}`) not present").into()),
