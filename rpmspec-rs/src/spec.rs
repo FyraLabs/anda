@@ -1,4 +1,4 @@
-use chrono::{DateTime, FixedOffset, NaiveDate};
+use chrono::{NaiveDate};
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 use std::{
@@ -6,7 +6,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use serde::{Deserializer, Serializer};
+
 
 // Special macros that need not be expanded
 const SPECIAL_MACROS: &[&str] = &[
@@ -214,7 +214,7 @@ fn test_sadas() {
     println!("{}", changelog);
 
     let specfile = include_str!("../../tests/umpkg.spec");
-    let spec = SpecParser::parse(Rule::file, specfile).unwrap();
+    let _spec = SpecParser::parse(Rule::file, specfile).unwrap();
     // println!("{:?}", spec);
     // let spec = Body::parse(specfile);
 }

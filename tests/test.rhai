@@ -5,13 +5,27 @@
 // rpm.version(obj.str());
 // rpm.f = sub("2.2.2", "3.3.3", rpm.f);
 
-print(gh("Bonandry/adwaita-plus"));
+// print(gh("Bonandry/adwaita-plus"));
 print(env("PATH"));
 
 // rpm.version("0.3.63");
 // rpm.source(0, "https://github.com/Ultramarine-Linux/umpkg/archive/refs/tags/%{version}.tar.gz");
 
-let manifest = anda::cfg::load_file("/stuff/chubby/terra/anda.hcl");
-print(manifest);
+// let manifest = anda::cfg::load_file("/stuff/chubby/terra/anda.hcl");
+// print(manifest);
 
-print(npm("discord.js"));
+// print(npm("discord.js"));
+
+let obj = #{
+    "a": 1,
+    "b": 2 ,
+    "c": #{
+        "d": "e",
+    },
+    "bar": npm("discord.js")
+};
+
+// print(obj);
+
+// funny template test
+template_file(obj,"test.txt").write("test.t.txt");

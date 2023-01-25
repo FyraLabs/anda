@@ -2,7 +2,7 @@ use crate::error::AndaxRes;
 use rhai::{plugin::*, EvalAltResult};
 use std::process::Command;
 use tracing::{debug, instrument};
-
+use std::io::Write;
 macro_rules! _sh_out {
     ($ctx:expr, $o:expr) => {
         Ok((
@@ -88,5 +88,22 @@ pub mod ar {
             res.push(dir.ehdl(&ctx)?.path().to_string_lossy().to_string());
         }
         Ok(res)
+    }
+    /// write data to file
+    /// 
+    /// ## Example
+    /// ```rhai
+    /// let foo = "bar";
+    /// foo.write("bar.txt")
+    /// ```
+    #[rhai_fn(name = "write", return_raw)]
+    pub(crate) fn write(
+        ctx: NativeCallContext,
+        data: &str,
+        file: &str,
+    ) -> Result<(), Box<EvalAltResult>> {
+        let mut f = std::fs::File::create(file).ehdl(&ctx)?;
+        f.write_all(data.as_bytes()).ehdl(&ctx)?;
+        Ok(())
     }
 }

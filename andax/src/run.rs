@@ -37,6 +37,7 @@ fn gen_en() -> (Engine, Scope<'static>) {
     en.register_global_module(exported_module!(f::io::ar).into())
         .register_global_module(exported_module!(f::tsunagu::ar).into())
         .register_global_module(exported_module!(f::kokoro::ar).into())
+        .register_global_module(exported_module!(f::tenshi::ar).into())
         .register_static_module("anda::rpmbuild", exported_module!(f::build::ar).into())
         .register_static_module("anda::cfg", exported_module!(f::cfg::ar).into())
         .build_type::<f::tsunagu::Req>()
@@ -45,6 +46,8 @@ fn gen_en() -> (Engine, Scope<'static>) {
         .register_fn("find_key_for_value", anda_config::Manifest::find_key_for_value)
         .register_fn("get_project", anda_config::Manifest::get_project);
     rhai_fs::FilesystemPackage::new().register_into_engine(&mut en);
+    rhai_url::UrlPackage::new().register_into_engine(&mut en);
+    trace!(en = ?en, "Engine created");
     (en, sc)
 }
 
@@ -236,8 +239,8 @@ fn hint(sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> 
         Rhai(err) => hint_ear(sl, lns, err, rhai_fn),
     }
 }
-fn hint_ear(sl: &str, lns: &str, ear: &EvalAltResult, _rhai_fn: &str) -> Option<String> {
-    trace!("Hinting for EvalAltResult");
+fn hint_ear(sl: &str, lns: &str, ear: &EvalAltResult, rhai_fn: &str) -> Option<String> {
+    trace!(?rhai_fn,"Hinting for EvalAltResult");
     gen_h!(lns);
     use EvalAltResult::*;
     match ear {
