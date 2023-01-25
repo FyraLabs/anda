@@ -112,7 +112,7 @@ pub struct RpmOpts {
     pub no_mirrors: bool,
 
     /// RPM: Builder backend
-    #[clap(long,short, value_enum, default_value = "mock")]
+    #[clap(long, short, value_enum, default_value = "mock")]
     pub rpm_builder: RPMBuilder,
 
     /// RPM: Define a custom macro

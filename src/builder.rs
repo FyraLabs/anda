@@ -273,10 +273,7 @@ pub async fn build_project(
 
     if let Some(pre_script) = &project.pre_script {
         if pre_script.extension().unwrap_or_default() == "rhai" {
-            script!(
-                "pre_script",
-                pre_script,
-            );
+            script!("pre_script", pre_script,);
         } else {
             let p = Command::new("sh").arg("-c").arg(pre_script).status()?;
             if !p.success() {
@@ -430,10 +427,7 @@ pub async fn build_project(
 
     if let Some(post_script) = &project.post_script {
         if post_script.extension().unwrap_or_default() == "rhai" {
-            script!(
-                "post_script",
-                post_script,
-            );
+            script!("post_script", post_script,);
         } else {
             let p = Command::new("sh").arg("-c").arg(post_script).status()?;
             if !p.success() {
