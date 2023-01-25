@@ -66,7 +66,6 @@ pub struct Cli {
 }
 
 #[derive(Args, Debug, Clone, Default)]
-#[clap(help_template = "Flatpak Builder Options")]
 pub struct FlatpakOpts {
     /// Flatpak: Extra source directory
     /// can be defined multiple times
@@ -84,7 +83,6 @@ pub struct FlatpakOpts {
 }
 
 #[derive(Args, Debug, Clone, Default)]
-#[clap(help_template = "OCI Builder Options")]
 pub struct OciOpts {
     /// OCI: Labels to add to the image
     #[clap(long)]
@@ -100,7 +98,6 @@ pub struct OciOpts {
 }
 
 #[derive(Args, Debug, Clone, Default)]
-#[clap(help_template = "RPM Options")]
 pub struct RpmOpts {
     /// RPM: Do not mirror repositories.
     ///
