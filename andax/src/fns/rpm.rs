@@ -36,7 +36,7 @@ impl RPMSpec {
         let re = regex::Regex::new(r"Release:(\s+)(.+?)\n").unwrap();
         let m = re.captures(self.f.as_str());
         if let Some(m) = m {
-            self.f = re.replace(&self.f, format!("Release:{}{rel}%{{?dist}}", &m[1])).to_string();
+            self.f = re.replace(&self.f, format!("Release:{}{rel}%{{?dist}}\n", &m[1])).to_string();
             self.changed = true;
             return Ok(());
         }
