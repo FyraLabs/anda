@@ -90,6 +90,9 @@ pub struct Docker {
 pub fn parse_map(input: &str) -> Option<BTreeMap<String, String>> {
     let mut map = BTreeMap::new();
     for item in input.split(',') {
+        if item.trim().is_empty() {
+            continue;
+        }
         let (k, v) = item.split_once('=')?;
         map.insert(k.to_string(), v.to_string());
     }
