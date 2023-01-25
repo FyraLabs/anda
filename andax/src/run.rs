@@ -32,18 +32,17 @@ where
 }
 
 fn module_resolver() -> ModuleResolversCollection {
-    let mut resolv = rhai::module_resolvers::ModuleResolversCollection::default();
+    let mut resolv = ModuleResolversCollection::default();
 
     let mut base_modules = rhai::module_resolvers::StaticModuleResolver::new();
 
     // todo: rewrite all these stuff to make use of the new resolver
 
-
     base_modules.insert("io", exported_module!(f::io::ar));
     base_modules.insert("tsunagu", exported_module!(f::tsunagu::ar));
     base_modules.insert("kokoro", exported_module!(f::kokoro::ar));
     base_modules.insert("tenshi", exported_module!(f::tenshi::ar));
-    base_modules.insert("anda::rpmbuild",exported_module!(f::build::ar));
+    base_modules.insert("anda::rpmbuild", exported_module!(f::build::ar));
     base_modules.insert("anda::cfg", exported_module!(f::cfg::ar));
 
     resolv.push(base_modules);
@@ -94,34 +93,17 @@ fn gen_en() -> (Engine, Scope<'static>) {
         .register_static_module("anda::rpmbuild", exported_module!(f::build::ar).into())
         .register_static_module("anda::cfg", exported_module!(f::cfg::ar).into())
         .build_type::<f::tsunagu::Req>()
-        .build_type::<f::rpm::RPMSpec>()
-        .register_type::<anda_config::Manifest>()
-        .register_fn("find_key_for_value", anda_config::Manifest::find_key_for_value)
-        .register_fn("get_project", anda_config::Manifest::get_project);
+        .build_type::<f::rpm::RPMSpec>();
     rhai_fs::FilesystemPackage::new().register_into_engine(&mut en);
     rhai_url::UrlPackage::new().register_into_engine(&mut en);
-    trace!(en = ?en, "Engine created");
+    trace!(?en, "Engine created");
     (en, sc)
 }
 
-/// Generates Error description from nanitozo \
-/// used in `_tb()`
-fn _gemsg(nanitozo: &TbErr) -> String {
-    match nanitozo {
-        Report(o) => format!("From: {o:#}"),
-        Arb(o) => format!("Caused by: {o}"),
-        Rhai(o) => format!("Rhai: {o}"),
-    }
-}
-
+#[inline]
 fn _gpos(p: Position) -> Option<(usize, usize)> {
     p.line().map(|l| (l, p.position().unwrap_or(0)))
 }
-
-pub fn _tb_fb(p: &str, s: std::path::Display, nntz: TbErr) {
-    error!("{p}: {s} (no position data)\n{}", _gemsg(&nntz));
-}
-
 lazy_static! {
     static ref WORD_REGEX: Regex = Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").unwrap();
 }
@@ -136,7 +118,7 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
             ($var:expr, $msg:expr) => {{
                 if let Err(e) = $var {
                     error!($msg, e);
-                    return _tb_fb(proj, scr, nanitozo);
+                    return error!("{proj}: {scr} (no position data)\n{nanitozo}");
                 }
                 $var.unwrap()
             }};
@@ -173,7 +155,7 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
             if !fn_src.is_empty() {
                 code += &format!("\n {lns} └─═ Function source: {fn_src}");
             }
-            code += &format!("\n {lns} └─═ {}", _gemsg(&nanitozo));
+            code += &format!("\n {lns} └─═ {nanitozo}");
             code += &hint(&sl, &lns, &nanitozo, rhai_fn).unwrap_or_default();
             let c = code.matches('└').count();
             if c > 0 {
@@ -183,7 +165,7 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
         }
         error!("{proj}: Non-existence exception at {scr}:{line}");
     }
-    _tb_fb(proj, scr.display(), nanitozo)
+    error!("{proj}: {scr:?} (no position data)\n{nanitozo}");
 }
 
 pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {

@@ -1,5 +1,6 @@
 use rhai::EvalAltResult;
 use smartstring::{LazyCompact, SmartString};
+use std::fmt::Display;
 use std::rc::Rc;
 use tracing::instrument;
 use tracing::trace;
@@ -19,6 +20,16 @@ pub enum TbErr {
     Report(Rc<color_eyre::Report>),
     Arb(Rc<dyn std::error::Error + 'static>),
     Rhai(EvalAltResult),
+}
+
+impl Display for TbErr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Report(o) => f.write_fmt(format_args!("From: {o:#}")),
+            Self::Arb(o) => f.write_fmt(format_args!("Caused by: {o}")),
+            Self::Rhai(o) => f.write_fmt(format_args!("Rhai: {o}")),
+        }
+    }
 }
 
 pub(crate) trait AndaxRes<T> {

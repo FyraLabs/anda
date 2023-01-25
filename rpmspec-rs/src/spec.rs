@@ -1,12 +1,10 @@
-use chrono::{NaiveDate};
+use chrono::NaiveDate;
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 use std::{
     collections::BTreeMap,
     fmt::{Display, Formatter},
 };
-
-
 
 // Special macros that need not be expanded
 const SPECIAL_MACROS: &[&str] = &[

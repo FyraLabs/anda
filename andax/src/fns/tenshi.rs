@@ -32,7 +32,7 @@ pub mod ar {
             // turn value into a hcl::Value::Object
             let value = hcl::value::to_value(v).ehdl(&ctx)?;
 
-            let span = tracing::debug_span!("hcl.declare_var", key = ?key, value = ?value);
+            let span = tracing::debug_span!("hcl.declare_var", ?key, ?value);
             span.in_scope(|| {
                 hcl.declare_var(key, value);
             });

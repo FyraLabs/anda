@@ -1,8 +1,8 @@
 use crate::error::AndaxRes;
 use rhai::{plugin::*, EvalAltResult};
+use std::io::Write;
 use std::process::Command;
 use tracing::{debug, instrument};
-use std::io::Write;
 macro_rules! _sh_out {
     ($ctx:expr, $o:expr) => {
         Ok((
@@ -90,7 +90,7 @@ pub mod ar {
         Ok(res)
     }
     /// write data to file
-    /// 
+    ///
     /// ## Example
     /// ```rhai
     /// let foo = "bar";
