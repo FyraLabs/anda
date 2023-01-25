@@ -47,6 +47,13 @@ pub fn fetch_build_entries(config: Manifest) -> Result<Vec<BuildEntry>> {
         }
 
         if let Some(rpm) = project.rpm {
+            if rpm.enable_scm.unwrap_or(false) {
+                for arch in DEFAULT_ARCHES.iter() {
+                    entries.push(BuildEntry { pkg: name.clone(), arch: arch.clone() });
+                }
+                continue;
+            }
+
             let mut arches: Vec<String> = Vec::new();
 
             let mut build_arches: Vec<String> = Vec::new();
@@ -76,7 +83,7 @@ pub fn fetch_build_entries(config: Manifest) -> Result<Vec<BuildEntry>> {
                 // find a default arch that is in the exclusive arches
                 let arch = DEFAULT_ARCHES
                     .iter()
-                    .find(|arch| exclusive_arches.len() == 0 || exclusive_arches.contains(arch))
+                    .find(|arch| exclusive_arches.is_empty() || exclusive_arches.contains(arch))
                     .unwrap();
 
                 arches.push(arch.to_string());
