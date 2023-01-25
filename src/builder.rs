@@ -83,11 +83,11 @@ pub async fn build_rpm(
 
     trace!("Building RPMs with {opts:?}");
 
-    let builder = builder.build(spec, opts).await;
+    let builder = builder.build(spec, opts).await?;
 
     run_cmd!(createrepo_c --quiet --update ${repo_path})?;
 
-    builder
+    Ok(builder)
 }
 
 pub async fn build_flatpak(
