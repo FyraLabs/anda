@@ -41,7 +41,7 @@ dependencies = [
 
 [[package]]
 name = "anda"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "anda-config",
  "andax",
