@@ -1,7 +1,7 @@
 # Cargo workspace
 [package]
 name = "anda"
-version = "0.1.13"
+version = "0.1.14"
 edition = "2021"
 description = "Andaman Build toolchain"
 license = "MIT"
