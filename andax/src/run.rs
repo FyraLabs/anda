@@ -10,7 +10,7 @@ use regex::Regex;
 use rhai::{
     packages::Package, plugin::*, Engine, EvalAltResult as RhaiE, NativeCallContext as Ctx, Scope,
 };
-use std::{io::BufRead, path::Path};
+use std::{collections::BTreeMap, io::BufRead, path::Path};
 use tracing::{debug, error, instrument, trace, warn};
 
 pub(crate) fn rf<T>(ctx: Ctx, res: color_eyre::Result<T>) -> Result<T, Box<RhaiE>>
@@ -159,7 +159,7 @@ pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
 pub fn run<'a>(
     name: &'a str,
     scr: &'a Path,
-    labels: std::collections::BTreeMap<String, String>,
+    labels: BTreeMap<String, String>,
     f: impl FnOnce(&mut Scope<'a>),
 ) -> Option<Scope<'a>> {
     let (en, mut sc) = gen_en();
@@ -184,26 +184,33 @@ fn exec<'a>(name: &'a str, scr: &'a Path, mut sc: Scope<'a>, en: Engine) -> Opti
     }
 }
 
+macro_rules! gen_h {
+    // nyeshu
+    ($lns:ident) => {
+        macro_rules! h {
+            ($s:expr) => {
+                let left = " ".repeat(7 + $lns.len());
+                let mut s = String::new();
+                let mut first = true;
+                for l in $s.lines() {
+                    let l = l.trim();
+                    if first {
+                        s = format!("\n {} └─═ Hint: {l}", $lns);
+                        first = false;
+                        continue;
+                    }
+                    s += &format!("\n{left}...: {l}");
+                }
+                return Some(s);
+            };
+        }
+    };
+}
+
 #[instrument(skip(sl, lns, nanitozo, rhai_fn))]
 fn hint(sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> {
     trace!("Matching hints");
-    macro_rules! h {
-        ($s:expr) => {
-            let left = " ".repeat(7 + lns.len());
-            let mut s = String::new();
-            let mut first = true;
-            for l in $s.lines() {
-                let l = l.trim();
-                if first {
-                    s = format!("\n {lns} └─═ Hint: {l}");
-                    first = false;
-                    continue;
-                }
-                s += &format!("\n{left}...: {l}");
-            }
-            return Some(s);
-        };
-    }
+    gen_h!(lns);
     match nanitozo {
         Arb(err) => {
             if let Some(err) = (**err).downcast_ref::<EvalAltResult>() {
@@ -229,26 +236,9 @@ fn hint(sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> 
         Rhai(err) => hint_ear(sl, lns, err, rhai_fn),
     }
 }
-
 fn hint_ear(sl: &str, lns: &str, ear: &EvalAltResult, _rhai_fn: &str) -> Option<String> {
     trace!("Hinting for EvalAltResult");
-    macro_rules! h {
-        ($s:expr) => {
-            let left = " ".repeat(7 + lns.len());
-            let mut s = String::new();
-            let mut first = true;
-            for l in $s.lines() {
-                let l = l.trim();
-                if first {
-                    s = format!("\n {lns} └─═ Hint: {l}");
-                    first = false;
-                    continue;
-                }
-                s += &format!("\n{left}...: {l}");
-            }
-            return Some(s);
-        };
-    }
+    gen_h!(lns);
     use EvalAltResult::*;
     match ear {
         ErrorRuntime(d, _) => {
