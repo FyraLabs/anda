@@ -60,7 +60,7 @@ fn _rpm(o: Option<anda_config::RpmBuild>) -> Dynamic {
         m.insert("opts".into(), r.opts.unwrap_or_default().into());
         m.into()
     })
-    .unwrap_or(().into())
+    .unwrap_or_else(|| ().into())
 }
 fn _docker(o: Option<anda_config::Docker>) -> Dynamic {
     o.map(|d| {
@@ -82,7 +82,7 @@ fn _docker(o: Option<anda_config::Docker>) -> Dynamic {
         );
         m.into()
     })
-    .unwrap_or(().into())
+    .unwrap_or_else(|| ().into())
 }
 fn _flatpak(o: Option<anda_config::Flatpak>) -> Dynamic {
     o.map(|f| {
@@ -92,5 +92,5 @@ fn _flatpak(o: Option<anda_config::Flatpak>) -> Dynamic {
         m.insert("post_script".into(), _pb(f.post_script));
         m.into()
     })
-    .unwrap_or(().into())
+    .unwrap_or_else(|| ().into())
 }
