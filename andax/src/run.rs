@@ -5,10 +5,12 @@ use crate::{
     },
     fns as f,
 };
+use directories::BaseDirs;
 use lazy_static::lazy_static;
 use regex::Regex;
 use rhai::{
-    packages::Package, plugin::*, Engine, EvalAltResult as RhaiE, NativeCallContext as Ctx, Scope,
+    module_resolvers::ModuleResolversCollection, packages::Package, plugin::*, Engine,
+    EvalAltResult as RhaiE, NativeCallContext as Ctx, Scope,
 };
 use std::{collections::BTreeMap, io::BufRead, path::Path};
 use tracing::{debug, error, instrument, trace, warn};
@@ -29,12 +31,63 @@ where
     })
 }
 
+fn module_resolver() -> ModuleResolversCollection {
+    let mut resolv = rhai::module_resolvers::ModuleResolversCollection::default();
+
+    let mut base_modules = rhai::module_resolvers::StaticModuleResolver::new();
+
+    // todo: rewrite all these stuff to make use of the new resolver
+
+
+    base_modules.insert("io", exported_module!(f::io::ar));
+    base_modules.insert("tsunagu", exported_module!(f::tsunagu::ar));
+    base_modules.insert("kokoro", exported_module!(f::kokoro::ar));
+    base_modules.insert("tenshi", exported_module!(f::tenshi::ar));
+    base_modules.insert("anda::rpmbuild",exported_module!(f::build::ar));
+    base_modules.insert("anda::cfg", exported_module!(f::cfg::ar));
+
+    resolv.push(base_modules);
+
+    let sys_modules = vec![
+        "/usr/lib/anda",
+        "/usr/local/lib/anda",
+        // "/lib/anda",
+        "/usr/lib64/anda",
+        "/usr/local/lib64/anda",
+        // "/lib64/anda",
+    ];
+
+    for path in sys_modules {
+        let mut sys_resolv = rhai::module_resolvers::FileModuleResolver::new_with_path(path);
+        sys_resolv.enable_cache(true);
+        resolv.push(sys_resolv);
+    }
+
+    if let Some(base_dirs) = BaseDirs::new() {
+        let user_libs = base_dirs.home_dir().join(".local/lib/anda");
+        if user_libs.is_dir() {
+            let mut local_resolv = rhai::module_resolvers::FileModuleResolver::new_with_path(
+                user_libs.to_str().unwrap(),
+            );
+            local_resolv.enable_cache(true);
+            resolv.push(local_resolv);
+        }
+    }
+
+    let std_resolv = rhai::module_resolvers::FileModuleResolver::new();
+    resolv.push(std_resolv);
+
+    resolv
+}
 fn gen_en() -> (Engine, Scope<'static>) {
     let mut sc = Scope::new();
     sc.push("USER_AGENT", f::tsunagu::USER_AGENT);
     sc.push("IS_WIN32", cfg!(windows));
     let mut en = Engine::new();
-    en.register_global_module(exported_module!(f::io::ar).into())
+
+    let resolv = module_resolver();
+    en.set_module_resolver(resolv)
+        .register_global_module(exported_module!(f::io::ar).into())
         .register_global_module(exported_module!(f::tsunagu::ar).into())
         .register_global_module(exported_module!(f::kokoro::ar).into())
         .register_global_module(exported_module!(f::tenshi::ar).into())
@@ -240,7 +293,7 @@ fn hint(sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> 
     }
 }
 fn hint_ear(sl: &str, lns: &str, ear: &EvalAltResult, rhai_fn: &str) -> Option<String> {
-    trace!(?rhai_fn,"Hinting for EvalAltResult");
+    trace!(?rhai_fn, "Hinting for EvalAltResult");
     gen_h!(lns);
     use EvalAltResult::*;
     match ear {

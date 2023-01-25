@@ -9,7 +9,7 @@ type Res<T> = Result<T, Box<EvalAltResult>>;
 pub(crate) const USER_AGENT: &str = "andax";
 #[export_module]
 pub mod ar {
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, global)]
     pub(crate) fn get(ctx: NativeCallContext, url: &str) -> Res<String> {
         ureq::AgentBuilder::new()
             .redirects(0)
@@ -22,7 +22,7 @@ pub mod ar {
             .ehdl(&ctx)
     }
 
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, global)]
     pub(crate) fn gh(ctx: NativeCallContext, repo: &str) -> Res<String> {
         let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/releases/latest"))
             .set("Authorization", &format!("Bearer {}", env("GITHUB_TOKEN")?))
@@ -40,7 +40,7 @@ pub mod ar {
         }
         Ok(ver.to_string())
     }
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, global)]
     pub(crate) fn gh_tag(ctx: NativeCallContext, repo: &str) -> Res<String> {
         let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/tags"))
             .set("Authorization", &format!("Bearer {}", env("GITHUB_TOKEN")?))
@@ -59,38 +59,38 @@ pub mod ar {
         Ok(ver.to_string())
     }
 
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, global)]
     pub(crate) fn pypi(ctx: NativeCallContext, name: &str) -> Res<String> {
         ctx.engine().eval(&format!("get(`https://pypi.org/pypi/{name}/json`).json().info.version"))
     }
 
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, global)]
     pub(crate) fn crates(ctx: NativeCallContext, name: &str) -> Res<String> {
         ctx.engine().eval(&format!(
             "get(`https://crates.io/api/v1/crates/{name}`).json().crate.max_stable_version"
         ))
     }
 
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, global)]
     pub(crate) fn crates_max(ctx: NativeCallContext, name: &str) -> Res<String> {
         ctx.engine().eval(&format!(
             "get(`https://crates.io/api/v1/crates/{name}`).json().crate.max_version"
         ))
     }
 
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, global)]
     pub(crate) fn crates_newest(ctx: NativeCallContext, name: &str) -> Res<String> {
         ctx.engine().eval(&format!(
             "get(`https://crates.io/api/v1/crates/{name}`).json().crate.newest_version"
         ))
     }
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, global)]
     pub(crate) fn npm(ctx: NativeCallContext, name: &str) -> Res<String> {
         ctx.engine()
             .eval(&format!("get(`https://registry.npmjs.org/{name}/latest`).json().version"))
     }
 
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, global)]
     pub(crate) fn env(key: &str) -> Res<String> {
         trace!("env(`{key}`) = {:?}", std::env::var(key));
         match std::env::var(key) {

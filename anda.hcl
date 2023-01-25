@@ -1,5 +1,5 @@
 
-// TODO: When hcl-rs finally finishes expression parsing, we can implement build script macros
+// Build macros are built using AndaX, a Rhai runtime for Andaman.
 
 config {
     strip_prefix = "tests/"

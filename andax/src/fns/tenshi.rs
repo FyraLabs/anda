@@ -13,7 +13,7 @@ pub mod ar {
     use tracing::{debug, trace};
 
     /// Function that takes in an object map and a file path
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, global)]
     pub(crate) fn template_file(
         ctx: NativeCallContext,
         map: rhai::Map,
