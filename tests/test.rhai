@@ -26,6 +26,8 @@ let obj = #{
 };
 
 // print(obj);
-
+print(obj);
 // funny template test
-template_file(obj,"test.txt").write("test.t.txt");
+let t = template_file(obj,"tests/umpkg.spec.in");
+
+print(t);

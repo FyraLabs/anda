@@ -271,6 +271,14 @@ pub async fn build_project(
 
     let mut rpm_opts = RPMOptions::new(rpmb_opts.mock_config.clone(), cwd, cli.target_dir.clone());
 
+
+    // export environment variables
+    if let Some(env) = &project.env {
+        for (key, value) in env {
+            std::env::set_var(key, value);
+        }
+    }
+
     if let Some(pre_script) = &project.pre_script {
         if pre_script.extension().unwrap_or_default() == "rhai" {
             script!("pre_script", pre_script,);
@@ -455,6 +463,10 @@ pub async fn builder(
     trace!("all: {all}");
     trace!("project: {project:?}");
     trace!("package: {package:?}");
+    // export envars for CLI environment
+    std::env::set_var("ANDA_TARGET_DIR", &cli.target_dir);
+    std::env::set_var("ANDA_CONFIG_PATH", &cli.config);
+
     if all {
         for (name, project) in config.project {
             println!("Building project: {}", name);

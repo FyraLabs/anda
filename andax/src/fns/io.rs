@@ -99,10 +99,18 @@ pub mod ar {
     #[rhai_fn(name = "write", return_raw, global)]
     pub(crate) fn write(
         ctx: NativeCallContext,
-        data: &str,
+        data: Dynamic,
         file: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let mut f = std::fs::File::create(file).ehdl(&ctx)?;
+        let data = {
+            if data.is_map() {
+                // turn into JSON
+                serde_json::to_string(&data).ehdl(&ctx)?
+            } else {
+                data.to_string()
+            }
+        };
         f.write_all(data.as_bytes()).ehdl(&ctx)?;
         Ok(())
     }
