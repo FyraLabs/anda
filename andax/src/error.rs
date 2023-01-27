@@ -92,15 +92,14 @@ ____   *   .    .      .   .           .  .   .      .    : O. Oo;    .   .
     |                                                      \ \.    .         .
     |                                                       \ \ .     * jrei  *"#;
 
-
 #[derive(Default)]
 pub(crate) struct ErrHdlr {
-    name: Box<SStr>,
+    name: SStr,
     scr: Option<Box<Path>>,
     tbe: TbErr,
     pos: Position,
-    rfn: Box<SStr>,
-    fsrc: Box<SStr>,
+    rfn: SStr,
+    fsrc: SStr,
     colors: ColorGenerator,
 }
 
@@ -112,7 +111,7 @@ impl ErrHdlr {
             match run_err.clone().try_cast::<AndaxError>() {
                 Some(AndaxError::RustReport(rhai_fn, fn_src, oerr)) => {
                     return Some(Self {
-                        name: Box::new(name.into()),
+                        name: name.into(),
                         scr: Some(scr.into()),
                         tbe: TbErr::Report(oerr),
                         pos,
@@ -123,7 +122,7 @@ impl ErrHdlr {
                 }
                 Some(AndaxError::RustError(rhai_fn, fn_src, oerr)) => {
                     return Some(Self {
-                        name: Box::new(name.into()),
+                        name: name.into(),
                         scr: Some(scr.into()),
                         tbe: TbErr::Arb(oerr),
                         pos,
@@ -147,12 +146,12 @@ impl ErrHdlr {
         trace!("Rhai moment: {err:#?}");
         let pos = err.position();
         Some(Self {
-            name: Box::new(name.into()),
+            name: name.into(),
             scr: Some(scr.into()),
             tbe: TbErr::Rhai(err),
             pos,
-            rfn: Box::new("".into()),
-            fsrc: Box::new("".into()),
+            rfn: "".into(),
+            fsrc: "".into(),
             ..Self::default()
         })
     }
