@@ -1,9 +1,9 @@
-use rhai::EvalAltResult;
+use ariadne::ColorGenerator;
+use rhai::{EvalAltResult, Position};
 use smartstring::{LazyCompact, SmartString};
-use std::fmt::Display;
 use std::rc::Rc;
-use tracing::instrument;
-use tracing::trace;
+use std::{fmt::Display, path::Path};
+use tracing::{debug, error, instrument, trace, warn};
 
 type SStr = SmartString<LazyCompact>;
 
@@ -20,6 +20,12 @@ pub enum TbErr {
     Report(Rc<color_eyre::Report>),
     Arb(Rc<dyn std::error::Error + 'static>),
     Rhai(EvalAltResult),
+}
+
+impl Default for TbErr {
+    fn default() -> Self {
+        Self::Report(Rc::new(color_eyre::Report::msg("Default val leak (bug!)")))
+    }
 }
 
 impl Display for TbErr {
@@ -85,3 +91,69 @@ ____   *   .    .      .   .           .  .   .      .    : O. Oo;    .   .
     |                                                 `.__, \  *     .   . *. .
     |                                                      \ \.    .         .
     |                                                       \ \ .     * jrei  *"#;
+
+
+#[derive(Default)]
+pub(crate) struct ErrHdlr {
+    name: Box<SStr>,
+    scr: Option<Box<Path>>,
+    tbe: TbErr,
+    pos: Position,
+    rfn: Box<SStr>,
+    fsrc: Box<SStr>,
+    colors: ColorGenerator,
+}
+
+impl ErrHdlr {
+    #[instrument]
+    fn new(name: &str, scr: &Path, err: EvalAltResult) -> Option<Self> {
+        trace!("{name}: Generating traceback");
+        if let EvalAltResult::ErrorRuntime(ref run_err, pos) = err {
+            match run_err.clone().try_cast::<AndaxError>() {
+                Some(AndaxError::RustReport(rhai_fn, fn_src, oerr)) => {
+                    return Some(Self {
+                        name: Box::new(name.into()),
+                        scr: Some(scr.into()),
+                        tbe: TbErr::Report(oerr),
+                        pos,
+                        rfn: rhai_fn.into(),
+                        fsrc: fn_src.into(),
+                        ..Self::default()
+                    })
+                }
+                Some(AndaxError::RustError(rhai_fn, fn_src, oerr)) => {
+                    return Some(Self {
+                        name: Box::new(name.into()),
+                        scr: Some(scr.into()),
+                        tbe: TbErr::Arb(oerr),
+                        pos,
+                        rfn: rhai_fn.into(),
+                        fsrc: fn_src.into(),
+                        ..Self::default()
+                    })
+                }
+                Some(AndaxError::Exit(b)) => {
+                    if b {
+                        warn!("世界を壊している。\n{}", crate::error::EARTH);
+                        error!("生存係為咗喵？打程式幾好呀。仲喵要咁憤世嫉俗喎。還掂おこちゃま戦争係政治家嘅事……");
+                        trace!("あなたは世界の終わりにずんだを食べるのだ");
+                    }
+                    debug!("Exit from rhai at: {pos}");
+                    return None;
+                }
+                None => return None,
+            }
+        }
+        trace!("Rhai moment: {err:#?}");
+        let pos = err.position();
+        Some(Self {
+            name: Box::new(name.into()),
+            scr: Some(scr.into()),
+            tbe: TbErr::Rhai(err),
+            pos,
+            rfn: Box::new("".into()),
+            fsrc: Box::new("".into()),
+            ..Self::default()
+        })
+    }
+}

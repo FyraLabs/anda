@@ -99,6 +99,7 @@ name = "andax"
 version = "0.1.2"
 dependencies = [
  "anda-config",
+ "ariadne",
  "color-eyre",
  "directories",
  "hcl-rs",
@@ -129,6 +130,15 @@ name = "anyhow"
 version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2cb2f989d18dd141ab8ae82f64d1a8cdd37e0840f73a406896cf5e99502fab61"
+
+[[package]]
+name = "ariadne"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1cb2a2046bea8ce5e875551f5772024882de0b540c7f93dfc5d6cf1ca8b030c"
+dependencies = [
+ "yansi",
+]
 
 [[package]]
 name = "async-trait"
@@ -2323,3 +2333,9 @@ dependencies = [
  "clap_complete",
  "clap_mangen",
 ]
+
+[[package]]
+name = "yansi"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
