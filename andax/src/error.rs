@@ -1,6 +1,7 @@
-use ariadne::ColorGenerator;
+use ariadne::{ColorGenerator, Report, ReportBuilder, ReportKind};
 use rhai::{EvalAltResult, Position};
 use smartstring::{LazyCompact, SmartString};
+use std::ops::Range;
 use std::rc::Rc;
 use std::{fmt::Display, path::Path};
 use tracing::{debug, error, instrument, trace, warn};
@@ -93,19 +94,21 @@ ____   *   .    .      .   .           .  .   .      .    : O. Oo;    .   .
     |                                                       \ \ .     * jrei  *"#;
 
 #[derive(Default)]
-pub(crate) struct ErrHdlr {
+pub struct ErrHdlr {
     name: SStr,
     scr: Option<Box<Path>>,
     tbe: TbErr,
     pos: Position,
     rfn: SStr,
     fsrc: SStr,
-    colors: ColorGenerator,
+    cg: ColorGenerator,
+    rp: Option<ReportBuilder<(&'static str, Range<usize>)>>,
+    f: String,
 }
 
 impl ErrHdlr {
     #[instrument]
-    fn new(name: &str, scr: &Path, err: EvalAltResult) -> Option<Self> {
+    pub fn new(name: &str, scr: &Path, err: EvalAltResult) -> Option<Self> {
         trace!("{name}: Generating traceback");
         if let EvalAltResult::ErrorRuntime(ref run_err, pos) = err {
             match run_err.clone().try_cast::<AndaxError>() {
@@ -155,4 +158,44 @@ impl ErrHdlr {
             ..Self::default()
         })
     }
+    fn gen_rp(&mut self, offset: usize) {
+        let scr = self.scr.clone().map_or("??".to_string(), |a| a.to_string_lossy().to_string());
+        let scr: &'static str = Box::leak(Box::new(scr));
+        self.rp = Some(std::mem::take(&mut self.rp).unwrap_or(Report::build(
+            ReportKind::Error,
+            scr,
+            offset,
+        )));
+    }
+    #[inline]
+    fn _gpos(&self) -> Option<(usize, usize)> {
+        self.pos.line().map(|l| (l, self.pos.position().unwrap_or(0)))
+    }
+
+    /// # Why does this exist?
+    /// Apparently, ariadne does not take an offset by a position, but instead
+    /// by no. of characters to that position (`usize`). That means we have to
+    /// manually count the no. of chars to that pos by reading the file to str
+    /// then store it for later use.
+    /// # Notes
+    /// Before using this function, check if `self.scr` is `Some`
+    fn get_offset(&mut self) -> std::io::Result<usize> {
+        let (a, b) = self._gpos().expect("No position data in traceback.");
+        self.f = std::fs::read_to_string(self.scr.as_ref().unwrap())?;
+        let mut passed_lines = 0;
+        let mut chn = 0;
+        for (n, ch) in self.f.chars().enumerate() {
+            if passed_lines == a - 1 {
+                chn += 1;
+                if chn == b {
+                    return Ok(n);
+                }
+            }
+            if ch == '\n' { // ignore \r for now
+                passed_lines += 1;
+            }
+        }
+        Ok(0)
+    }
+    pub fn print(&mut self) {}
 }
