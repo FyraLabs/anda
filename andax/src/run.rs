@@ -180,7 +180,7 @@ pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
             }
             Some(AErr::Exit(b)) => {
                 if b {
-                    warn!("世界を壊している。\n{}", crate::error::EARTH);
+                    warn!("世界を壊している。\n{}", include_str!("earth.txt"));
                     error!("生存係為咗喵？打程式幾好呀。仲喵要咁憤世嫉俗喎。還掂おこちゃま戦争係政治家嘅事……");
                     trace!("あなたは世界の終わりにずんだを食べるのだ");
                 }
