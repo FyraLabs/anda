@@ -1,6 +1,7 @@
 use ariadne::{ColorGenerator, Report, ReportBuilder, ReportKind};
 use rhai::{EvalAltResult, Position};
 use smartstring::{LazyCompact, SmartString};
+use std::error::Error;
 use std::ops::Range;
 use std::rc::Rc;
 use std::{fmt::Display, path::Path};
@@ -108,7 +109,7 @@ impl ErrHdlr {
                 }
                 Some(AndaxError::Exit(b)) => {
                     if b {
-                        warn!("世界を壊している。\n{}", crate::error::EARTH);
+                        warn!("世界を壊している。\n{}", include_str!("earth.txt"));
                         error!("生存係為咗喵？打程式幾好呀。仲喵要咁憤世嫉俗喎。還掂おこちゃま戦争係政治家嘅事……");
                         trace!("あなたは世界の終わりにずんだを食べるのだ");
                     }
@@ -163,11 +164,58 @@ impl ErrHdlr {
                     return Ok(n);
                 }
             }
-            if ch == '\n' { // ignore \r for now
+            if ch == '\n' {
+                // ignore \r for now
                 passed_lines += 1;
             }
         }
         Ok(0)
     }
-    pub fn print(&mut self) {}
+    #[cfg(debug_assertions)]
+    fn chk(&self) {
+        assert!(self.scr.is_some(), "Empty source");
+    }
+    #[cfg(not(debug_assertions))]
+    fn chk(&self) {}
+
+    pub fn _show(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        self.chk();
+        let offset = self.get_offset()?;
+        self.gen_rp(offset);
+        Ok(())
+    }
+    #[instrument(skip(self))]
+    pub fn show(&mut self) {
+        self._show().unwrap_or_else(|err| {
+            let err: &'static (dyn Error + Send + Sync) = Box::leak(err);
+            if let Some(io_err) = err.downcast_ref::<std::io::Error>() {
+                let rp = color_eyre::Report::new(io_err);
+                error!("[FATAL] Cannot generate traceback, failed to read script:\n{rp:?}");
+            } else {
+                let rp = color_eyre::Report::new(err);
+                error!("[FATAL] Failed to handle exception. Panic Traceback:\n{rp:?}");
+                error!("[FATAL] If the above error seems unreasonable, report the bug.");
+            }
+            error!("Caused by the following exception:{}", self.tbe);
+            if let TbErr::Report(ref rp) = self.tbe {
+                error!("Exception Traceback:\n{rp:?}");
+            }
+        })
+    }
+}
+
+mod test {
+    use super::*;
+
+    #[test]
+    fn offset() -> std::io::Result<()> {
+        let hdl = ErrHdlr::new(
+            "hai",
+            &Path::new("src/earth.txt"),
+            rhai::EvalAltResult::ErrorArithmetic("www".into(), rhai::Position::new(2, 2)),
+        );
+        let mut hdl = hdl.unwrap();
+        assert_eq!(hdl.get_offset()?, 80);
+        Ok(())
+    }
 }
