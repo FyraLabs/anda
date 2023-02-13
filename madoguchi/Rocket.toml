@@ -1,0 +1,2 @@
+[default.databases.madoguchi]
+url = "postgres://localhost:5432/madoguchi"

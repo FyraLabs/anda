@@ -12,7 +12,8 @@ exclude = [
     "andax",
     ".devcontainer",
     ".github",
-    ".flatpak-builder/*"
+    ".flatpak-builder/*",
+    "madoguchi",
 ]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -59,4 +60,5 @@ members = [
     "xtask",
     "rpmspec-rs",
     "andax",
+    "madoguchi",
 ]
