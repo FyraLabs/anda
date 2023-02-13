@@ -8,5 +8,5 @@ edition = "2021"
 [dependencies]
 chrono = "0.4.22"
 pest = { version = "2.4.0", features = ["serde", "pretty-print"] }
-pest_derive = "2.4.0"
+pest_derive = "2.5.5"
 serde = { version = "1.0.145", features = ["derive"] }
