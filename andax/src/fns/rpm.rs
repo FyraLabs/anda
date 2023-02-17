@@ -49,7 +49,9 @@ impl RPMSpec {
             return Err("No version preamble in spec".into());
         }
         let m = unsafe { m.unwrap_unchecked() };
-        if ver != &m[2] {
+        let ver = ver.strip_prefix('v').unwrap_or(ver);
+        let ver = ver.replace('-', ".");
+        if ver != m[2] {
             info!("{}: {} —→ {ver}", self.name, &m[2]);
             self.f = re.replace(&self.f, format!("Version:{}{ver}\n", &m[1])).to_string();
             self.reset_release()?;
