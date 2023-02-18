@@ -271,7 +271,6 @@ pub async fn build_project(
 
     let mut rpm_opts = RPMOptions::new(rpmb_opts.mock_config.clone(), cwd, cli.target_dir.clone());
 
-
     // export environment variables
     if let Some(env) = &project.env {
         for (key, value) in env {

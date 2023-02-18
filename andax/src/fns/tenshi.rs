@@ -76,5 +76,4 @@ pub mod ar {
         let map = serde_json::from_str(&json).ehdl(&ctx)?;
         Ok(map)
     }
-
 }
