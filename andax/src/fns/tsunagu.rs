@@ -2,13 +2,15 @@ use crate::{error::AndaxRes, run::rf};
 use rhai::{plugin::*, CustomType};
 use serde_json::Value;
 use std::env::VarError;
-use tracing::{debug, trace};
+use tracing::trace;
 
 type Res<T> = Result<T, Box<EvalAltResult>>;
 
-pub(crate) const USER_AGENT: &str = "andax";
+pub(crate) const USER_AGENT: &str = "AndaX";
 #[export_module]
 pub mod ar {
+    type E = Box<rhai::EvalAltResult>;
+
     #[rhai_fn(return_raw, global)]
     pub(crate) fn get(ctx: NativeCallContext, url: &str) -> Res<String> {
         ureq::AgentBuilder::new()
@@ -32,13 +34,7 @@ pub mod ar {
             .into_json()
             .ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
-        let binding = &v["tag_name"];
-        let ver = binding.as_str().unwrap_or("");
-        if let Some(ver) = ver.strip_prefix('v') {
-            debug!("Stripped `v` prefix");
-            return Ok(ver.to_string());
-        }
-        Ok(ver.to_string())
+        Ok(v["tag_name"].as_str().unwrap_or("").to_string())
     }
     #[rhai_fn(return_raw, global)]
     pub(crate) fn gh_tag(ctx: NativeCallContext, repo: &str) -> Res<String> {
@@ -50,44 +46,62 @@ pub mod ar {
             .into_json()
             .ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
-        let binding = &v[0]["name"];
-        let ver = binding.as_str().unwrap_or("");
-        if let Some(ver) = ver.strip_prefix('v') {
-            debug!("Stripped `v` prefix");
-            return Ok(ver.to_string());
-        }
-        Ok(ver.to_string())
+        let v = v
+            .as_array()
+            .ok_or::<Box<EvalAltResult>>("gh_tag received not array".into())
+            .map(|a| a.first().ok_or::<Box<EvalAltResult>>("gh_tag no tags".into()))??;
+        Ok(v["name"].as_str().unwrap_or("").to_string())
     }
 
     #[rhai_fn(return_raw, global)]
     pub(crate) fn pypi(ctx: NativeCallContext, name: &str) -> Res<String> {
-        ctx.engine().eval(&format!("get(`https://pypi.org/pypi/{name}/json`).json().info.version"))
+        let obj = ureq::get(&format!("https://pypi.org/pypi/{name}/json"));
+        let obj: serde_json::Value =
+            obj.set("User-Agent", USER_AGENT).call().ehdl(&ctx)?.into_json().ehdl(&ctx)?;
+        let obj = obj.get("info").ok_or::<E>("No json[`info`]?".into())?;
+        let obj = obj.get("version").ok_or::<E>("No json[`info`][`version`]?".into())?;
+        obj.as_str().map(|s| s.to_string()).ok_or("json not string?".into())
     }
 
     #[rhai_fn(return_raw, global)]
     pub(crate) fn crates(ctx: NativeCallContext, name: &str) -> Res<String> {
-        ctx.engine().eval(&format!(
-            "get(`https://crates.io/api/v1/crates/{name}`).json().crate.max_stable_version"
-        ))
+        let obj = ureq::get(&format!("https://crates.io/api/v1/crates/{name}"));
+        let obj: serde_json::Value =
+            obj.set("User-Agent", USER_AGENT).call().ehdl(&ctx)?.into_json().ehdl(&ctx)?;
+        let obj = obj.get("crate").ok_or::<E>("No json[`crate`]?".into())?;
+        let obj = obj.get("max_stable_version");
+        let obj = obj.ok_or::<E>("No json[`crate`][`max_stable_version`]?".into())?;
+        obj.as_str().map(|s| s.to_string()).ok_or("json not string?".into())
     }
 
     #[rhai_fn(return_raw, global)]
     pub(crate) fn crates_max(ctx: NativeCallContext, name: &str) -> Res<String> {
-        ctx.engine().eval(&format!(
-            "get(`https://crates.io/api/v1/crates/{name}`).json().crate.max_version"
-        ))
+        let obj = ureq::get(&format!("https://crates.io/api/v1/crates/{name}"));
+        let obj: serde_json::Value =
+            obj.set("User-Agent", USER_AGENT).call().ehdl(&ctx)?.into_json().ehdl(&ctx)?;
+        let obj = obj.get("crate").ok_or::<E>("No json[`crate`]?".into())?;
+        let obj = obj.get("max_version");
+        let obj = obj.ok_or::<E>("No json[`crate`][`max_version`]?".into())?;
+        obj.as_str().map(|s| s.to_string()).ok_or("json not string?".into())
     }
 
     #[rhai_fn(return_raw, global)]
     pub(crate) fn crates_newest(ctx: NativeCallContext, name: &str) -> Res<String> {
-        ctx.engine().eval(&format!(
-            "get(`https://crates.io/api/v1/crates/{name}`).json().crate.newest_version"
-        ))
+        let obj = ureq::get(&format!("https://crates.io/api/v1/crates/{name}"));
+        let obj: serde_json::Value =
+            obj.set("User-Agent", USER_AGENT).call().ehdl(&ctx)?.into_json().ehdl(&ctx)?;
+        let obj = obj.get("crate").ok_or::<E>("No json[`crate`]?".into())?;
+        let obj = obj.get("newest_version");
+        let obj = obj.ok_or::<E>("No json[`crate`][`newest_version`]?".into())?;
+        obj.as_str().map(|s| s.to_string()).ok_or("json not string?".into())
     }
     #[rhai_fn(return_raw, global)]
     pub(crate) fn npm(ctx: NativeCallContext, name: &str) -> Res<String> {
-        ctx.engine()
-            .eval(&format!("get(`https://registry.npmjs.org/{name}/latest`).json().version"))
+        let obj = ureq::get(&format!("https://registry.npmjs.org/{name}/latest"));
+        let obj: serde_json::Value =
+            obj.set("User-Agent", USER_AGENT).call().ehdl(&ctx)?.into_json().ehdl(&ctx)?;
+        let obj = obj.get("version").ok_or::<E>("No json[`version`]?".into())?;
+        obj.as_str().map(|s| s.to_string()).ok_or("json not string?".into())
     }
 
     #[rhai_fn(return_raw, global)]

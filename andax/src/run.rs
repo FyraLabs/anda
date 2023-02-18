@@ -82,6 +82,7 @@ fn gen_en() -> (Engine, Scope<'static>) {
     let mut sc = Scope::new();
     sc.push("USER_AGENT", f::tsunagu::USER_AGENT);
     sc.push("IS_WIN32", cfg!(windows));
+    sc.push("ANDAX_VER", env!("CARGO_PKG_VERSION"));
     let mut en = Engine::new();
 
     let resolv = module_resolver();
@@ -110,6 +111,17 @@ lazy_static! {
 
 #[instrument(name = "traceback")]
 pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str, fn_src: &str) {
+    // {
+    //     let _proj = proj.to_string();
+    //     let _nntz = format!("{nanitozo}");
+    //     let _fn = rhai_fn.to_string();
+    //     let _src = fn_src.to_string();
+    //     let _pos = format!("{pos:?}");
+    //     let _scr = scr.display().to_string();
+    //     std::panic::set_hook(Box::new(move |_| {
+    //         error!(_proj, ?_scr, _nntz, _pos, _fn, _src, "BUG: PANIC during traceback generation");
+    //     }));
+    // }
     if let Some((line, col)) = _gpos(pos) {
         // Print code
         let f = std::fs::File::open(scr);
@@ -163,7 +175,7 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
             }
             return error!("Script Exception —— {proj}\n{code}");
         }
-        error!("{proj}: Non-existence exception at {scr}:{line}");
+        error!("{proj}: Non-existence exception at {scr}:{line}:{col}");
     }
     error!("{proj}: {scr:?} (no position data)\n{nanitozo}");
 }
