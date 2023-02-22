@@ -111,17 +111,6 @@ lazy_static! {
 
 #[instrument(name = "traceback")]
 pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str, fn_src: &str) {
-    // {
-    //     let _proj = proj.to_string();
-    //     let _nntz = format!("{nanitozo}");
-    //     let _fn = rhai_fn.to_string();
-    //     let _src = fn_src.to_string();
-    //     let _pos = format!("{pos:?}");
-    //     let _scr = scr.display().to_string();
-    //     std::panic::set_hook(Box::new(move |_| {
-    //         error!(_proj, ?_scr, _nntz, _pos, _fn, _src, "BUG: PANIC during traceback generation");
-    //     }));
-    // }
     if let Some((line, col)) = _gpos(pos) {
         // Print code
         let f = std::fs::File::open(scr);
