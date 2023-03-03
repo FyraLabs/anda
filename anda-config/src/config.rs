@@ -207,7 +207,7 @@ pub fn prefix_config(mut config: Manifest, prefix: &str) -> Manifest {
         }
         default!(new_project, update, "update.rhai");
         default!(new_project, pre_script, "pre.rhai");
-        default!(new_project, post_script, "pre.rhai");
+        default!(new_project, post_script, "post.rhai");
 
         if let Some(scripts) = &mut new_project.scripts {
             for scr in scripts {

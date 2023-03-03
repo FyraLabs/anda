@@ -1,6 +1,10 @@
 //! Utility functions and types
 
-use std::{collections::BTreeMap, fs::read_to_string, path::Path};
+use std::{
+    collections::{BTreeMap, HashSet},
+    fs::read_to_string,
+    path::Path,
+};
 
 use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
 use async_trait::async_trait;
@@ -34,15 +38,16 @@ pub struct BuildEntry {
 
 pub fn fetch_build_entries(config: Manifest) -> Result<Vec<BuildEntry>> {
     let changed_files = get_changed_files(Path::new(".")).unwrap_or_default();
+    let changed_dirs: HashSet<_> = changed_files
+        .iter()
+        .map(|f| f.trim_end_matches(|x| x != '/').trim_end_matches('/'))
+        .collect();
+    let suffix = config.config.strip_suffix.clone().unwrap_or_default();
 
     let mut entries = Vec::new();
-
     for (name, project) in config.project {
-        if !changed_files
-            .iter()
-            .filter_map(|file| Path::new(file).parent())
-            .any(|file| name.starts_with(file.to_str().unwrap()))
-        {
+        let dir = name.trim_end_matches(&suffix);
+        if !changed_dirs.contains(dir) {
             continue;
         }
 
