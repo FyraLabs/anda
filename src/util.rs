@@ -21,7 +21,7 @@ use tokio::{io::AsyncBufReadExt, process::Command};
 lazy_static! {
     static ref BUILDARCH_REGEX: Regex = Regex::new("BuildArch:\\s*(.+)").unwrap();
     static ref EXCLUSIVEARCH_REGEX: Regex = Regex::new("ExclusiveArch:\\s*(.+)").unwrap();
-    static ref DEFAULT_ARCHES: HashSet<String> = ["x86_64".into(), "aarch64".into()].into();
+    static ref DEFAULT_ARCHES: [String; 2] = ["x86_64".to_string(), "aarch64".to_string()];
 }
 
 enum ConsoleOut {
@@ -77,7 +77,7 @@ pub fn fetch_build_entries(config: Manifest) -> Result<Vec<BuildEntry>> {
             }
 
             if arches.is_empty() || arches.iter().any(|arch| arch.starts_with('%')) {
-                arches = DEFAULT_ARCHES.clone();
+                arches = DEFAULT_ARCHES.clone().into();
             } else if noarch {
                 // find a default arch that is in the exclusive arches
                 let arch = DEFAULT_ARCHES
@@ -86,9 +86,8 @@ pub fn fetch_build_entries(config: Manifest) -> Result<Vec<BuildEntry>> {
                     .unwrap();
 
                 arches.insert(arch.to_string());
-            } else {
-                arches.retain(|arch| arch != "noarch");
             }
+            arches.retain(|arch| arch != "noarch");
 
             for arch in arches {
                 entries.push(BuildEntry { pkg: name.clone(), arch });
