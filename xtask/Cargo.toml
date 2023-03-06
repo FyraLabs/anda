@@ -8,6 +8,6 @@ edition = "2021"
 [dependencies]
 clap_mangen = "0.2.9"
 anda = { path = ".." }
-clap = { version = "4.0.17", features = ["derive", "env"] }
+clap = { version = "4.1.8", features = ["derive", "env"] }
 anyhow = "1.0.69"
 clap_complete = "4.1.3"
