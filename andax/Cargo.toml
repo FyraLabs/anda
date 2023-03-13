@@ -20,6 +20,6 @@ tempfile = "3.4.0"
 anda-config = { version = "0.1.3", path = "../anda-config" }
 rhai-fs = "0.1.2"
 rhai-url = "0.0.1"
-hcl-rs = "0.12.3"
+hcl-rs = "0.13.3"
 serde-value-flatten = "0.1.0"
 directories = "4.0.1"
