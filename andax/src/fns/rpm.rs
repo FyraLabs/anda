@@ -43,7 +43,7 @@ impl RPMSpec {
         Err("No release preamble in spec".into())
     }
     pub fn version(&mut self, ver: &str) -> Result<(), Box<EvalAltResult>> {
-        let re = regex::Regex::new(r"Version:(\s+)([\.\d]+)\n").unwrap();
+        let re = regex::Regex::new(r"Version:(\s+)([\d.^+abcdef]+)\n").unwrap();
         let m = re.captures(self.f.as_str());
         if m.is_none() {
             return Err("No version preamble in spec".into());
