@@ -57,7 +57,7 @@ pub fn fetch_build_entries(config: Manifest) -> Result<Vec<BuildEntry>> {
                 continue;
             }
 
-            for arch in DEFAULT_ARCHES.iter() {
+            for arch in project.arches.unwrap_or(DEFAULT_ARCHES.to_vec()) {
                 entries.push(BuildEntry { pkg: name.clone(), arch: arch.clone() });
             }
         }

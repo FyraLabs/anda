@@ -63,6 +63,7 @@ pub struct Project {
     #[serde(default)]
     pub labels: BTreeMap<String, String>,
     pub update: Option<PathBuf>,
+    pub arches: Option<Vec<String>>,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
