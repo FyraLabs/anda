@@ -2,7 +2,6 @@
 
 use std::{
     collections::{BTreeMap, HashSet},
-    fs::read_to_string,
     path::Path,
 };
 
@@ -58,39 +57,8 @@ pub fn fetch_build_entries(config: Manifest) -> Result<Vec<BuildEntry>> {
                 continue;
             }
 
-            let mut arches = HashSet::new();
-
-            let spec = rpm.spec;
-            let spec_contents = read_to_string(spec)?;
-            let mut noarch = false;
-            for cap in BUILDARCH_REGEX.captures_iter(spec_contents.as_str()) {
-                let s = cap[1].split(' ').map(|arch| arch.to_string()).collect::<Vec<String>>();
-                noarch = s.len() == 1 && s[0] == "noarch";
-                arches.extend(s);
-            }
-
-            let mut exclusive_arches: Vec<String> = Vec::new();
-            for cap in EXCLUSIVEARCH_REGEX.captures_iter(spec_contents.as_str()) {
-                let mut s = cap[1].split(' ').map(|arch| arch.to_string()).collect::<Vec<String>>();
-                arches.extend(s.clone());
-                exclusive_arches.append(&mut s);
-            }
-
-            if arches.is_empty() || arches.iter().any(|arch| arch.starts_with('%')) {
-                arches = DEFAULT_ARCHES.clone().into();
-            } else if noarch {
-                // find a default arch that is in the exclusive arches
-                let arch = DEFAULT_ARCHES
-                    .iter()
-                    .find(|arch| exclusive_arches.is_empty() || exclusive_arches.contains(arch))
-                    .unwrap();
-
-                arches.insert(arch.to_string());
-            }
-            arches.retain(|arch| arch != "noarch");
-
-            for arch in arches {
-                entries.push(BuildEntry { pkg: name.clone(), arch });
+            for arch in DEFAULT_ARCHES.iter() {
+                entries.push(BuildEntry { pkg: name.clone(), arch: arch.clone() });
             }
         }
     }
