@@ -438,7 +438,7 @@ impl MacroBuf {
 		self.do_argv_define(argv, RMIL_GLOBAL, true, parsed);
 	}
 	fn do_dump(&mut self, me: Entry, argv: &[&str], parsed: usize) {
-		dumpMacroTable(self.mc, None);
+		dumpMacroTable(self.mc, &mut None);
 	}
 }
 
@@ -478,7 +478,7 @@ impl SaiGaai {
 		Ok(())
 	}
 }
-pub(crate) fn dumpMacroTable(mc: Context, fp: Option<File>) -> io::Result<()> {
+pub(crate) fn dumpMacroTable(mc: Context, fp: &mut Option<File>) -> io::Result<()> {
 	let mc = mc.lock().unwrap();
 	let fp = fp.unwrap(); // FIXME should default to stderr
 	fp.write(b"========================")?;
@@ -669,7 +669,7 @@ pub(crate) fn find_macro_end(s: &str) -> usize {
 pub(crate) fn define_macro(mc: Option<Context>, name: &str, lvl: i16) -> Result<bool> {
 	let mc = mc.unwrap_or(_dummy_context());
 	let mc = mc.lock().map_err(|e| eyre!(e.to_string()))?;
-	let mb = MacroBuf::new(mc.clone(), 0);
+	let mut mb = MacroBuf::new(mc.clone(), 0);
 	mb.do_define(name.as_mut(), lvl, false, 0);
 	Ok(mb.error)
 }

@@ -1,15 +1,14 @@
 use crate::error::ParserError;
-use anyhow::{anyhow, bail, Ok, Result};
+use color_eyre::{eyre::bail, eyre::eyre, Result};
 use lazy_static::lazy_static;
-use log::debug;
 use regex::Regex;
 use std::{
 	collections::HashMap,
 	fs::File,
-	hash::Hash,
 	io::{BufRead, BufReader, Read},
 	process::Command,
 };
+use tracing::debug;
 
 //? https://rpm-software-management.github.io/rpm/manual/spec.html
 const PREAMBLES: &[&str] = &[
@@ -59,7 +58,7 @@ const PREAMBLES: &[&str] = &[
 	"Patch#",
 ];
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct Package {
 	name: String,
 	version: Option<String>,
@@ -69,10 +68,13 @@ struct Package {
 }
 impl Package {
 	fn new(name: String) -> Self {
-		Package { name, version: None, release: None, epoch: None, condition: None }
+		let mut x = Self::default();
+		x.name = name;
+		x
 	}
 }
 
+#[derive(Default)]
 struct RPMRequires {
 	none: Vec<Package>,
 	pre: Vec<Package>,
@@ -87,21 +89,11 @@ struct RPMRequires {
 }
 impl RPMRequires {
 	fn new() -> Self {
-		Self {
-			none: vec![],
-			interp: vec![],
-			meta: vec![],
-			post: vec![],
-			posttrans: vec![],
-			postun: vec![],
-			pre: vec![],
-			pretrans: vec![],
-			preun: vec![],
-			verify: vec![],
-		}
+		Self::default()
 	}
 }
 
+#[derive(Default)]
 struct Scriptlets {
 	pre: Option<String>,
 	post: Option<String>,
@@ -125,25 +117,7 @@ struct Scriptlets {
 }
 impl Scriptlets {
 	fn new() -> Self {
-		Self {
-			pre: None,
-			post: None,
-			preun: None,
-			postun: None,
-			pretrans: None,
-			posttrans: None,
-			verify: None,
-			triggerprein: None,
-			triggerin: None,
-			triggerun: None,
-			triggerpostun: None,
-			filetriggerin: None,
-			filetriggerun: None,
-			filetriggerpostun: None,
-			transfiletriggerin: None,
-			transfiletriggerun: None,
-			transfiletriggerpostun: None,
-		}
+		Self::default()
 	}
 }
 
@@ -165,6 +139,7 @@ enum VerifyFileMod {
 	Caps,
 }
 
+#[derive(Default)]
 struct Files {
 	// %artifact
 	artifact: Vec<String>,
@@ -184,15 +159,7 @@ struct Files {
 }
 impl Files {
 	fn new() -> Self {
-		Self {
-			artifact: vec![],
-			ghost: vec![],
-			config: HashMap::new(),
-			dir: vec![],
-			doc: vec![],
-			license: vec![],
-			verify: HashMap::new(),
-		}
+		Self::default()
 	}
 }
 
@@ -204,6 +171,7 @@ struct Changelog {
 	message: String,
 }
 
+#[derive(Default)]
 struct RPMSpec {
 	globals: HashMap<String, String>,
 	defines: HashMap<String, String>,
@@ -274,59 +242,11 @@ struct RPMSpec {
 impl RPMSpec {
 	fn new() -> Self {
 		Self {
-			globals: HashMap::new(),
-			defines: HashMap::new(),
-			description: None,
-			prep: None,
-			generate_buildrequires: None,
-			conf: None,
-			build: None,
-			install: None,
-			check: None,
-			scriptlets: Scriptlets::new(),
-			files: Files::new(),
-			changelog: vec![],
-			name: None,
-			version: None,
-			release: None,
-			epoch: None,
-			license: None,
-			sourcelicense: None,
-			group: None,
-			summary: None,
-			sources: HashMap::new(),
-			patches: HashMap::new(),
-			// icon
-			// nosource nopatch
-			url: None,
-			bugurl: None,
-			modularitylabel: None,
-			disttag: None,
-			vsc: None,
-			distribution: None,
-			vendor: None,
-			packager: None,
 			// buildroot
 			autoreqprov: true,
 			autoreq: true,
 			autoprov: true,
-			requires: RPMRequires::new(),
-			provides: vec![],
-			conflicts: vec![],
-			obsoletes: vec![],
-			suggests: vec![],
-			// recommends suggests supplements enhances
-			orderwithrequires: vec![],
-			buildrequires: vec![],
-			buildconflicts: vec![],
-			excludearch: vec![],
-			exclusivearch: vec![],
-			excludeos: vec![],
-			exclusiveos: vec![],
-			buildarch: vec![], // BuildArchitectures BuildArch
-			prefix: None,      // Prefixes Prefix
-			docdir: None,
-			removepathpostfixes: vec![],
+			..Self::default()
 		}
 	}
 }
@@ -430,6 +350,7 @@ impl SpecParser {
 							self.macros.get(&cap[1]).unwrap(),
 							&cap[2]
 						);
+						continue; // FIXME?
 					}
 					self.macros.insert(cap[1].to_string(), cap[2].to_string());
 				}
@@ -499,7 +420,7 @@ impl SpecParser {
 			.map(|(k, v)| self.set_list_preamble(k, v))
 			.collect::<Result<Vec<_>>>()?;
 		if !self.errors.is_empty() {
-			return Err(anyhow!("{:#?}", self.errors));
+			return Err(eyre!("{:#?}", self.errors));
 		}
 		Ok(())
 	}
