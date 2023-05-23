@@ -480,7 +480,7 @@ impl SaiGaai {
 }
 pub(crate) fn dumpMacroTable(mc: Context, fp: &mut Option<File>) -> io::Result<()> {
 	let mc = mc.lock().unwrap();
-	let fp = fp.unwrap(); // FIXME should default to stderr
+	let mut fp = fp.unwrap(); // FIXME should default to stderr
 	fp.write(b"========================")?;
 	for (name, me) in mc.table {
 		let mut s = String::new();
@@ -674,9 +674,9 @@ pub(crate) fn define_macro(mc: Option<Context>, name: &str, lvl: i16) -> Result<
 	Ok(mb.error)
 }
 
-pub(crate) fn pop_macro(mc: Option<Context>, name: &str) -> Result<()> {
-	let mc = mc.unwrap_or(_dummy_context());
-	let mc = mc.lock().map_err(|e| eyre!(e.to_string()))?;
+pub(crate) fn pop_macro(mut mc: Option<Context>, name: &str) -> Result<()> {
+	let mut mc = mc.unwrap_or(_dummy_context());
+	let mut mc = mc.lock().map_err(|e| eyre!(e.to_string()))?;
 	mc.table.remove(name);
 
 	Ok(())
@@ -710,7 +710,7 @@ pub(crate) fn load_macro_file(mc: Option<Context>, name: &str) -> Result<i32> {
 	let fd = fd.unwrap();
 	push_macro(mc, "__file_name", "", name, RMIL_MACROFILES, ME_LITERAL);
 
-	while let Ok(buffer) = rdcl(fd.try_clone()?) {
+	while let Ok(buffer) = rdcl(std::io::BufReader::new(fd)) {
 		let nlines = buffer.lines().count();
 		let lineno = 0;
 

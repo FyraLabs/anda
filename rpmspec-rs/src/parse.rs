@@ -251,10 +251,25 @@ impl RPMSpec {
 	}
 }
 
+// Process on required ... knackly?
+#[derive(Debug)]
+enum Pork<T = String> {
+	Raw(String), // do you like raw meat
+	Done(T),     // or well-done meat?
+}
+
+#[derive(Debug)]
+enum Macro {
+	Text(String),
+	Lua(String),
+	Sub(String),
+	Internal,
+}
+
 struct SpecParser {
 	rpm: RPMSpec,
 	errors: Vec<Result<(), ParserError>>,
-	macros: HashMap<String, String>,
+	macros: HashMap<String, Pork<Macro>>,
 }
 
 impl SpecParser {
@@ -313,10 +328,9 @@ impl SpecParser {
 					}
 				}
 			}
-			true
-		} else {
-			false
+			return true;
 		}
+		false
 	}
 	fn arch() -> Result<String> {
 		let s = String::from_utf8(Command::new("uname").arg("-m").output()?.stdout)?;
@@ -345,14 +359,14 @@ impl SpecParser {
 				for cap in re.captures_iter(std::str::from_utf8(&buf)?) {
 					if self.macros.contains_key(&cap[1]) {
 						debug!(
-							"Macro Definition duplicated: {} : '{}' | '{}'",
+							"Macro Definition duplicated: {} : '{:?}' | '{}'",
 							&cap[1],
 							self.macros.get(&cap[1]).unwrap(),
 							&cap[2]
 						);
 						continue; // FIXME?
 					}
-					self.macros.insert(cap[1].to_string(), cap[2].to_string());
+					self.macros.insert(cap[1].to_string(), Pork::Raw(cap[2].to_string()));
 				}
 			}
 		}
@@ -480,23 +494,48 @@ impl SpecParser {
 			"Prefix" => {}
 			"DocDir" => {}
 			"RemovePathPostfixes" => {}
-			_ => bail!("BUG: failed to match preamble '{}'", name),
+			_ => bail!("BUG: failed to match preamble '{name}'"),
 		}
 		Ok(())
 	}
-	fn parse_macros(line: &str) -> Result<()> {
-		// we only handle inline macros here
-		// assume we don't multiline
-		let re = Regex::new(r"%((\{[^}]+\})|([_\w]+))").unwrap();
-		for cap in re.captures_iter(line) {
-			let m = &cap[1];
-			let elements = m.split_ascii_whitespace().collect::<Vec<&str>>();
-			let name = elements[1];
-			if elements.len() > 1 {
-				let args = &elements[1..];
+
+	fn _internal_macro(&mut self, name: &str) -> Result<&str> {
+		Ok("") // TODO
+	}
+
+	fn _rp_macro(&mut self, name: &str, args: &str) -> Result<&str> {
+		let m = self.macros.get(name).ok_or_else(|| eyre!("Unknown macro '{name}'"))?;
+		if let Pork::Done(m) = m {
+			match m {
+				Macro::Text(val) => Ok(val),
+				Macro::Internal => self._internal_macro(name),
+				Macro::Sub(ph) => {
+					Ok("".into()) // TODO
+				}
+				Macro::Lua(code) => {
+					Ok("".into()) // TODO
+				}
 			}
+		} else {
+			Ok("".into())
 		}
-		Ok(())
+	}
+
+	fn parse_macros(&mut self, content: &str, startline: bool) -> Result<&str> {
+		if startline {
+			debug_assert!(!content.starts_with("%{"));
+			debug_assert!(!content.ends_with("}"));
+			// %macro_name args...
+			if let Some((mut name, args)) = content.split_once(' ') {
+				name = name.trim_start_matches('%');
+				self._rp_macro(name, args)
+			} else {
+				let name = content.trim_start_matches('%');
+				self._rp_macro(name, "")
+			}
+		} else {
+			Ok("".into()) // TODO
+		}
 	}
 	fn new() -> Self {
 		Self { rpm: RPMSpec::new(), errors: vec![], macros: HashMap::new() }
@@ -515,9 +554,9 @@ fn _sbin(value: &Vec<String>) -> Result<bool> {
 }
 
 mod tests {
+	use super::*;
 	use std::fs::File;
 
-	use super::*;
 	#[test]
 	fn parse_spec() -> Result<()> {
 		let f = File::open("../tests/test.spec")?;
