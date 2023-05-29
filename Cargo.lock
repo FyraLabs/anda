@@ -1538,11 +1538,13 @@ dependencies = [
 
 [[package]]
 name = "rhai-url"
-version = "0.0.1"
+version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "073c38486fbeae61e8ffd6b458a8ac2bcc6996c1e7333cde99a96c7adb03309c"
+checksum = "74428be7868582fb0ddd07634132234a769dd2c45413b6e35b37c4bc774c225a"
 dependencies = [
  "rhai",
+ "serde",
+ "serde_json",
  "url",
 ]
 
