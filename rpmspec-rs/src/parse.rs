@@ -4,11 +4,29 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::{
 	collections::HashMap,
+	fmt::Write,
 	fs::File,
 	io::{BufRead, BufReader, Read},
 	process::Command,
+	str::Chars,
 };
-use tracing::debug;
+use tracing::{debug, warn};
+
+const INTERNAL_MACROS: &[&str] = &[
+	"trace",
+	"dump",
+	"echo",
+	"warn",
+	"error",
+	"define",
+	"undefine",
+	"global",
+	"uncompress",
+	"expand",
+	"S",
+	"P",
+	"F",
+];
 
 //? https://rpm-software-management.github.io/rpm/manual/spec.html
 const PREAMBLES: &[&str] = &[
@@ -266,6 +284,7 @@ enum Macro {
 	Internal,
 }
 
+#[derive(Default)]
 struct SpecParser {
 	rpm: RPMSpec,
 	errors: Vec<Result<(), ParserError>>,
@@ -500,45 +519,154 @@ impl SpecParser {
 	}
 
 	fn _internal_macro(&mut self, name: &str) -> Result<&str> {
-		Ok("") // TODO
+		todo!()
 	}
 
-	fn _rp_macro(&mut self, name: &str, args: &str) -> Result<&str> {
-		let m = self.macros.get(name).ok_or_else(|| eyre!("Unknown macro '{name}'"))?;
-		if let Pork::Done(m) = m {
-			match m {
-				Macro::Text(val) => Ok(val),
-				Macro::Internal => self._internal_macro(name),
-				Macro::Sub(ph) => {
-					Ok("".into()) // TODO
-				}
-				Macro::Lua(code) => {
-					Ok("".into()) // TODO
-				}
+	fn _rp_macro(&mut self, name: &str, args: &str) -> Option<&str> {
+		let m = self.macros.get(name)?;
+		match m {
+			Pork::Done(Macro::Text(val)) => Some(val),
+			Pork::Done(Macro::Internal) => self._internal_macro(name).ok(),
+			Pork::Done(Macro::Sub(ph)) => {
+				Some("".into()) // TODO
 			}
-		} else {
-			Ok("".into())
+			Pork::Done(Macro::Lua(code)) => {
+				Some("".into()) // TODO
+			}
+			Pork::Raw(m) => {
+				// it's fucking raw!!
+				self._parse_macro_definition(name, m, args) // calls _rp_macro() again
+			}
 		}
 	}
 
-	fn parse_macros(&mut self, content: &str, startline: bool) -> Result<&str> {
-		if startline {
-			debug_assert!(!content.starts_with("%{"));
-			debug_assert!(!content.ends_with("}"));
-			// %macro_name args...
-			if let Some((mut name, args)) = content.split_once(' ') {
-				name = name.trim_start_matches('%');
-				self._rp_macro(name, args)
-			} else {
-				let name = content.trim_start_matches('%');
-				self._rp_macro(name, "")
+	// used by _rp_macro, expands macro definition from Pork::Raw.
+	// recursive!
+	fn _parse_macro_definition(&mut self, name: &str, m: &String, args: &str) -> Option<&str> {
+		// first of all it's not internal (filled in Self::new())
+		let mut res = String::new();
+		let mut percent = false;
+		let mut is_substitution = false;
+		let mut chars = m.chars();
+		while let Some(ch) = chars.next() {
+			if ch == '%' {
+				if percent {
+					res += "%";
+					percent = false; // %%%% will be parsed correctly in this way
+					continue;
+				}
+				percent = true;
+				continue;
 			}
-		} else {
-			Ok("".into()) // TODO
+			if percent {
+				res += self._read_raw_macro_use(&mut chars).ok()?;
+				percent = false;
+			}
 		}
+		self.macros.insert(
+			name.to_string(),
+			Pork::Done(if is_substitution { Macro::Sub(res) } else { Macro::Text(res) }),
+		);
+		return self._rp_macro(name, args); // FIXME we can probably optimise this part.
 	}
+
+	/// parse the stuff after %, and determines "{[(". returns expanded macro.
+	fn _read_raw_macro_use(&mut self, chars: &mut Chars) -> Result<&str> {
+		// read until we get name?
+		let mut notflag = false;
+		let mut question = false;
+		let mut content = String::new();
+		let mut add = "";
+		while let Some(ch) = chars.next() {
+			// we read until we encounter '}' or ':' or the end
+			match ch {
+				'!' => notflag = !notflag,
+				'?' => {
+					if question {
+						warn!("Seeing double `?` flag in macro use. Ignoring.");
+					}
+					question = true;
+				}
+				'{' => {
+					if !content.is_empty() {
+						add = "{";
+						break;
+					}
+					let mut name = String::new();
+					while let Some(ch) = chars.next() {
+						if ch == '}' {
+							// TODO flags
+							return self
+								._rp_macro(&name, "")
+								.ok_or(eyre!("Macro not found: %{name}"));
+						}
+						if ch == ':' {
+							let mut content = String::new();
+							while let Some(ch) = chars.next() {
+								if ch == '}' {
+									// TODO flags
+									return self
+										._rp_macro(&name, &content)
+										.ok_or(eyre!("Macro not found: %{name}"));
+								}
+							}
+						}
+						name.write_char(ch);
+					}
+				}
+				'(' => {
+					if !content.is_empty() {
+						add = "(";
+						break;
+					}
+					if notflag || question {
+						warn!("flags (! and ?) are not supported for %().");
+					}
+					let mut shellcmd = String::new();
+					while let Some(ch) = chars.next() {
+						if ch == ')' {
+							return match Command::new("sh").arg("-c").arg(shellcmd).output() {
+								Ok(out) => Ok(String::from_utf8(out.stdout)?.as_str()),
+								Err(e) => Err(eyre!(e)),
+							};
+						}
+						shellcmd.write_char(ch);
+					}
+					return Err(eyre!("Unexpected end of shell command, for `%({shellcmd}`"));
+				}
+				'[' => {
+					todo!("what does %[] mean? www")
+				}
+				_ => {
+					if !(ch.is_alphanumeric() || ch == '_') {
+						break;
+					}
+					content.write_char(ch);
+				}
+			}
+		}
+		// TODO flags
+		let out = self._rp_macro(&content, "").map(|x| {
+			let x = x.to_string();
+			x.push_str(add);
+			x.as_str()
+		});
+		if notflag {
+			warn!("Found `%!...`, returning nothing.");
+			return Ok("");
+		}
+		if question {
+			return Ok(out.unwrap_or_default());
+		}
+		return out.ok_or(eyre!("Macro not found: %{content}"));
+	}
+
 	fn new() -> Self {
-		Self { rpm: RPMSpec::new(), errors: vec![], macros: HashMap::new() }
+		let mut obj = Self { rpm: RPMSpec::new(), errors: vec![], macros: HashMap::new() };
+		INTERNAL_MACROS
+			.iter()
+			.map(|name| obj.macros.insert(name.to_string(), Pork::Done(Macro::Internal)));
+		obj
 	}
 }
 
