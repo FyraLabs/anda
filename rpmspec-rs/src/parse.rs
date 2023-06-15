@@ -269,6 +269,67 @@ impl RPMSpec {
 	}
 }
 
+/// A consumer that yields chars from a mutable String.
+/// It is a bit more efficient if characters need to be
+/// added into the String for the `.next()` iterations.
+/// # Implementation
+/// `Consumer` internally has `self.s` (String) storing
+/// the output of the `BufReader` temporarily. However,
+/// it is actually reversed. This is because operations
+/// like `pop()` and `push()` are faster (`O(1)`) while
+/// `remove(0)` and `insert(0, ?)` are slower (`O(n)`).
+struct Consumer<R: std::io::Read> {
+	s: String,
+	r: Option<BufReader<R>>,
+}
+
+impl<R: std::io::Read> Consumer<R> {
+	fn new(s: String, r: Option<BufReader<R>>) -> Self {
+		Self { s: s.chars().rev().collect(), r }
+	}
+	fn push<'a>(&mut self, c: char) {
+		self.s.push(c)
+	}
+}
+
+impl<R: std::io::Read> Iterator for Consumer<R> {
+	type Item = char;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		if let Some(c) = self.s.pop() {
+			return Some(c);
+		}
+		if let Some(r) = self.r {
+			let mut buf = [0; 64];
+			if r.read(&mut buf).ok()? == 0 {
+				None // EOF
+			} else {
+				self.s = match String::from_utf8(buf.into()) {
+					Ok(s) => s.chars().rev().collect(),
+					Err(e) => {
+						eyre!("cannot parse buffer `{buf:?}`: {e}");
+						return None;
+					}
+				};
+				Some(unsafe { self.s.pop().unwrap_unchecked() })
+			}
+		} else {
+			None
+		}
+	}
+}
+
+impl<R: std::io::Read> From<&str> for Consumer<R> {
+	fn from(value: &str) -> Self {
+		Consumer { s: value.chars().rev().collect(), r: None }
+	}
+}
+
+enum ReadRawMacro {
+	Parameter(String),
+	Text(String),
+}
+
 // Process on required ... knackly?
 #[derive(Debug)]
 enum Pork<T = String> {
@@ -280,7 +341,7 @@ enum Pork<T = String> {
 enum Macro {
 	Text(String),
 	Lua(String),
-	Sub(String),
+	Par(String),
 	Internal,
 }
 
@@ -307,6 +368,7 @@ impl SpecParser {
 		}
 		true
 	}
+	// todo BuildRequires?
 	fn parse_requires(&mut self, sline: &str, ln: usize) -> bool {
 		lazy_static! {
 			static ref RE1: Regex =
@@ -355,6 +417,9 @@ impl SpecParser {
 		let s = String::from_utf8(Command::new("uname").arg("-m").output()?.stdout)?;
 		Ok(s[..s.len() - 1].to_string()) // remove new line
 	}
+	// not sure where I've seen the docs, but there was one lying around saying you can define multiple
+	// macros with the same name, and when you undefine it the old one recovers (stack?). I don't think
+	// it is a good idea to do it like that (it is simply ridiculous and inefficient) but you can try
 	fn load_macros(&mut self) -> Result<()> {
 		// run rpm --showrc | grep "^Macro path"
 		let binding = String::from_utf8(
@@ -385,7 +450,17 @@ impl SpecParser {
 						);
 						continue; // FIXME?
 					}
-					self.macros.insert(cap[1].to_string(), Pork::Raw(cap[2].to_string()));
+					let name = &cap[1];
+					if name.ends_with("()") {
+						let content = cap[2].to_string();
+						content.push(' '); // yup, we mark it using a space.
+						self.macros.insert(
+							unsafe { name.strip_suffix("()").unwrap_unchecked() }.to_string(),
+							Pork::Raw(content),
+						);
+					}
+					// we trim() just in case
+					self.macros.insert(cap[1].to_string(), Pork::Raw(cap[2].trim().to_string()));
 				}
 			}
 		}
@@ -527,27 +602,31 @@ impl SpecParser {
 		match m {
 			Pork::Done(Macro::Text(val)) => Some(val),
 			Pork::Done(Macro::Internal) => self._internal_macro(name).ok(),
-			Pork::Done(Macro::Sub(ph)) => {
-				Some("".into()) // TODO
+			Pork::Done(Macro::Par(ph)) => {
+				todo!() // parameterized macro
 			}
 			Pork::Done(Macro::Lua(code)) => {
-				Some("".into()) // TODO
+				todo!() // we have this in `rpmio/rpmlua.rs` already. kinda?
 			}
 			Pork::Raw(m) => {
 				// it's fucking raw!!
+				if m.ends_with(' ') {
+					// parameterized macro
+					todo!() // another parser? dunno
+				}
 				self._parse_macro_definition(name, m, args) // calls _rp_macro() again
 			}
 		}
 	}
 
 	// used by _rp_macro, expands macro definition from Pork::Raw.
-	// recursive!
+	// recursive! and doesn't parse parameterized macros
 	fn _parse_macro_definition(&mut self, name: &str, m: &String, args: &str) -> Option<&str> {
 		// first of all it's not internal (filled in Self::new())
 		let mut res = String::new();
 		let mut percent = false;
 		let mut is_substitution = false;
-		let mut chars = m.chars();
+		let mut chars: Consumer<stringreader::StringReader> = Consumer::from(m.as_str()); // any type that impl Read works
 		while let Some(ch) = chars.next() {
 			if ch == '%' {
 				if percent {
@@ -559,19 +638,22 @@ impl SpecParser {
 				continue;
 			}
 			if percent {
+				chars.push(ch);
 				res += self._read_raw_macro_use(&mut chars).ok()?;
 				percent = false;
+			} else {
+				res.write_char(ch);
 			}
 		}
 		self.macros.insert(
 			name.to_string(),
-			Pork::Done(if is_substitution { Macro::Sub(res) } else { Macro::Text(res) }),
+			Pork::Done(if is_substitution { Macro::Par(res) } else { Macro::Text(res) }),
 		);
 		return self._rp_macro(name, args); // FIXME we can probably optimise this part.
 	}
 
 	/// parse the stuff after %, and determines "{[(". returns expanded macro.
-	fn _read_raw_macro_use(&mut self, chars: &mut Chars) -> Result<&str> {
+	fn _read_raw_macro_use<R: std::io::Read>(&mut self, chars: &mut Consumer<R>) -> Result<&str> {
 		// read until we get name?
 		let mut notflag = false;
 		let mut question = false;
@@ -639,6 +721,7 @@ impl SpecParser {
 				}
 				_ => {
 					if !(ch.is_alphanumeric() || ch == '_') {
+						chars.push(ch);
 						break;
 					}
 					content.write_char(ch);
