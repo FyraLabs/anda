@@ -1,5 +1,5 @@
 use crate::error::ParserError;
-use color_eyre::{eyre::bail, eyre::eyre, Result};
+use color_eyre::{eyre::bail, eyre::eyre, Help, Result};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{
@@ -8,7 +8,6 @@ use std::{
 	fs::File,
 	io::{BufRead, BufReader, Read},
 	process::Command,
-	str::Chars,
 };
 use tracing::{debug, warn};
 
@@ -76,19 +75,87 @@ const PREAMBLES: &[&str] = &[
 	"Patch#",
 ];
 
+#[derive(Default, Clone, Copy)]
+enum PkgQCond {
+	#[default]
+	Eq, // =
+	Le, // <=
+	Lt, // <
+	Ge, // >=
+	Gt, // >
+}
+
+impl From<&str> for PkgQCond {
+	fn from(value: &str) -> Self {
+		match value {
+			"=" => PkgQCond::Eq,
+			">=" => PkgQCond::Ge,
+			">" => PkgQCond::Gt,
+			"<=" => PkgQCond::Le,
+			"<" => PkgQCond::Lt,
+			_ => unreachable!("Regex RE_PKGQCOND matched bad condition `{value}`"),
+		}
+	}
+}
+
 #[derive(Clone, Default)]
 struct Package {
 	name: String,
 	version: Option<String>,
 	release: Option<String>,
-	epoch: Option<i32>,
-	condition: Option<String>,
+	epoch: Option<u32>,
+	condition: PkgQCond,
 }
+lazy_static! {
+	static ref RE_PKGQCOND: Regex =
+		Regex::new(r"\s+(>=?|<=?|=)\s+(\d+:)?([\w\d.^~]+)-([\w\d.^~]+)(.*)").unwrap();
+}
+
+const PKGNAMECHARSET: &str = "_-";
+
 impl Package {
 	fn new(name: String) -> Self {
 		let mut x = Self::default();
 		x.name = name;
 		x
+	}
+	fn add_query(pkgs: &mut Vec<Self>, query: &str) -> Result<()> {
+		let query = query.trim(); // just in case
+		if let Some((name, rest)) =
+			query.split_once(|c: char| !c.is_alphanumeric() && !PKGNAMECHARSET.contains(c))
+		{
+			// the part that matches the good name is `name`. Check the rest.
+			let mut pkg = Package::new(name.to_string());
+			if let Some(caps) = RE_PKGQCOND.captures(rest) {
+				pkg.condition = caps[1].into();
+				if let Some(epoch) = caps.get(2) {
+					let epoch =
+						epoch.as_str().strip_suffix(':').expect("epoch no `:` by RE_PKGQCOND");
+					pkg.epoch = Some(epoch.parse().map_err(|e| {
+						eyre!("Cannot parse epoch to u32: `{epoch}`")
+							.with_error(|| e)
+							.suggestion("Epoch can only be positive integers")
+					})?);
+				}
+				pkg.version = Some(caps[3].to_string());
+				pkg.release = Some(caps[4].to_string());
+				pkgs.push(pkg);
+				if let Some(rest) = caps.get(5) {
+					return Self::add_query(pkgs, rest.as_str().trim_start());
+				}
+				Ok(())
+			} else {
+				Self::add_query(pkgs, rest)
+			}
+		} else {
+			// check if query matches pkg name
+			if query.chars().any(|c| !c.is_alphanumeric() && !PKGNAMECHARSET.contains(c)) {
+				return Err(eyre!("Invalid package name `{query}`")
+					.suggestion("Use only alphanumerics, underscores and dashes."));
+			}
+			pkgs.push(Self::new(query.to_string()));
+			Ok(())
+		}
 	}
 }
 
@@ -167,11 +234,11 @@ struct Files {
 	config: HashMap<String, ConfigFileMod>,
 	// %dir
 	dir: Vec<String>,
+	// %readme (obsolete) = %doc
 	// %doc
 	doc: Vec<String>,
 	// %license
 	license: Vec<String>,
-	// %readme (obsolete)
 	// %verify
 	verify: HashMap<String, VerifyFileMod>,
 }
@@ -224,17 +291,17 @@ struct RPMSpec {
 	summary: Option<String>,
 	sources: HashMap<i16, String>,
 	patches: HashMap<i16, String>,
-	// icon
-	// nosource nopatch
+	// TODO icon
+	// TODO nosource nopatch
 	url: Option<String>,
 	bugurl: Option<String>,
 	modularitylabel: Option<String>,
 	disttag: Option<String>,
-	vsc: Option<String>,
+	vcs: Option<String>,
 	distribution: Option<String>,
 	vendor: Option<String>,
 	packager: Option<String>,
-	// buildroot
+	// TODO buildroot
 	autoreqprov: bool,
 	autoreq: bool,
 	autoprov: bool,
@@ -243,7 +310,7 @@ struct RPMSpec {
 	conflicts: Vec<Package>,
 	obsoletes: Vec<Package>,
 	suggests: Vec<Package>,
-	// recommends suggests supplements enhances
+	// TODO recommends suggests supplements enhances
 	orderwithrequires: Vec<Package>,
 	buildrequires: Vec<Package>,
 	buildconflicts: Vec<Package>,
@@ -278,7 +345,7 @@ impl RPMSpec {
 /// it is actually reversed. This is because operations
 /// like `pop()` and `push()` are faster (`O(1)`) while
 /// `remove(0)` and `insert(0, ?)` are slower (`O(n)`).
-struct Consumer<R: std::io::Read> {
+struct Consumer<R: std::io::Read = stringreader::StringReader<'static>> {
 	s: String,
 	r: Option<BufReader<R>>,
 }
@@ -377,16 +444,9 @@ impl SpecParser {
 				Regex::new(r"(?m)([\w-]+)(?:\s*([>=<]{1,2})\s*([\d._~^]+))?").unwrap();
 		}
 		if let Some(caps) = RE1.captures(sline) {
-			let spkgs = &caps[caps.len()].trim();
+			let spkgs = caps[caps.len()].trim();
 			let mut pkgs = vec![];
-			for cpkg in RE2.captures_iter(spkgs) {
-				let mut pkg = Package::new(cpkg[cpkg.len() - 1].to_string());
-				if cpkg.len() == 3 {
-					// get rid of spaces I guess
-					pkg.condition = Some(format!("{}{}", &cpkg[1], &cpkg[2]));
-				}
-				pkgs.push(pkg);
-			}
+			Package::add_query(&mut pkgs, spkgs);
 			let modifiers = if caps.len() == 2 { &caps[2] } else { "none" };
 			for modifier in modifiers.split(',') {
 				let modifier = modifier.trim();
@@ -467,7 +527,7 @@ impl SpecParser {
 		Ok(())
 	}
 	fn parse<R: std::io::Read>(&mut self, bufread: BufReader<R>) -> Result<()> {
-		let re = Regex::new(r"(\w+):\s*(.+)").unwrap();
+		let re_preamble = Regex::new(r"(\w+):\s*(.+)").unwrap();
 		let re_dnl = Regex::new(r"^%dnl\b").unwrap();
 		let re_digit = Regex::new(r"\d+$").unwrap();
 		let mut preambles: HashMap<String, Vec<String>> = HashMap::new();
@@ -475,6 +535,7 @@ impl SpecParser {
 		'll: for (line_number, line) in bufread.lines().enumerate() {
 			let line = line?;
 			let sline = line.trim();
+			// todo
 			// * we have to parse %macros here (just like rpm)
 			if sline.is_empty() || sline.starts_with('#') || re_dnl.is_match(sline) {
 				continue;
@@ -484,93 +545,100 @@ impl SpecParser {
 				continue;
 			}
 			// only then do we check for other preambles
-			for cap in re.captures_iter(sline) {
-				// key already exists
-				if preambles.contains_key(&cap[1]) {
-					if re_digit.is_match(&cap[1]) {
-						self.errors
-							.push(Err(ParserError::Duplicate(line_number, cap[1].to_string())));
-						continue 'll;
-					}
-					preambles.get_mut(&cap[1]).unwrap().push(cap[2].to_string());
-					continue 'll;
-				}
+			for cap in re_preamble.captures_iter(sline) {
 				// check for list_preambles
 				if let Some(digitcap) = re_digit.captures(&cap[1]) {
 					let sdigit = &digitcap[0];
 					let digit: i16 = sdigit.parse()?;
 					let name = &cap[1][..cap[1].len() - sdigit.len()];
 					let sname = name.to_string();
-					if !self.preamble_check(format!("{}#", name), line_number) {
+					if !self.preamble_check(format!("{name}#"), line_number) {
 						continue 'll;
 					}
-					if !list_preambles.contains_key(&sname) {
-						list_preambles.insert(name.to_string(), HashMap::new());
-					}
-					match &mut list_preambles.get_mut(&sname) {
-						Some(hm) => hm.insert(digit, cap[2].to_string()),
-						None => bail!("BUG: added HashMap gone"),
-					};
+					self.add_list_preamble(name, digit, cap[2].to_string())?;
 				} else {
 					let name = cap[1].to_string();
 					if !self.preamble_check(name, line_number) {
 						continue 'll;
 					}
-					// create key with new value (normal preambles)
-					preambles.insert(cap[1].to_string(), vec![cap[2].to_string()]);
+					self.add_preamble(&cap[1], cap[2].to_string(), line_number)?;
 				}
 			}
 			// ! error?
 		}
-		preambles.iter().map(|(k, v)| self.set_preamble(k, v)).collect::<Result<Vec<_>>>()?;
-		list_preambles
-			.iter()
-			.map(|(k, v)| self.set_list_preamble(k, v))
-			.collect::<Result<Vec<_>>>()?;
 		if !self.errors.is_empty() {
 			return Err(eyre!("{:#?}", self.errors));
 		}
 		Ok(())
 	}
 
-	fn set_list_preamble(&mut self, name: &str, value: &HashMap<i16, String>) -> Result<()> {
+	fn add_list_preamble(&mut self, name: &str, digit: i16, value: String) -> Result<()> {
 		let value = value.to_owned();
 		let rpm = &mut self.rpm;
 		match name {
-			"Source" => rpm.sources = value,
-			"Patch" => rpm.patches = value,
-			_ => bail!("BUG: failed to match preamble '{}'", name),
+			"Source" => rpm.sources = todo!(),
+			"Patch" => rpm.patches = todo!(),
+			_ => bail!("BUG: failed to match preamble '{name}'"),
 		}
 		Ok(())
 	}
 
-	fn set_preamble(&mut self, name: &String, value: &Vec<String>) -> Result<()> {
+	// TODO (wip) call this on the spot? or else macros can't be parsed correctly
+	fn add_preamble(&mut self, name: &str, value: String, ln: usize) -> Result<()> {
 		let rpm = &mut self.rpm;
-		match name.as_str() {
-			"Name" => rpm.name = _ssin(value),
-			"Version" => rpm.version = _ssin(value),
-			"Release" => rpm.release = _ssin(value),
+
+		macro_rules! opt {
+			($x:ident $y:ident) => {
+				if name == stringify!($x) {
+					if let Some(old) = rpm.$y {
+						warn!(
+							"overriding existing {} preamble value `{old}` to `{value}`",
+							stringify!($x)
+						);
+						self.errors
+							.push(Err(ParserError::Duplicate(ln, stringify!($x).to_string())));
+					}
+					rpm.name = Some(value);
+					return Ok(());
+				}
+			};
+			(~$x:ident $y:ident) => {
+				if name == stringify!($x) {
+					rpm.name = Some(value.parse()?);
+					return Ok(());
+				}
+			};
+		}
+
+		opt!(Name name);
+		opt!(Version version);
+		opt!(Release release);
+		opt!(License license);
+		opt!(SourceLicense sourcelicense);
+		opt!(Group group);
+		opt!(Summary summary);
+		opt!(URL url);
+		opt!(BugURL bugurl);
+		opt!(ModularityLabel modularitylabel);
+		opt!(DistTag disttag);
+		opt!(VCS vcs);
+		opt!(Distribution distribution);
+		opt!(Vendor vendor);
+		opt!(Packager packager);
+		opt!(~AutoReqProv autoreqprov);
+		opt!(~AutoReq autoreq);
+		opt!(~AutoProv autoprov);
+
+		match name {
 			"Epoch" => {
-				rpm.epoch = _ssin(value).map(|x| x.parse().expect("Failed to decode epoch to int"))
+				if let Some(old) = rpm.epoch {
+					warn!("Overriding existing Epoch preamble value `{old}` to `{value}`");
+				}
+				rpm.epoch = Some(value.parse().expect("Failed to decode epoch to int"));
 			}
-			"License" => rpm.license = _ssin(value),
-			"SourceLicense" => rpm.sourcelicense = _ssin(value),
-			"Group" => rpm.group = _ssin(value), // ! confirm?
-			"Summary" => rpm.summary = _ssin(value),
-			"URL" => rpm.url = _ssin(value),
-			"BugURL" => rpm.bugurl = _ssin(value),
-			"ModularityLabel" => rpm.modularitylabel = _ssin(value),
-			"DistTag" => rpm.disttag = _ssin(value),
-			"VCS" => {}
-			"Distribution" => rpm.distribution = _ssin(value),
-			"Vendor" => rpm.vendor = _ssin(value),
-			"Packager" => rpm.packager = _ssin(value),
-			"AutoReqProv" => rpm.autoreqprov = _sbin(value)?,
-			"AutoReq" => rpm.autoreq = _sbin(value)?,
-			"AutoProv" => rpm.autoprov = _sbin(value)?,
-			"Provides" => {}
-			"Conflicts" => {}
-			"Obsoletes" => {}
+			"Provides" => Package::add_query(&mut rpm.provides, &value)?,
+			"Conflicts" => Package::add_query(&mut rpm.conflicts, &value)?,
+			"Obsoletes" => Package::add_query(&mut rpm.obsoletes, &value)?,
 			"Recommends" => {}
 			"Suggests" => {}
 			"Supplements" => {}
@@ -597,6 +665,7 @@ impl SpecParser {
 		todo!()
 	}
 
+	// design issue: we kinda need to know if it's Macro::Par before we can grab the args...?
 	fn _rp_macro(&mut self, name: &str, args: &str) -> Option<&str> {
 		let m = self.macros.get(name)?;
 		match m {
@@ -626,7 +695,7 @@ impl SpecParser {
 		let mut res = String::new();
 		let mut percent = false;
 		let mut is_substitution = false;
-		let mut chars: Consumer<stringreader::StringReader> = Consumer::from(m.as_str()); // any type that impl Read works
+		let mut chars: Consumer = Consumer::from(m.as_str()); // any type that impl Read works
 		while let Some(ch) = chars.next() {
 			if ch == '%' {
 				if percent {
@@ -653,7 +722,7 @@ impl SpecParser {
 	}
 
 	/// parse the stuff after %, and determines "{[(". returns expanded macro.
-	fn _read_raw_macro_use<R: std::io::Read>(&mut self, chars: &mut Consumer<R>) -> Result<&str> {
+	fn _read_raw_macro_use(&mut self, chars: &mut Consumer) -> Result<&str> {
 		// read until we get name?
 		let mut notflag = false;
 		let mut question = false;
@@ -686,6 +755,7 @@ impl SpecParser {
 							let mut content = String::new();
 							while let Some(ch) = chars.next() {
 								if ch == '}' {
+									// TODO check for macro existence
 									// TODO flags
 									return self
 										._rp_macro(&name, &content)
@@ -785,6 +855,13 @@ mod tests {
 		let mut sp = SpecParser::new();
 		sp.load_macros()?;
 		println!("{:#?}", sp.macros);
+		Ok(())
+	}
+	#[test]
+	fn simple_macro_expand() -> Result<()> {
+		let mut parser = super::SpecParser::new();
+		parser.macros.insert("macrohai".to_string(), Pork::Raw("hai hai".to_string()));
+		assert_eq!(parser._read_raw_macro_use(&mut ("%macrohai".into()))?, "hai hai");
 		Ok(())
 	}
 }
