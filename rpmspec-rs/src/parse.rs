@@ -9,7 +9,7 @@ use std::{
 	io::{BufRead, BufReader, Read},
 	process::Command,
 };
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 const INTERNAL_MACROS: &[&str] = &[
 	"trace",
@@ -119,6 +119,26 @@ impl Package {
 		x.name = name;
 		x
 	}
+	// Simple query: query without the <= and >= and versions and stuff. Only names.
+	fn add_simple_query(pkgs: &mut Vec<Self>, query: &str) -> Result<()> {
+		let query = query.trim();
+		let mut last = String::new();
+		for ch in query.chars() {
+			if ch != ' ' && ch != ',' {
+				if !(ch.is_alphanumeric() || PKGNAMECHARSET.contains(ch)) {
+					return Err(eyre!("Invalid character `{ch}` found in package query.")
+						.note(format!("query: `{query}`")));
+				}
+				last.write_char(ch)?;
+			} else {
+				pkgs.push(Package::new(std::mem::take(&mut last)));
+			}
+		}
+		if !last.is_empty() {
+			pkgs.push(Package::new(last));
+		}
+		Ok(())
+	}
 	fn add_query(pkgs: &mut Vec<Self>, query: &str) -> Result<()> {
 		let query = query.trim(); // just in case
 		if let Some((name, rest)) =
@@ -141,11 +161,14 @@ impl Package {
 				pkg.release = Some(caps[4].to_string());
 				pkgs.push(pkg);
 				if let Some(rest) = caps.get(5) {
-					return Self::add_query(pkgs, rest.as_str().trim_start());
+					return Self::add_query(
+						pkgs,
+						rest.as_str().trim_start_matches(|c| " ,".contains(c)),
+					);
 				}
 				Ok(())
 			} else {
-				Self::add_query(pkgs, rest)
+				Self::add_query(pkgs, rest.trim_start_matches(|c| " ,".contains(c)))
 			}
 		} else {
 			// check if query matches pkg name
@@ -309,8 +332,10 @@ struct RPMSpec {
 	provides: Vec<Package>,
 	conflicts: Vec<Package>,
 	obsoletes: Vec<Package>,
+	recommends: Vec<Package>,
 	suggests: Vec<Package>,
-	// TODO recommends suggests supplements enhances
+	supplements: Vec<Package>,
+	enhances: Vec<Package>,
 	orderwithrequires: Vec<Package>,
 	buildrequires: Vec<Package>,
 	buildconflicts: Vec<Package>,
@@ -357,6 +382,9 @@ impl<R: std::io::Read> Consumer<R> {
 	fn push<'a>(&mut self, c: char) {
 		self.s.push(c)
 	}
+	fn len(&self) -> usize {
+		self.s.len()
+	}
 }
 
 impl<R: std::io::Read> Iterator for Consumer<R> {
@@ -366,7 +394,7 @@ impl<R: std::io::Read> Iterator for Consumer<R> {
 		if let Some(c) = self.s.pop() {
 			return Some(c);
 		}
-		if let Some(r) = self.r {
+		if let Some(ref mut r) = self.r {
 			let mut buf = [0; 64];
 			if r.read(&mut buf).ok()? == 0 {
 				None // EOF
@@ -374,7 +402,7 @@ impl<R: std::io::Read> Iterator for Consumer<R> {
 				self.s = match String::from_utf8(buf.into()) {
 					Ok(s) => s.chars().rev().collect(),
 					Err(e) => {
-						eyre!("cannot parse buffer `{buf:?}`: {e}");
+						error!("cannot parse buffer `{buf:?}`: {e}");
 						return None;
 					}
 				};
@@ -423,8 +451,9 @@ impl SpecParser {
 	fn parse_multiline(&self, sline: &str) {
 		todo!();
 	}
-	fn parse_macro(&self, sline: &str) {
+	fn parse_macro(&self, sline: &str) -> String {
 		// run rpm --eval
+		unimplemented!()
 	}
 
 	// returns true if it passes the check
@@ -446,7 +475,7 @@ impl SpecParser {
 		if let Some(caps) = RE1.captures(sline) {
 			let spkgs = caps[caps.len()].trim();
 			let mut pkgs = vec![];
-			Package::add_query(&mut pkgs, spkgs);
+			Package::add_query(&mut pkgs, spkgs).unwrap(); // fixme
 			let modifiers = if caps.len() == 2 { &caps[2] } else { "none" };
 			for modifier in modifiers.split(',') {
 				let modifier = modifier.trim();
@@ -512,7 +541,7 @@ impl SpecParser {
 					}
 					let name = &cap[1];
 					if name.ends_with("()") {
-						let content = cap[2].to_string();
+						let mut content = cap[2].to_string();
 						content.push(' '); // yup, we mark it using a space.
 						self.macros.insert(
 							unsafe { name.strip_suffix("()").unwrap_unchecked() }.to_string(),
@@ -590,7 +619,7 @@ impl SpecParser {
 		macro_rules! opt {
 			($x:ident $y:ident) => {
 				if name == stringify!($x) {
-					if let Some(old) = rpm.$y {
+					if let Some(ref old) = rpm.$y {
 						warn!(
 							"overriding existing {} preamble value `{old}` to `{value}`",
 							stringify!($x)
@@ -639,12 +668,12 @@ impl SpecParser {
 			"Provides" => Package::add_query(&mut rpm.provides, &value)?,
 			"Conflicts" => Package::add_query(&mut rpm.conflicts, &value)?,
 			"Obsoletes" => Package::add_query(&mut rpm.obsoletes, &value)?,
-			"Recommends" => {}
-			"Suggests" => {}
-			"Supplements" => {}
-			"Enhances" => {}
+			"Recommends" => Package::add_simple_query(&mut rpm.recommends, &value)?,
+			"Suggests" => Package::add_simple_query(&mut rpm.suggests, &value)?,
+			"Supplements" => Package::add_simple_query(&mut rpm.supplements, &value)?,
+			"Enhances" => Package::add_simple_query(&mut rpm.enhances, &value)?,
 			"OrderWithRequires" => {}
-			"BuildRequires" => {}
+			"BuildRequires" => Package::add_query(&mut rpm.buildrequires, &value)?,
 			"BuildConflicts" => {}
 			"ExcludeArch" => {}
 			"ExclusiveArch" => {}
@@ -661,15 +690,16 @@ impl SpecParser {
 		Ok(())
 	}
 
-	fn _internal_macro(&mut self, name: &str) -> Result<&str> {
+	fn _internal_macro(&mut self, name: &str) -> Result<String> {
 		todo!()
 	}
 
 	// design issue: we kinda need to know if it's Macro::Par before we can grab the args...?
-	fn _rp_macro(&mut self, name: &str, args: &str) -> Option<&str> {
+	fn _rp_macro(&mut self, name: &str, reader: &mut Consumer) -> Option<String> {
+		debug!("getting %{name}");
 		let m = self.macros.get(name)?;
 		match m {
-			Pork::Done(Macro::Text(val)) => Some(val),
+			Pork::Done(Macro::Text(val)) => Some(val.into()),
 			Pork::Done(Macro::Internal) => self._internal_macro(name).ok(),
 			Pork::Done(Macro::Par(ph)) => {
 				todo!() // parameterized macro
@@ -677,25 +707,27 @@ impl SpecParser {
 			Pork::Done(Macro::Lua(code)) => {
 				todo!() // we have this in `rpmio/rpmlua.rs` already. kinda?
 			}
-			Pork::Raw(m) => {
+			Pork::Raw(def) => {
 				// it's fucking raw!!
-				if m.ends_with(' ') {
+				let def = def.to_string();
+				if def.ends_with(' ') {
 					// parameterized macro
 					todo!() // another parser? dunno
 				}
-				self._parse_macro_definition(name, m, args) // calls _rp_macro() again
+				let m = self._parse_simple_macro_definition(&def).unwrap();
+				self.macros.insert(name.to_string(), m);
+				self._rp_macro(name, reader)
 			}
 		}
 	}
 
 	// used by _rp_macro, expands macro definition from Pork::Raw.
 	// recursive! and doesn't parse parameterized macros
-	fn _parse_macro_definition(&mut self, name: &str, m: &String, args: &str) -> Option<&str> {
+	fn _parse_simple_macro_definition(&mut self, definition: &str) -> Result<Pork<Macro>> {
 		// first of all it's not internal (filled in Self::new())
 		let mut res = String::new();
 		let mut percent = false;
-		let mut is_substitution = false;
-		let mut chars: Consumer = Consumer::from(m.as_str()); // any type that impl Read works
+		let mut chars: Consumer = Consumer::from(definition);
 		while let Some(ch) = chars.next() {
 			if ch == '%' {
 				if percent {
@@ -708,81 +740,117 @@ impl SpecParser {
 			}
 			if percent {
 				chars.push(ch);
-				res += self._read_raw_macro_use(&mut chars).ok()?;
+				res += &self._read_raw_macro_use(&mut chars)?;
 				percent = false;
 			} else {
-				res.write_char(ch);
+				res.write_char(ch).unwrap();
 			}
 		}
-		self.macros.insert(
-			name.to_string(),
-			Pork::Done(if is_substitution { Macro::Par(res) } else { Macro::Text(res) }),
-		);
-		return self._rp_macro(name, args); // FIXME we can probably optimise this part.
+		Ok(Pork::Done(Macro::Text(res)))
 	}
 
-	/// parse the stuff after %, and determines "{[(". returns expanded macro.
-	fn _read_raw_macro_use(&mut self, chars: &mut Consumer) -> Result<&str> {
-		// read until we get name?
+	/// parse the stuff after %, and determines `{[()]}`. returns expanded macro.
+	/// Assumption: `chars` is a str Consumer (no reader).
+	/// FIXME please REFACTOR me!!
+	fn _read_raw_macro_use(&mut self, chars: &mut Consumer) -> Result<String> {
+		debug!("reading macro");
 		let mut notflag = false;
 		let mut question = false;
 		let mut content = String::new();
-		let mut add = "";
+		let l = chars.len();
+		macro_rules! flagmacrohdl {
+			($name:expr, $consumer:expr) => {
+				let out = self._rp_macro($name, &mut Consumer::from($consumer));
+				if notflag {
+					if question {
+						return Ok("".into());
+					}
+					// when %a is undefined, %{!a} expands to %{!a}, but %!a expands to %a
+					if content.is_empty() {
+						return Ok(out.unwrap_or_else(|| format!("%{}", $name)));
+					} else {
+						return Ok(out.unwrap_or_else(|| format!("%{{!{}}}", $name)));
+					}
+				}
+				if question {
+					return Ok(out.unwrap_or_default());
+				}
+				return out.ok_or(eyre!("Macro not found: %{content}"));
+			};
+			($name:expr) => {
+				flagmacrohdl!($name, "")
+			};
+		}
+		macro_rules! _q {
+			() => {{
+				if question {
+					warn!("Seeing double `?` flag in macro use. Ignoring.");
+				}
+				question = true;
+				continue;
+			}};
+		}
 		while let Some(ch) = chars.next() {
 			// we read until we encounter '}' or ':' or the end
 			match ch {
 				'!' => notflag = !notflag,
-				'?' => {
-					if question {
-						warn!("Seeing double `?` flag in macro use. Ignoring.");
-					}
-					question = true;
-				}
+				'?' => _q!(),
 				'{' => {
-					if !content.is_empty() {
-						add = "{";
+					if chars.len() + 1 != l {
+						chars.push('{');
 						break;
 					}
 					let mut name = String::new();
 					while let Some(ch) = chars.next() {
 						if ch == '}' {
-							// TODO flags
-							return self
-								._rp_macro(&name, "")
-								.ok_or(eyre!("Macro not found: %{name}"));
+							flagmacrohdl!(&name);
 						}
 						if ch == ':' {
 							let mut content = String::new();
-							while let Some(ch) = chars.next() {
+							for ch in chars.by_ref() {
 								if ch == '}' {
-									// TODO check for macro existence
-									// TODO flags
-									return self
-										._rp_macro(&name, &content)
-										.ok_or(eyre!("Macro not found: %{name}"));
+									if question {
+										if self.macros.contains_key(&name) ^ notflag {
+											return Ok("".to_string());
+										} else {
+											// expand content?
+											return Ok(self.parse_macro(&content));
+										}
+									}
+									flagmacrohdl!(&name, &*content);
 								}
+								content.write_char(ch)?;
 							}
 						}
-						name.write_char(ch);
+						if ch == '?' {
+							_q!();
+						}
+						if ch == '!' {
+							notflag = !notflag;
+							continue;
+						}
+						name.write_char(ch)?;
 					}
 				}
 				'(' => {
 					if !content.is_empty() {
-						add = "(";
+						chars.push('(');
 						break;
 					}
 					if notflag || question {
 						warn!("flags (! and ?) are not supported for %().");
 					}
 					let mut shellcmd = String::new();
-					while let Some(ch) = chars.next() {
+					for ch in chars.by_ref() {
 						if ch == ')' {
 							return match Command::new("sh").arg("-c").arg(shellcmd).output() {
-								Ok(out) => Ok(String::from_utf8(out.stdout)?.as_str()),
+								Ok(out) => {
+									Ok(String::from_utf8(out.stdout)?.trim_end_matches('\n').into())
+								}
 								Err(e) => Err(eyre!(e)),
 							};
 						}
-						shellcmd.write_char(ch);
+						shellcmd.write_char(ch)?;
 					}
 					return Err(eyre!("Unexpected end of shell command, for `%({shellcmd}`"));
 				}
@@ -794,31 +862,18 @@ impl SpecParser {
 						chars.push(ch);
 						break;
 					}
-					content.write_char(ch);
+					content.write_char(ch)?;
 				}
 			}
 		}
-		// TODO flags
-		let out = self._rp_macro(&content, "").map(|x| {
-			let x = x.to_string();
-			x.push_str(add);
-			x.as_str()
-		});
-		if notflag {
-			warn!("Found `%!...`, returning nothing.");
-			return Ok("");
-		}
-		if question {
-			return Ok(out.unwrap_or_default());
-		}
-		return out.ok_or(eyre!("Macro not found: %{content}"));
+		flagmacrohdl!(&content);
 	}
 
 	fn new() -> Self {
 		let mut obj = Self { rpm: RPMSpec::new(), errors: vec![], macros: HashMap::new() };
-		INTERNAL_MACROS
-			.iter()
-			.map(|name| obj.macros.insert(name.to_string(), Pork::Done(Macro::Internal)));
+		INTERNAL_MACROS.iter().for_each(|name| {
+			obj.macros.insert(name.to_string(), Pork::Done(Macro::Internal));
+		});
 		obj
 	}
 }
@@ -861,7 +916,36 @@ mod tests {
 	fn simple_macro_expand() -> Result<()> {
 		let mut parser = super::SpecParser::new();
 		parser.macros.insert("macrohai".to_string(), Pork::Raw("hai hai".to_string()));
-		assert_eq!(parser._read_raw_macro_use(&mut ("%macrohai".into()))?, "hai hai");
+		assert_eq!(parser._read_raw_macro_use(&mut ("macrohai".into()))?, "hai hai");
+		Ok(())
+	}
+	#[test]
+	fn text_recursive_macro_expand() -> Result<()> {
+		let mut parser = super::SpecParser::new();
+		parser.macros.insert("mhai".to_string(), Pork::Raw("hai hai".to_string()));
+		parser.macros.insert("quadhai".to_string(), Pork::Raw("%mhai %{mhai}".to_string()));
+		assert_eq!(parser._read_raw_macro_use(&mut ("quadhai".into()))?, "hai hai hai hai");
+		Ok(())
+	}
+	#[test]
+	fn text_quoting_recursive_macro_expand() -> Result<()> {
+		let mut parser = super::SpecParser::new();
+		parser.macros.insert("mhai".to_string(), Pork::Raw("hai hai".to_string()));
+		parser.macros.insert("idk".to_string(), Pork::Raw("%!?mhai %?!mhai %{mhai}".to_string()));
+		parser
+			.macros
+			.insert("idk2".into(), Pork::Raw("%{?mhai} %{!mhai} %{!?mhai} %{?!mhai}".into()));
+		parser.macros.insert("aaa".to_string(), Pork::Raw("%idk %idk2".to_string()));
+		assert_eq!(parser._read_raw_macro_use(&mut ("aaa".into()))?, "  hai hai hai hai hai hai  ");
+		Ok(())
+	}
+	#[test]
+	fn shell_macro_expand() -> Result<()> {
+		let mut parser = super::SpecParser::new();
+		parser
+			.macros
+			.insert("x".to_string(), Pork::Raw("%(echo haai | sed 's/a/aa/g')".to_string()));
+		assert_eq!(parser._read_raw_macro_use(&mut ("x".into()))?, "haaaai");
 		Ok(())
 	}
 }

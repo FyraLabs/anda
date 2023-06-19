@@ -12,9 +12,9 @@
 
 mod error;
 mod parse;
-mod rpmio;
-mod spec;
-mod utils;
+// mod rpmio;
+// mod spec;
+// mod utils;
 
 pub fn add(left: usize, right: usize) -> usize {
 	left + right
