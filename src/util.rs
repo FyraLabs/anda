@@ -238,6 +238,7 @@ pub fn get_changed_files(path: &Path) -> Option<Vec<String>> {
         None,
     )
     .ok()?;
+    trace!("changed files: {changed_files:?}");
     Some(changed_files)
 }
 
@@ -254,6 +255,7 @@ pub fn get_date() -> String {
 }
 
 use promptly::prompt_default;
+use tracing::trace;
 
 /// Initializes a new anda project
 pub fn init(path: &Path, yes: bool) -> Result<()> {
