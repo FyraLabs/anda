@@ -1,4 +1,4 @@
-use std::io::Stderr;
+use smartstring::alias::String;
 
 #[derive(Debug)]
 pub enum ParserError {

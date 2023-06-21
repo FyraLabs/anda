@@ -2,11 +2,13 @@ use crate::error::ParserError;
 use color_eyre::{eyre::bail, eyre::eyre, Help, Result};
 use lazy_static::lazy_static;
 use regex::Regex;
+use smartstring::alias::String;
 use std::{
 	collections::HashMap,
 	fmt::Write,
 	fs::File,
 	io::{BufRead, BufReader, Read},
+	mem::take,
 	process::Command,
 };
 use tracing::{debug, error, warn};
@@ -145,7 +147,7 @@ impl Package {
 			query.split_once(|c: char| !c.is_alphanumeric() && !PKGNAMECHARSET.contains(c))
 		{
 			// the part that matches the good name is `name`. Check the rest.
-			let mut pkg = Package::new(name.to_string());
+			let mut pkg = Package::new(name.into());
 			if let Some(caps) = RE_PKGQCOND.captures(rest) {
 				pkg.condition = caps[1].into();
 				if let Some(epoch) = caps.get(2) {
@@ -157,8 +159,8 @@ impl Package {
 							.suggestion("Epoch can only be positive integers")
 					})?);
 				}
-				pkg.version = Some(caps[3].to_string());
-				pkg.release = Some(caps[4].to_string());
+				pkg.version = Some(caps[3].into());
+				pkg.release = Some(caps[4].into());
 				pkgs.push(pkg);
 				if let Some(rest) = caps.get(5) {
 					return Self::add_query(
@@ -176,7 +178,7 @@ impl Package {
 				return Err(eyre!("Invalid package name `{query}`")
 					.suggestion("Use only alphanumerics, underscores and dashes."));
 			}
-			pkgs.push(Self::new(query.to_string()));
+			pkgs.push(Self::new(query.into()));
 			Ok(())
 		}
 	}
@@ -194,11 +196,6 @@ struct RPMRequires {
 	verify: Vec<Package>,
 	interp: Vec<Package>,
 	meta: Vec<Package>,
-}
-impl RPMRequires {
-	fn new() -> Self {
-		Self::default()
-	}
 }
 
 #[derive(Default)]
@@ -222,11 +219,6 @@ struct Scriptlets {
 	transfiletriggerin: Option<String>,
 	transfiletriggerun: Option<String>,
 	transfiletriggerpostun: Option<String>,
-}
-impl Scriptlets {
-	fn new() -> Self {
-		Self::default()
-	}
 }
 
 enum ConfigFileMod {
@@ -264,11 +256,6 @@ struct Files {
 	license: Vec<String>,
 	// %verify
 	verify: HashMap<String, VerifyFileMod>,
-}
-impl Files {
-	fn new() -> Self {
-		Self::default()
-	}
 }
 
 struct Changelog {
@@ -399,7 +386,7 @@ impl<R: std::io::Read> Iterator for Consumer<R> {
 			if r.read(&mut buf).ok()? == 0 {
 				None // EOF
 			} else {
-				self.s = match String::from_utf8(buf.into()) {
+				self.s = match core::str::from_utf8(&buf) {
 					Ok(s) => s.chars().rev().collect(),
 					Err(e) => {
 						error!("cannot parse buffer `{buf:?}`: {e}");
@@ -425,48 +412,70 @@ enum ReadRawMacro {
 	Text(String),
 }
 
-// Process on required ... knackly?
-#[derive(Debug)]
-enum Pork<T = String> {
-	Raw(String), // do you like raw meat
-	Done(T),     // or well-done meat?
-}
-
-#[derive(Debug)]
-enum Macro {
-	Text(String),
-	Lua(String),
-	Par(String),
-	Internal,
-}
-
 #[derive(Default)]
 struct SpecParser {
 	rpm: RPMSpec,
 	errors: Vec<Result<(), ParserError>>,
-	macros: HashMap<String, Pork<Macro>>,
+	macros: HashMap<String, String>,
+}
+
+struct SpecMacroParserIter<'a> {
+	reader: &'a mut Consumer,
+	parser: &'a mut SpecParser,
+	percent: bool,
+	buf: String,
+}
+
+impl<'a> Iterator for SpecMacroParserIter<'a> {
+	type Item = char;
+	fn next(&mut self) -> Option<Self::Item> {
+		if !self.buf.is_empty() {
+			return self.buf.pop();
+		}
+		if let Some(ch) = self.reader.next() {
+			if ch == '%' {
+				self.percent = !self.percent;
+				if !self.percent {
+					return Some('%');
+				}
+				return self.next();
+			}
+			if self.percent {
+				match self.parser._read_raw_macro_use(self.reader) {
+					Ok(s) => {
+						self.buf = s.chars().rev().collect();
+						return self.buf.pop();
+					}
+					Err(e) => {
+						error!("Fail to parse macro: {e:#?}");
+						return None;
+					}
+				}
+			}
+			Some(ch)
+		} else {
+			None
+		}
+	}
 }
 
 impl SpecParser {
-	fn parse_multiline(&self, sline: &str) {
-		todo!();
-	}
-	fn parse_macro(&self, sline: &str) -> String {
-		// run rpm --eval
-		unimplemented!()
+	fn parse_macro<'a>(&'a mut self, reader: &'a mut Consumer) -> SpecMacroParserIter {
+		SpecMacroParserIter { reader, parser: self, percent: false, buf: String::new() }
 	}
 
 	// returns true if it passes the check
-	fn preamble_check(&mut self, name: String, ln: usize) -> bool {
-		if !PREAMBLES.contains(&name.as_str()) {
-			self.errors.push(Err(ParserError::UnknownPreamble(ln, name)));
+	// deprecate this FIXME
+	fn preamble_check(&mut self, name: &str, ln: usize) -> bool {
+		if !PREAMBLES.contains(&name) {
+			self.errors.push(Err(ParserError::UnknownPreamble(ln, name.into())));
 			return false;
 		}
 		true
 	}
 	// todo BuildRequires?
 	fn parse_requires(&mut self, sline: &str, ln: usize) -> bool {
-		lazy_static! {
+		lazy_static! { // move outside FIXME
 			static ref RE1: Regex =
 				Regex::new(r"(?m)^Requires(?:\(([\w,\s]+)\))?:\s*(.+)$").unwrap();
 			static ref RE2: Regex =
@@ -493,8 +502,7 @@ impl SpecParser {
 					"meta" => self.rpm.requires.meta.extend(pkgs),
 					// _ => bail!("Unknown Modifier '{}' for Requires", modifier),
 					_ => {
-						self.errors
-							.push(Err(ParserError::UnknownModifier(ln, modifier.to_string())));
+						self.errors.push(Err(ParserError::UnknownModifier(ln, modifier.into())));
 					}
 				}
 			}
@@ -503,20 +511,19 @@ impl SpecParser {
 		false
 	}
 	fn arch() -> Result<String> {
-		let s = String::from_utf8(Command::new("uname").arg("-m").output()?.stdout)?;
-		Ok(s[..s.len() - 1].to_string()) // remove new line
+		let binding = Command::new("uname").arg("-m").output()?;
+		let s = core::str::from_utf8(&binding.stdout)?;
+		Ok(s[..s.len() - 1].into()) // remove new line
 	}
 	// not sure where I've seen the docs, but there was one lying around saying you can define multiple
 	// macros with the same name, and when you undefine it the old one recovers (stack?). I don't think
 	// it is a good idea to do it like that (it is simply ridiculous and inefficient) but you can try
 	fn load_macros(&mut self) -> Result<()> {
 		// run rpm --showrc | grep "^Macro path"
-		let binding = String::from_utf8(
-			Command::new("sh")
-				.args(["-c", "rpm --showrc|grep '^Macro path'|sed 's/Macro path: //'"])
-				.output()?
-				.stdout,
-		)?;
+		let binding = Command::new("sh")
+			.args(["-c", "rpm --showrc|grep '^Macro path'|sed 's/Macro path: //'"])
+			.output()?;
+		let binding = core::str::from_utf8(&binding.stdout)?;
 		let paths = binding.trim().split(':');
 
 		let re = Regex::new(r"(?m)^%([\w()]+)[\t ]+((\\\n|[^\n])+)$").unwrap();
@@ -530,26 +537,24 @@ impl SpecParser {
 				let bytes = BufReader::new(File::open(&path)?).read_to_end(&mut buf)?;
 				assert_ne!(bytes, 0, "Empty macro definition file '{}'", path.display());
 				for cap in re.captures_iter(std::str::from_utf8(&buf)?) {
-					if self.macros.contains_key(&cap[1]) {
+					if let Some(val) = self.macros.get(&cap[1]) {
 						debug!(
-							"Macro Definition duplicated: {} : '{:?}' | '{}'",
-							&cap[1],
-							self.macros.get(&cap[1]).unwrap(),
-							&cap[2]
+							"Macro Definition duplicated: {} : '{val:?}' | '{}'",
+							&cap[1], &cap[2]
 						);
 						continue; // FIXME?
 					}
 					let name = &cap[1];
 					if name.ends_with("()") {
-						let mut content = cap[2].to_string();
+						let mut content = String::from(&cap[2]);
 						content.push(' '); // yup, we mark it using a space.
 						self.macros.insert(
-							unsafe { name.strip_suffix("()").unwrap_unchecked() }.to_string(),
-							Pork::Raw(content),
+							unsafe { name.strip_suffix("()").unwrap_unchecked() }.into(),
+							content,
 						);
 					}
 					// we trim() just in case
-					self.macros.insert(cap[1].to_string(), Pork::Raw(cap[2].trim().to_string()));
+					self.macros.insert(cap[1].into(), cap[2].trim().into());
 				}
 			}
 		}
@@ -559,8 +564,6 @@ impl SpecParser {
 		let re_preamble = Regex::new(r"(\w+):\s*(.+)").unwrap();
 		let re_dnl = Regex::new(r"^%dnl\b").unwrap();
 		let re_digit = Regex::new(r"\d+$").unwrap();
-		let mut preambles: HashMap<String, Vec<String>> = HashMap::new();
-		let mut list_preambles: HashMap<String, HashMap<i16, String>> = HashMap::new();
 		'll: for (line_number, line) in bufread.lines().enumerate() {
 			let line = line?;
 			let sline = line.trim();
@@ -580,33 +583,42 @@ impl SpecParser {
 					let sdigit = &digitcap[0];
 					let digit: i16 = sdigit.parse()?;
 					let name = &cap[1][..cap[1].len() - sdigit.len()];
-					let sname = name.to_string();
-					if !self.preamble_check(format!("{name}#"), line_number) {
+					if !self.preamble_check(&format!("{name}#"), line_number) {
 						continue 'll;
 					}
-					self.add_list_preamble(name, digit, cap[2].to_string())?;
+					self.add_list_preamble(name, digit, cap[2].into())?;
 				} else {
 					let name = cap[1].to_string();
-					if !self.preamble_check(name, line_number) {
+					if !self.preamble_check(&name, line_number) {
 						continue 'll;
 					}
-					self.add_preamble(&cap[1], cap[2].to_string(), line_number)?;
+					self.add_preamble(&cap[1], cap[2].into(), line_number)?;
 				}
 			}
 			// ! error?
 		}
 		if !self.errors.is_empty() {
-			return Err(eyre!("{:#?}", self.errors));
+			return take(&mut self.errors)
+				.into_iter()
+				.map(Result::unwrap_err)
+				.fold(Err(eyre!("Cannot parse spec file")), |report, e| report.error(e));
 		}
 		Ok(())
 	}
 
 	fn add_list_preamble(&mut self, name: &str, digit: i16, value: String) -> Result<()> {
-		let value = value.to_owned();
+		let value = value;
 		let rpm = &mut self.rpm;
+		macro_rules! no_override_ins {
+			($attr:ident) => {{
+				if let Some(old) = rpm.$attr.insert(digit, value) {
+					error!("Overriding preamble `{name}{digit}` (was `{old}`)");
+				}
+			}};
+		}
 		match name {
-			"Source" => rpm.sources = todo!(),
-			"Patch" => rpm.patches = todo!(),
+			"Source" => no_override_ins!(sources),
+			"Patch" => no_override_ins!(patches),
 			_ => bail!("BUG: failed to match preamble '{name}'"),
 		}
 		Ok(())
@@ -624,8 +636,7 @@ impl SpecParser {
 							"overriding existing {} preamble value `{old}` to `{value}`",
 							stringify!($x)
 						);
-						self.errors
-							.push(Err(ParserError::Duplicate(ln, stringify!($x).to_string())));
+						self.errors.push(Err(ParserError::Duplicate(ln, stringify!($x).into())));
 					}
 					rpm.name = Some(value);
 					return Ok(());
@@ -637,26 +648,31 @@ impl SpecParser {
 					return Ok(());
 				}
 			};
+			(%$x:ident $y:ident) => {
+				if name == stringify!($x) {
+					rpm.$y.append(&mut value.split_whitespace().map(|s| s.into()).collect());
+					return Ok(());
+				}
+			};
+			($a:ident $b:ident | $($x:ident $y:ident)|+) => {
+				opt!($a $b);
+				opt!($($x $y)|+);
+			}
 		}
 
-		opt!(Name name);
-		opt!(Version version);
-		opt!(Release release);
-		opt!(License license);
-		opt!(SourceLicense sourcelicense);
-		opt!(Group group);
-		opt!(Summary summary);
-		opt!(URL url);
-		opt!(BugURL bugurl);
-		opt!(ModularityLabel modularitylabel);
-		opt!(DistTag disttag);
-		opt!(VCS vcs);
-		opt!(Distribution distribution);
-		opt!(Vendor vendor);
-		opt!(Packager packager);
+		opt!(Name name|Version version|Release release|License license|SourceLicense sourcelicense);
+		opt!(Group group); // todo subpackage
+		opt!(Summary summary); // todo subpackage
+		opt!(URL url|BugURL bugurl|ModularityLabel modularitylabel|DistTag disttag|VCS vcs|Distribution distribution|Vendor vendor|Packager packager);
 		opt!(~AutoReqProv autoreqprov);
 		opt!(~AutoReq autoreq);
 		opt!(~AutoProv autoprov);
+		opt!(%ExcludeArch excludearch);
+		opt!(%ExclusiveArch exclusivearch);
+		opt!(%ExcludeOS exclusiveos);
+		opt!(%ExclusiveOS exclusiveos);
+		opt!(%BuildArch buildarch);
+		opt!(%BuildArchitectures buildarch);
 
 		match name {
 			"Epoch" => {
@@ -665,26 +681,20 @@ impl SpecParser {
 				}
 				rpm.epoch = Some(value.parse().expect("Failed to decode epoch to int"));
 			}
-			"Provides" => Package::add_query(&mut rpm.provides, &value)?,
-			"Conflicts" => Package::add_query(&mut rpm.conflicts, &value)?,
-			"Obsoletes" => Package::add_query(&mut rpm.obsoletes, &value)?,
-			"Recommends" => Package::add_simple_query(&mut rpm.recommends, &value)?,
-			"Suggests" => Package::add_simple_query(&mut rpm.suggests, &value)?,
-			"Supplements" => Package::add_simple_query(&mut rpm.supplements, &value)?,
-			"Enhances" => Package::add_simple_query(&mut rpm.enhances, &value)?,
-			"OrderWithRequires" => {}
+			"Provides" => Package::add_query(&mut rpm.provides, &value)?, // todo subpackage
+			"Conflicts" => Package::add_query(&mut rpm.conflicts, &value)?, // todo subpackage
+			"Obsoletes" => Package::add_query(&mut rpm.obsoletes, &value)?, // todo subpackage
+			"Recommends" => Package::add_simple_query(&mut rpm.recommends, &value)?, // todo subpackage
+			"Suggests" => Package::add_simple_query(&mut rpm.suggests, &value)?, // todo subpackage
+			"Supplements" => Package::add_simple_query(&mut rpm.supplements, &value)?, // todo subpackage
+			"Enhances" => Package::add_simple_query(&mut rpm.enhances, &value)?, // todo subpackage
 			"BuildRequires" => Package::add_query(&mut rpm.buildrequires, &value)?,
-			"BuildConflicts" => {}
-			"ExcludeArch" => {}
-			"ExclusiveArch" => {}
-			"ExcludeOS" => {}
-			"ExclusiveOS" => {}
-			"BuildArch" => {}
-			"BuildArchitectures" => {}
-			"Prefixes" => {}
-			"Prefix" => {}
-			"DocDir" => {}
-			"RemovePathPostfixes" => {}
+			"OrderWithRequires" => todo!(),
+			"BuildConflicts" => todo!(),
+			"Prefixes" => todo!(),
+			"Prefix" => todo!(),
+			"DocDir" => todo!(),
+			"RemovePathPostfixes" => todo!(),
 			_ => bail!("BUG: failed to match preamble '{name}'"),
 		}
 		Ok(())
@@ -697,41 +707,23 @@ impl SpecParser {
 	// design issue: we kinda need to know if it's Macro::Par before we can grab the args...?
 	fn _rp_macro(&mut self, name: &str, reader: &mut Consumer) -> Option<String> {
 		debug!("getting %{name}");
-		let m = self.macros.get(name)?;
-		match m {
-			Pork::Done(Macro::Text(val)) => Some(val.into()),
-			Pork::Done(Macro::Internal) => self._internal_macro(name).ok(),
-			Pork::Done(Macro::Par(ph)) => {
-				todo!() // parameterized macro
-			}
-			Pork::Done(Macro::Lua(code)) => {
-				todo!() // we have this in `rpmio/rpmlua.rs` already. kinda?
-			}
-			Pork::Raw(def) => {
-				// it's fucking raw!!
-				let def = def.to_string();
-				if def.ends_with(' ') {
-					// parameterized macro
-					todo!() // another parser? dunno
-				}
-				let m = self._parse_simple_macro_definition(&def).unwrap();
-				self.macros.insert(name.to_string(), m);
-				self._rp_macro(name, reader)
-			}
+		if name == "lua" {
+			todo!()
 		}
-	}
-
-	// used by _rp_macro, expands macro definition from Pork::Raw.
-	// recursive! and doesn't parse parameterized macros
-	fn _parse_simple_macro_definition(&mut self, definition: &str) -> Result<Pork<Macro>> {
-		// first of all it's not internal (filled in Self::new())
+		// check for internal here
+		let def = self.macros.get(name)?;
+		if def.ends_with(' ') {
+			// parameterized macro
+			todo!() // another parser? dunno
+		}
+		// it's just text
 		let mut res = String::new();
 		let mut percent = false;
-		let mut chars: Consumer = Consumer::from(definition);
+		let mut chars: Consumer = Consumer::from(def.as_str());
 		while let Some(ch) = chars.next() {
 			if ch == '%' {
 				if percent {
-					res += "%";
+					res.push('%');
 					percent = false; // %%%% will be parsed correctly in this way
 					continue;
 				}
@@ -740,14 +732,15 @@ impl SpecParser {
 			}
 			if percent {
 				chars.push(ch);
-				res += &self._read_raw_macro_use(&mut chars)?;
+				res.push_str(&self._read_raw_macro_use(&mut chars).ok()?);
 				percent = false;
 			} else {
 				res.write_char(ch).unwrap();
 			}
 		}
-		Ok(Pork::Done(Macro::Text(res)))
+		Some(res)
 	}
+
 
 	/// parse the stuff after %, and determines `{[()]}`. returns expanded macro.
 	/// Assumption: `chars` is a str Consumer (no reader).
@@ -767,9 +760,9 @@ impl SpecParser {
 					}
 					// when %a is undefined, %{!a} expands to %{!a}, but %!a expands to %a
 					if content.is_empty() {
-						return Ok(out.unwrap_or_else(|| format!("%{}", $name)));
+						return Ok(out.unwrap_or_else(|| format!("%{}", $name).into()));
 					} else {
-						return Ok(out.unwrap_or_else(|| format!("%{{!{}}}", $name)));
+						return Ok(out.unwrap_or_else(|| format!("%{{!{}}}", $name).into()));
 					}
 				}
 				if question {
@@ -781,20 +774,16 @@ impl SpecParser {
 				flagmacrohdl!($name, "")
 			};
 		}
-		macro_rules! _q {
-			() => {{
-				if question {
-					warn!("Seeing double `?` flag in macro use. Ignoring.");
-				}
-				question = true;
-				continue;
-			}};
-		}
 		while let Some(ch) = chars.next() {
 			// we read until we encounter '}' or ':' or the end
 			match ch {
 				'!' => notflag = !notflag,
-				'?' => _q!(),
+				'?' => {
+					if question {
+						warn!("Seeing double `?` flag in macro use. Ignoring.");
+					}
+					question = true;
+				}
 				'{' => {
 					if chars.len() + 1 != l {
 						chars.push('{');
@@ -811,19 +800,24 @@ impl SpecParser {
 								if ch == '}' {
 									if question {
 										if self.macros.contains_key(&name) ^ notflag {
-											return Ok("".to_string());
+											return Ok(self
+												.parse_macro(&mut Consumer::from(&*content))
+												.collect());
 										} else {
-											// expand content?
-											return Ok(self.parse_macro(&content));
+											return Ok("".into());
 										}
 									}
 									flagmacrohdl!(&name, &*content);
 								}
-								content.write_char(ch)?;
+								content.push(ch);
 							}
 						}
 						if ch == '?' {
-							_q!();
+							if question {
+								warn!("Seeing double `?` flag in macro use. Ignoring.");
+							}
+							question = true;
+							continue;
 						}
 						if ch == '!' {
 							notflag = !notflag;
@@ -840,13 +834,13 @@ impl SpecParser {
 					if notflag || question {
 						warn!("flags (! and ?) are not supported for %().");
 					}
-					let mut shellcmd = String::new();
+					let mut shellcmd = std::string::String::new();
 					for ch in chars.by_ref() {
 						if ch == ')' {
 							return match Command::new("sh").arg("-c").arg(shellcmd).output() {
-								Ok(out) => {
-									Ok(String::from_utf8(out.stdout)?.trim_end_matches('\n').into())
-								}
+								Ok(out) => Ok(core::str::from_utf8(&out.stdout)?
+									.trim_end_matches('\n')
+									.into()),
 								Err(e) => Err(eyre!(e)),
 							};
 						}
@@ -871,9 +865,9 @@ impl SpecParser {
 
 	fn new() -> Self {
 		let mut obj = Self { rpm: RPMSpec::new(), errors: vec![], macros: HashMap::new() };
-		INTERNAL_MACROS.iter().for_each(|name| {
-			obj.macros.insert(name.to_string(), Pork::Done(Macro::Internal));
-		});
+		// INTERNAL_MACROS.iter().for_each(|name| {
+		// 	obj.macros.insert((*name).into(), Pork::Done(Macro::Internal));
+		// });
 		obj
 	}
 }
@@ -915,37 +909,44 @@ mod tests {
 	#[test]
 	fn simple_macro_expand() -> Result<()> {
 		let mut parser = super::SpecParser::new();
-		parser.macros.insert("macrohai".to_string(), Pork::Raw("hai hai".to_string()));
+		parser.macros.insert("macrohai".into(), "hai hai".into());
 		assert_eq!(parser._read_raw_macro_use(&mut ("macrohai".into()))?, "hai hai");
 		Ok(())
 	}
 	#[test]
 	fn text_recursive_macro_expand() -> Result<()> {
 		let mut parser = super::SpecParser::new();
-		parser.macros.insert("mhai".to_string(), Pork::Raw("hai hai".to_string()));
-		parser.macros.insert("quadhai".to_string(), Pork::Raw("%mhai %{mhai}".to_string()));
+		parser.macros.insert("mhai".into(), "hai hai".into());
+		parser.macros.insert("quadhai".into(), "%mhai %{mhai}".into());
 		assert_eq!(parser._read_raw_macro_use(&mut ("quadhai".into()))?, "hai hai hai hai");
 		Ok(())
 	}
 	#[test]
 	fn text_quoting_recursive_macro_expand() -> Result<()> {
 		let mut parser = super::SpecParser::new();
-		parser.macros.insert("mhai".to_string(), Pork::Raw("hai hai".to_string()));
-		parser.macros.insert("idk".to_string(), Pork::Raw("%!?mhai %?!mhai %{mhai}".to_string()));
+		parser.macros.insert("mhai".into(), "hai hai".into());
+		parser.macros.insert("idk".into(), "%!?mhai %?!mhai %{mhai}".into());
 		parser
 			.macros
-			.insert("idk2".into(), Pork::Raw("%{?mhai} %{!mhai} %{!?mhai} %{?!mhai}".into()));
-		parser.macros.insert("aaa".to_string(), Pork::Raw("%idk %idk2".to_string()));
+			.insert("idk2".into(), "%{?mhai} %{!mhai} %{!?mhai} %{?!mhai}".into());
+		parser.macros.insert("aaa".into(), "%idk %idk2".into());
 		assert_eq!(parser._read_raw_macro_use(&mut ("aaa".into()))?, "  hai hai hai hai hai hai  ");
 		Ok(())
 	}
 	#[test]
 	fn shell_macro_expand() -> Result<()> {
 		let mut parser = super::SpecParser::new();
-		parser
-			.macros
-			.insert("x".to_string(), Pork::Raw("%(echo haai | sed 's/a/aa/g')".to_string()));
+		parser.macros.insert("x".into(), "%(echo haai | sed 's/a/aa/g')".into());
 		assert_eq!(parser._read_raw_macro_use(&mut ("x".into()))?, "haaaai");
+		Ok(())
+	}
+	#[test]
+	fn presence_macro_expand() -> Result<()> {
+		let mut parser = super::SpecParser::new();
+		parser.macros.insert("x".into(), "%{?not_exist:hai}%{!?not_exist:bai}".into());
+		assert_eq!(parser._read_raw_macro_use(&mut ("x".into()))?, "bai");
+		parser.macros.insert("not_exist".into(), "wha".into());
+		assert_eq!(parser._read_raw_macro_use(&mut ("x".into()))?, "hai");
 		Ok(())
 	}
 }
