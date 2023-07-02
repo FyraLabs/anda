@@ -366,11 +366,72 @@ impl<R: std::io::Read> Consumer<R> {
 	fn new(s: String, r: Option<BufReader<R>>) -> Self {
 		Self { s: s.chars().rev().collect(), r }
 	}
+	#[inline]
 	fn push<'a>(&mut self, c: char) {
 		self.s.push(c)
 	}
+	#[inline]
 	fn len(&self) -> usize {
 		self.s.len()
+	}
+	fn read_til_EOL(&mut self) -> Option<String> {
+		let (mut sq, mut dq) = (false, false);
+		let mut ps = vec![];
+		let mut out = String::new();
+		macro_rules! close {
+			($ch:ident ~ $begin:expr, $end:expr) => {
+				if $ch == $end {
+					match ps.pop() {
+						Some($begin) => continue,
+						Some(x) => {
+							error!("Found `{}` before closing `{x}`", $end);
+							return None;
+						}
+						None => {
+							error!("Unexpected closing char: `{}`", $end);
+							return None;
+						}
+					}
+				}
+			};
+		}
+		'main: while let Some(ch) = self.next() {
+			if "([{".contains(ch) {
+				ps.push(ch);
+				continue;
+			}
+			if ch == '\'' {
+				ps.push('\'');
+				while let Some(ch) = self.next() {
+					ps.push(ch);
+					if ch == '\'' {
+						continue 'main;
+					}
+				}
+				error!("Unexpected EOF, `'` not closed");
+				return None;
+			}
+			if ch == '"' {
+				ps.push('"');
+				while let Some(ch) = self.next() {
+					ps.push(ch);
+					if ch == '"' {
+						continue 'main;
+					}
+				}
+				error!("Unexpected EOF, `\"` not closed");
+				return None;
+			}
+			close!(ch ~ '(', ')');
+			close!(ch ~ '[', ']');
+			close!(ch ~ '{', '}');
+			out.push(ch);
+		}
+		if !ps.is_empty() {
+			error!("Unclosed: {ps:?}");
+			return None;
+		}
+		Some(out)
 	}
 }
 
@@ -791,8 +852,64 @@ impl SpecParser {
 		Ok(())
 	}
 
-	fn _internal_macro(&mut self, name: &str) -> Result<String> {
-		todo!()
+	fn _internal_macro(&mut self, name: &str, reader: &mut Consumer) -> Option<String> {
+		match name {
+			"define" | "global" => {
+				let def = reader.read_til_EOL()?;
+				if let Some((name, def)) = def.split_once(' ') {
+					let name: String = if let Some(x) = name.strip_suffix("()") {
+						format!("{x} ").into()
+					} else {
+						name.into()
+					};
+					self.macros.insert(name, def.into());
+					return Some("".into());
+				} else {
+					error!("Invalid syntax: `%define {def}`");
+					return None;
+				}
+			}
+			"undefine" => {
+				self.macros.remove(name);
+				return Some("".into());
+			}
+			"load" => unimplemented!(),
+			"expand" => {
+				return self._expand_macro(reader);
+			}
+			"expr" => unimplemented!(),
+			"lua" => unimplemented!(),
+			"macrobody" => unimplemented!(),
+			"quote" => unimplemented!(),
+			"gsub" => unimplemented!(),
+			"len" => unimplemented!(),
+			"lower" => unimplemented!(),
+			"rep" => unimplemented!(),
+			"reverse" => unimplemented!(),
+			"sub" => unimplemented!(),
+			"upper" => unimplemented!(),
+			"shescape" => unimplemented!(),
+			"shrink" => unimplemented!(),
+			"basename" => unimplemented!(),
+			"dirname" => unimplemented!(),
+			"exists" => unimplemented!(),
+			"suffix" => unimplemented!(),
+			"url2path" => unimplemented!(),
+			"uncompress" => unimplemented!(),
+			"getncpus" => unimplemented!(),
+			"getconfidir" => unimplemented!(),
+			"getenv" => unimplemented!(),
+			"rpmversion" => unimplemented!(),
+			"echo" => unimplemented!(),
+			"warn" => unimplemented!(),
+			"error" => unimplemented!(),
+			"verbose" => unimplemented!(),
+			"S" => unimplemented!(),
+			"P" => unimplemented!(),
+			"trace" => unimplemented!(),
+			"dump" => unimplemented!(),
+			_ => return None,
+		}
 	}
 
 	/// parses:
@@ -809,11 +926,7 @@ impl SpecParser {
 		// we start AFTER %macro_name
 		let mut content = String::new();
 		let mut flags = vec![];
-		let mut pa: usize = 0; // ()
-		let mut pb: usize = 0; // []
-		let mut pc: usize = 0; // {}
-		let mut sq = false; // ''
-		let mut dq = false; // ""
+		let (mut pa, mut pb, mut pc, mut sq, mut dq);
 		gen_read_helper!(reader pa pb pc sq dq);
 		macro_rules! exit {
 			() => {
@@ -893,15 +1006,16 @@ impl SpecParser {
 		let (raw_args, args, flags) = self._param_macro_line_args(reader)?;
 		let mut res = String::new();
 		let mut percent = false;
-		let (mut sq, mut dq);
-		let (mut pa, mut pb, mut pc);
+		let (mut pa, mut pb, mut pc, mut sq, mut dq);
 		gen_read_helper!(def pa pb pc sq dq);
 		macro_rules! exit {
+			// for gen_read_helper!()
 			() => {
+				exit_chk!(); // maybe? FIXME
 				return None;
 			};
 		}
-		while let Some(ch) = def.next() {
+		'main: while let Some(ch) = def.next() {
 			chk_ps!(ch);
 			if ch == '%' {
 				if percent {
@@ -912,63 +1026,141 @@ impl SpecParser {
 				percent = true;
 				continue;
 			}
-			if percent {
-				percent = false;
-				match ch {
-					'*' => {
-						let follow = next!('*');
-						if follow == '*' {
-							// %**
-							res.push_str(&raw_args);
-						} else {
-							// %*
-							back!(follow);
-							res.push_str(&args.join(" "));
-						}
-						continue;
-					}
-					'#' => {
-						res.push_str(&args.len().to_string());
-						continue;
-					}
-					'0' => {
-						res.push_str(name);
-						continue;
-					}
-					'{' => {
-						todo!();
-					}
-					_ if ch.is_numeric() => {
-						todo!();
-					}
-					_ => {
-						def.push(ch);
-						res.push_str(&self._read_raw_macro_use(def).ok()?);
-					}
-				}
-			} else {
+			if !percent {
 				res.write_char(ch).unwrap();
+				continue;
+			}
+			percent = false;
+			// https://rpm-software-management.github.io/rpm/manual/macros.html
+			match ch {
+				'*' => {
+					let follow = next!('*');
+					if follow == '*' {
+						// %**
+						res.push_str(&raw_args);
+					} else {
+						// %*
+						back!(follow);
+						res.push_str(&args.join(" "));
+					}
+					continue;
+				}
+				'#' => {
+					res.push_str(&args.len().to_string());
+					continue;
+				}
+				'0' => {
+					res.push_str(name);
+					continue;
+				}
+				'{' => {
+					let req_pc = pc - 1;
+					let mut content = String::new();
+					while let Some(ch) = def.next() {
+						chk_ps!(ch);
+						if req_pc != pc {
+							content.push(ch);
+							continue;
+						}
+						// found `}`
+						let mut notflag = false;
+						if let Some(x) = content.strip_prefix('!') {
+							notflag = true;
+							content = x.into();
+						}
+						let expand = {
+							let binding = content.clone();
+							if let Some((name, e)) = binding.split_once(':') {
+								content = name.to_string().into();
+								e.into()
+							} else {
+								binding
+							}
+						};
+						if !content.starts_with('-') {
+							// normal stuff
+							res.push_str(
+								&self
+									._read_raw_macro_use(&mut Consumer::from(&*format!(
+										"{{{content}}}"
+									)))
+									.ok()?, // FIXME (err hdl?)
+							);
+						}
+						if let Some(content) = content.strip_suffix('*') {
+							if content.len() != 2 {
+								error!("Invalid macro param flag `%{{{content}}}`");
+								return None;
+							}
+							let mut argv = raw_args.split(' ');
+							if !notflag {
+								if let Some(n) = argv.clone().enumerate().find_map(|(n, x)| {
+									if x == content {
+										return Some(n);
+									}
+									None
+								}) {
+									if let Some(arg) = argv.nth(n + 1) {
+										res.push_str(arg);
+									}
+								}
+							}
+							// if there are no args after -f, add nothing.
+							continue 'main;
+						}
+						if content.len() == 2 {
+							let flag = unsafe { content.chars().last().unwrap_unchecked() };
+							if flag.is_alphabetic() {
+								if flags.contains(&flag) ^ notflag {
+									res.push_str(&expand);
+								}
+								continue 'main;
+							} else {
+								error!("Invalid macro name `%-{flag}`");
+								return None;
+							}
+						} else {
+							error!("Found `%-{content}` which is not a flag");
+							return None;
+						}
+					}
+					error!("Unexpected EOF while parsing `%{{...`");
+					return None;
+				}
+				_ if ch.is_numeric() => {
+					let mut macroname = String::new();
+					macroname.push(ch);
+					// no need chk_ps!(), must be numeric
+					while let Some(ch) = def.next() {
+						if ch.is_numeric() {
+							macroname.push(ch);
+						} else {
+							def.push(ch);
+							break;
+						}
+					}
+					let ret = match macroname.parse::<usize>() {
+						Ok(n) => args.get(n - 1),
+						Err(e) => {
+							error!("Cannot parse macro param `%{macroname}`: {e}");
+							return None;
+						}
+					};
+					res.push_str(ret.unwrap_or(&String::new()));
+				}
+				_ => {
+					def.push(ch);
+					res.push_str(&self._read_raw_macro_use(def).ok()?);
+				}
 			}
 		}
 		exit_chk!();
 		Some(res)
 	}
 
-	fn _rp_macro(&mut self, name: &str, reader: &mut Consumer) -> Option<String> {
-		debug!("getting %{name}");
-		if name == "lua" {
-			todo!()
-		}
-		// check for internal here
-		let def = self.macros.get(name)?;
-		if def.ends_with(' ') {
-			// parameterized macro
-			todo!() // another parser? dunno
-		}
-		// it's just text
+	fn _expand_macro(&mut self, chars: &mut Consumer) -> Option<String> {
 		let mut res = String::new();
 		let mut percent = false;
-		let mut chars: Consumer = Consumer::from(def.as_str());
 		while let Some(ch) = chars.next() {
 			if ch == '%' {
 				if percent {
@@ -981,13 +1173,32 @@ impl SpecParser {
 			}
 			if percent {
 				chars.push(ch);
-				res.push_str(&self._read_raw_macro_use(&mut chars).ok()?);
+				res.push_str(&self._read_raw_macro_use(chars).ok()?);
 				percent = false;
 			} else {
 				res.write_char(ch).unwrap();
 			}
 		}
 		Some(res)
+	}
+
+	fn _rp_macro(&mut self, name: &str, reader: &mut Consumer) -> Option<String> {
+		debug!("getting %{name}");
+		if name == "lua" {
+			todo!()
+		}
+		if let Some(expanded) = self._internal_macro(name, reader) {
+			return Some(expanded);
+		}
+		let def = self.macros.get(name)?;
+		if let Some(def) = def.strip_suffix(' ') {
+			// parameterized macro
+			let out = self._param_macro(name, &mut Consumer::from(def), reader)?;
+			self._expand_macro(&mut Consumer::from(&*out))
+		} else {
+			// it's just text
+			self._expand_macro(&mut Consumer::from(def.as_str()))
+		}
 	}
 
 	/// parse the stuff after %, and determines `{[()]}`. returns expanded macro.
