@@ -1,5 +1,5 @@
 use crate::error::ParserError;
-use color_eyre::{eyre::bail, eyre::eyre, Help, Result};
+use color_eyre::{eyre::bail, eyre::eyre, Help, Result, SectionExt};
 use lazy_static::lazy_static;
 use regex::Regex;
 use smartstring::alias::String;
@@ -13,72 +13,8 @@ use std::{
 };
 use tracing::{debug, error, warn};
 
-const INTERNAL_MACROS: &[&str] = &[
-	"trace",
-	"dump",
-	"echo",
-	"warn",
-	"error",
-	"define",
-	"undefine",
-	"global",
-	"uncompress",
-	"expand",
-	"S",
-	"P",
-	"F",
-];
-
-//? https://rpm-software-management.github.io/rpm/manual/spec.html
-const PREAMBLES: &[&str] = &[
-	"Name",
-	"Version",
-	"Release",
-	"Epoch",
-	"License",
-	"SourceLicense",
-	"Group",
-	"Summary",
-	"URL",
-	"BugURL",
-	"ModularityLabel",
-	"DistTag",
-	"VCS",
-	"Distribution",
-	"Vendor",
-	"Packager",
-	"BuildRoot",
-	"AutoReqProv",
-	"AutoReq",
-	"AutoProv",
-	"Requires",
-	"Provides",
-	"Conflicts",
-	"Obsoletes",
-	"Recommends",
-	"Suggests",
-	"Supplements",
-	"Enhances",
-	"OrderWithRequires",
-	"BuildRequires",
-	"BuildConflicts",
-	"ExcludeArch",
-	"ExclusiveArch",
-	"ExcludeOS",
-	"ExclusiveOS",
-	"BuildArch",
-	"BuildArchitectures",
-	"Prefixes",
-	"Prefix",
-	"DocDir",
-	"RemovePathPostfixes",
-	// list
-	"Source#",
-	"Patch#",
-];
-
 #[derive(Default, Clone, Copy)]
-enum PkgQCond {
+pub enum PkgQCond {
 	#[default]
 	Eq, // =
 	Le, // <=
@@ -101,72 +37,58 @@ impl From<&str> for PkgQCond {
 }
 
 #[derive(Clone, Default)]
-struct Package {
-	name: String,
-	version: Option<String>,
-	release: Option<String>,
-	epoch: Option<u32>,
-	condition: PkgQCond,
+pub struct Package {
+	pub name: String,
+	pub version: Option<String>,
+	pub release: Option<String>,
+	pub epoch: Option<u32>,
+	pub condition: PkgQCond,
 }
 lazy_static! {
-	static ref RE_PKGQCOND: Regex =
-		Regex::new(r"\s+(>=?|<=?|=)\s+(\d+:)?([\w\d.^~]+)-([\w\d.^~]+)(.*)").unwrap();
+	static ref RE_PKGQCOND: Regex = Regex::new(r"\s+(>=?|<=?|=)\s+(\d+:)?([\w\d.^~]+)-([\w\d.^~]+)(.*)").unwrap();
 }
 
 const PKGNAMECHARSET: &str = "_-";
 
 impl Package {
-	fn new(name: String) -> Self {
-		let mut x = Self::default();
-		x.name = name;
-		x
+	pub fn new(name: String) -> Self {
+		Self { name, ..Self::default() }
 	}
 	// Simple query: query without the <= and >= and versions and stuff. Only names.
-	fn add_simple_query(pkgs: &mut Vec<Self>, query: &str) -> Result<()> {
+	pub fn add_simple_query(pkgs: &mut Vec<Self>, query: &str) -> Result<()> {
 		let query = query.trim();
 		let mut last = String::new();
 		for ch in query.chars() {
-			if ch != ' ' && ch != ',' {
-				if !(ch.is_alphanumeric() || PKGNAMECHARSET.contains(ch)) {
-					return Err(eyre!("Invalid character `{ch}` found in package query.")
-						.note(format!("query: `{query}`")));
-				}
-				last.write_char(ch)?;
-			} else {
+			if ch == ' ' || ch == ',' {
 				pkgs.push(Package::new(std::mem::take(&mut last)));
+				continue;
 			}
+			if ch.is_alphanumeric() || PKGNAMECHARSET.contains(ch) {
+				return Err(eyre!("Invalid character `{ch}` found in package query.").note(format!("query: `{query}`")));
+			}
+			last.write_char(ch)?;
 		}
 		if !last.is_empty() {
 			pkgs.push(Package::new(last));
 		}
 		Ok(())
 	}
-	fn add_query(pkgs: &mut Vec<Self>, query: &str) -> Result<()> {
+	pub fn add_query(pkgs: &mut Vec<Self>, query: &str) -> Result<()> {
 		let query = query.trim(); // just in case
-		if let Some((name, rest)) =
-			query.split_once(|c: char| !c.is_alphanumeric() && !PKGNAMECHARSET.contains(c))
-		{
+		if let Some((name, rest)) = query.split_once(|c: char| !c.is_alphanumeric() && !PKGNAMECHARSET.contains(c)) {
 			// the part that matches the good name is `name`. Check the rest.
 			let mut pkg = Package::new(name.into());
 			if let Some(caps) = RE_PKGQCOND.captures(rest) {
 				pkg.condition = caps[1].into();
 				if let Some(epoch) = caps.get(2) {
-					let epoch =
-						epoch.as_str().strip_suffix(':').expect("epoch no `:` by RE_PKGQCOND");
-					pkg.epoch = Some(epoch.parse().map_err(|e| {
-						eyre!("Cannot parse epoch to u32: `{epoch}`")
-							.with_error(|| e)
-							.suggestion("Epoch can only be positive integers")
-					})?);
+					let epoch = epoch.as_str().strip_suffix(':').expect("epoch no `:` by RE_PKGQCOND");
+					pkg.epoch = Some(epoch.parse().map_err(|e| eyre!("Cannot parse epoch to u32: `{epoch}`").error(e).suggestion("Epoch can only be positive integers"))?);
 				}
 				pkg.version = Some(caps[3].into());
 				pkg.release = Some(caps[4].into());
 				pkgs.push(pkg);
 				if let Some(rest) = caps.get(5) {
-					return Self::add_query(
-						pkgs,
-						rest.as_str().trim_start_matches(|c| " ,".contains(c)),
-					);
+					return Self::add_query(pkgs, rest.as_str().trim_start_matches(|c| " ,".contains(c)));
 				}
 				Ok(())
 			} else {
@@ -175,8 +97,7 @@ impl Package {
 		} else {
 			// check if query matches pkg name
 			if query.chars().any(|c| !c.is_alphanumeric() && !PKGNAMECHARSET.contains(c)) {
-				return Err(eyre!("Invalid package name `{query}`")
-					.suggestion("Use only alphanumerics, underscores and dashes."));
+				return Err(eyre!("Invalid package name `{query}`").suggestion("Use only alphanumerics, underscores and dashes."));
 			}
 			pkgs.push(Self::new(query.into()));
 			Ok(())
@@ -185,49 +106,49 @@ impl Package {
 }
 
 #[derive(Default)]
-struct RPMRequires {
-	none: Vec<Package>,
-	pre: Vec<Package>,
-	post: Vec<Package>,
-	preun: Vec<Package>,
-	postun: Vec<Package>,
-	pretrans: Vec<Package>,
-	posttrans: Vec<Package>,
-	verify: Vec<Package>,
-	interp: Vec<Package>,
-	meta: Vec<Package>,
+pub struct RPMRequires {
+	pub none: Vec<Package>,
+	pub pre: Vec<Package>,
+	pub post: Vec<Package>,
+	pub preun: Vec<Package>,
+	pub postun: Vec<Package>,
+	pub pretrans: Vec<Package>,
+	pub posttrans: Vec<Package>,
+	pub verify: Vec<Package>,
+	pub interp: Vec<Package>,
+	pub meta: Vec<Package>,
 }
 
 #[derive(Default)]
-struct Scriptlets {
-	pre: Option<String>,
-	post: Option<String>,
-	preun: Option<String>,
-	postun: Option<String>,
-	pretrans: Option<String>,
-	posttrans: Option<String>,
-	verify: Option<String>,
+pub struct Scriptlets {
+	pub pre: Option<String>,
+	pub post: Option<String>,
+	pub preun: Option<String>,
+	pub postun: Option<String>,
+	pub pretrans: Option<String>,
+	pub posttrans: Option<String>,
+	pub verify: Option<String>,
 
-	triggerprein: Option<String>,
-	triggerin: Option<String>,
-	triggerun: Option<String>,
-	triggerpostun: Option<String>,
+	pub triggerprein: Option<String>,
+	pub triggerin: Option<String>,
+	pub triggerun: Option<String>,
+	pub triggerpostun: Option<String>,
 
-	filetriggerin: Option<String>,
-	filetriggerun: Option<String>,
-	filetriggerpostun: Option<String>,
-	transfiletriggerin: Option<String>,
-	transfiletriggerun: Option<String>,
-	transfiletriggerpostun: Option<String>,
+	pub filetriggerin: Option<String>,
+	pub filetriggerun: Option<String>,
+	pub filetriggerpostun: Option<String>,
+	pub transfiletriggerin: Option<String>,
+	pub transfiletriggerun: Option<String>,
+	pub transfiletriggerpostun: Option<String>,
 }
 
-enum ConfigFileMod {
+pub enum ConfigFileMod {
 	None,
 	MissingOK,
 	NoReplace,
 }
 
-enum VerifyFileMod {
+pub enum VerifyFileMod {
 	FileDigest, // or 'md5'
 	Size,
 	Link,
@@ -240,104 +161,104 @@ enum VerifyFileMod {
 }
 
 #[derive(Default)]
-struct Files {
+pub struct Files {
 	// %artifact
-	artifact: Vec<String>,
+	pub artifact: Vec<String>,
 	// %ghost
-	ghost: Vec<String>,
+	pub ghost: Vec<String>,
 	// %config
-	config: HashMap<String, ConfigFileMod>,
+	pub config: HashMap<String, ConfigFileMod>,
 	// %dir
-	dir: Vec<String>,
+	pub dir: Vec<String>,
 	// %readme (obsolete) = %doc
 	// %doc
-	doc: Vec<String>,
+	pub doc: Vec<String>,
 	// %license
-	license: Vec<String>,
+	pub license: Vec<String>,
 	// %verify
-	verify: HashMap<String, VerifyFileMod>,
+	pub verify: HashMap<String, VerifyFileMod>,
 }
 
-struct Changelog {
-	date: String, // ! any other?
-	version: Option<String>,
-	maintainer: String,
-	email: String,
-	message: String,
+pub struct Changelog {
+	pub date: String, // ! any other?
+	pub version: Option<String>,
+	pub maintainer: String,
+	pub email: String,
+	pub message: String,
 }
 
 #[derive(Default)]
-struct RPMSpec {
-	globals: HashMap<String, String>,
-	defines: HashMap<String, String>,
+pub struct RPMSpec {
+	pub globals: HashMap<String, String>,
+	pub defines: HashMap<String, String>,
 
 	// %description
-	description: Option<String>,
+	pub description: Option<String>,
 	// %prep
-	prep: Option<String>,
+	pub prep: Option<String>,
 	// %generate_buildrequires
-	generate_buildrequires: Option<String>,
+	pub generate_buildrequires: Option<String>,
 	// %conf
-	conf: Option<String>,
+	pub conf: Option<String>,
 	// %build
-	build: Option<String>,
+	pub build: Option<String>,
 	// %install
-	install: Option<String>,
+	pub install: Option<String>,
 	// %check
-	check: Option<String>,
+	pub check: Option<String>,
 
-	scriptlets: Scriptlets,
-	files: Files,              // %files
-	changelog: Vec<Changelog>, // %changelog
+	pub scriptlets: Scriptlets,
+	pub files: Files,              // %files
+	pub changelog: Vec<Changelog>, // %changelog
 
 	//* preamble
-	name: Option<String>,
-	version: Option<String>,
-	release: Option<String>,
-	epoch: Option<i32>,
-	license: Option<String>,
-	sourcelicense: Option<String>,
-	group: Option<String>,
-	summary: Option<String>,
-	sources: HashMap<i16, String>,
-	patches: HashMap<i16, String>,
+	pub name: Option<String>,
+	pub version: Option<String>,
+	pub release: Option<String>,
+	pub epoch: Option<i32>,
+	pub license: Option<String>,
+	pub sourcelicense: Option<String>,
+	pub group: Option<String>,
+	pub summary: Option<String>,
+	pub sources: HashMap<i16, String>,
+	pub patches: HashMap<i16, String>,
 	// TODO icon
 	// TODO nosource nopatch
-	url: Option<String>,
-	bugurl: Option<String>,
-	modularitylabel: Option<String>,
-	disttag: Option<String>,
-	vcs: Option<String>,
-	distribution: Option<String>,
-	vendor: Option<String>,
-	packager: Option<String>,
+	pub url: Option<String>,
+	pub bugurl: Option<String>,
+	pub modularitylabel: Option<String>,
+	pub disttag: Option<String>,
+	pub vcs: Option<String>,
+	pub distribution: Option<String>,
+	pub vendor: Option<String>,
+	pub packager: Option<String>,
 	// TODO buildroot
-	autoreqprov: bool,
-	autoreq: bool,
-	autoprov: bool,
-	requires: RPMRequires,
-	provides: Vec<Package>,
-	conflicts: Vec<Package>,
-	obsoletes: Vec<Package>,
-	recommends: Vec<Package>,
-	suggests: Vec<Package>,
-	supplements: Vec<Package>,
-	enhances: Vec<Package>,
-	orderwithrequires: Vec<Package>,
-	buildrequires: Vec<Package>,
-	buildconflicts: Vec<Package>,
-	excludearch: Vec<String>,
-	exclusivearch: Vec<String>,
-	excludeos: Vec<String>,
-	exclusiveos: Vec<String>,
-	buildarch: Vec<String>, // BuildArchitectures BuildArch
-	prefix: Option<String>, // Prefixes Prefix
-	docdir: Option<String>,
-	removepathpostfixes: Vec<String>,
+	pub autoreqprov: bool,
+	pub autoreq: bool,
+	pub autoprov: bool,
+	pub requires: RPMRequires,
+	pub provides: Vec<Package>,
+	pub conflicts: Vec<Package>,
+	pub obsoletes: Vec<Package>,
+	pub recommends: Vec<Package>,
+	pub suggests: Vec<Package>,
+	pub supplements: Vec<Package>,
+	pub enhances: Vec<Package>,
+	pub orderwithrequires: Vec<Package>,
+	pub buildrequires: Vec<Package>,
+	pub buildconflicts: Vec<Package>,
+	pub excludearch: Vec<String>,
+	pub exclusivearch: Vec<String>,
+	pub excludeos: Vec<String>,
+	pub exclusiveos: Vec<String>,
+	pub buildarch: Vec<String>, // BuildArchitectures BuildArch
+	pub prefix: Option<String>, // Prefixes Prefix
+	pub docdir: Option<String>,
+	pub removepathpostfixes: Vec<String>,
 }
 
 impl RPMSpec {
-	fn new() -> Self {
+	pub fn new() -> Self {
 		Self {
 			// buildroot
 			autoreqprov: true,
@@ -357,25 +278,24 @@ impl RPMSpec {
 /// it is actually reversed. This is because operations
 /// like `pop()` and `push()` are faster (`O(1)`) while
 /// `remove(0)` and `insert(0, ?)` are slower (`O(n)`).
-struct Consumer<R: std::io::Read = stringreader::StringReader<'static>> {
+pub struct Consumer<R: std::io::Read = stringreader::StringReader<'static>> {
 	s: String,
 	r: Option<BufReader<R>>,
 }
 
 impl<R: std::io::Read> Consumer<R> {
-	fn new(s: String, r: Option<BufReader<R>>) -> Self {
+	pub fn new(s: String, r: Option<BufReader<R>>) -> Self {
 		Self { s: s.chars().rev().collect(), r }
 	}
 	#[inline]
-	fn push<'a>(&mut self, c: char) {
+	pub fn push<'a>(&mut self, c: char) {
 		self.s.push(c)
 	}
 	#[inline]
-	fn len(&self) -> usize {
+	pub fn len(&self) -> usize {
 		self.s.len()
 	}
-	fn read_til_EOL(&mut self) -> Option<String> {
-		let (mut sq, mut dq) = (false, false);
+	pub fn read_til_eol(&mut self) -> Option<String> {
 		let mut ps = vec![];
 		let mut out = String::new();
 		macro_rules! close {
@@ -396,13 +316,16 @@ impl<R: std::io::Read> Consumer<R> {
 			};
 		}
 		'main: while let Some(ch) = self.next() {
+			if ch == '\n' {
+				break;
+			}
 			if "([{".contains(ch) {
 				ps.push(ch);
 				continue;
 			}
 			if ch == '\'' {
 				ps.push('\'');
-				while let Some(ch) = self.next() {
+				for ch in self.by_ref() {
 					ps.push(ch);
 					if ch == '\'' {
 						continue 'main;
@@ -413,7 +336,7 @@ impl<R: std::io::Read> Consumer<R> {
 			}
 			if ch == '"' {
 				ps.push('"');
-				while let Some(ch) = self.next() {
+				for ch in self.by_ref() {
 					ps.push(ch);
 					if ch == '"' {
 						continue 'main;
@@ -468,19 +391,14 @@ impl<R: std::io::Read> From<&str> for Consumer<R> {
 	}
 }
 
-enum ReadRawMacro {
-	Parameter(String),
-	Text(String),
-}
-
 #[derive(Default)]
-struct SpecParser {
-	rpm: RPMSpec,
-	errors: Vec<Result<(), ParserError>>,
-	macros: HashMap<String, String>,
+pub struct SpecParser {
+	pub rpm: RPMSpec,
+	pub errors: Vec<Result<(), ParserError>>,
+	pub macros: HashMap<String, String>,
 }
 
-struct SpecMacroParserIter<'a> {
+pub struct SpecMacroParserIter<'a> {
 	reader: &'a mut Consumer,
 	parser: &'a mut SpecParser,
 	percent: bool,
@@ -513,10 +431,9 @@ impl<'a> Iterator for SpecMacroParserIter<'a> {
 					}
 				}
 			}
-			Some(ch)
-		} else {
-			None
+			return Some(ch);
 		}
+		None
 	}
 }
 
@@ -538,30 +455,30 @@ impl<'a> Iterator for SpecMacroParserIter<'a> {
 /// ```
 #[rustfmt::skip] // kamo https://github.com/rust-lang/rustfmt/issues/4609
 macro_rules! gen_read_helper {
-	($reader:ident $pa:ident $pb:ident $pc:ident $sq:ident $dq:ident) => {
+	($reader:ident $pa:ident $pb:ident $pc:ident $sq:ident $dq:ident $ret:expr) => {
 		($pa, $pb, $pc) = (usize::default(), usize::default(), usize::default());
 		($sq, $dq) = (false, false);
 		macro_rules! exit_chk {
 			() => {
 				if $pa != 0 {
 					error!("Unclosed `(` while parsing arguments for parameterized macro ({} time(s))", $pa);
-					return None;
+					return $ret;
 				}
 				if $pb != 0 {
 					error!("Unclosed `[` while parsing arguments for parameterized macro ({} time(s))", $pb);
-					return None;
+					return $ret;
 				}
 				if $pc != 0 {
 					error!("Unclosed `{{` while parsing arguments for parameterized macro ({} time(s))", $pc);
-					return None;
+					return $ret;
 				}
 				if $sq {
 					error!("Unclosed `'` while parsing arguments for parameterized macro ({} time(s))", $sq);
-					return None;
+					return $ret;
 				}
 				if $dq {
 					error!("Unclosed `\"` while parsing arguments for parameterized macro ({} time(s))", $dq);
-					return None;
+					return $ret;
 				}
 			};
 		}
@@ -596,11 +513,13 @@ macro_rules! gen_read_helper {
 				}
 			};
 		}
+		#[allow(unused_macros)]
 		macro_rules! quote_remain {
 			() => {
 				$pa + $pb + $pc != 0 || $sq || $dq
 			};
 		}
+		#[allow(unused_macros)]
 		macro_rules! next {
 			($c:expr) => {
 				if let Some(ch) = $reader.next() {
@@ -616,21 +535,11 @@ macro_rules! gen_read_helper {
 }
 
 impl SpecParser {
-	fn parse_macro<'a>(&'a mut self, reader: &'a mut Consumer) -> SpecMacroParserIter {
+	pub fn parse_macro<'a>(&'a mut self, reader: &'a mut Consumer) -> SpecMacroParserIter {
 		SpecMacroParserIter { reader, parser: self, percent: false, buf: String::new() }
 	}
 
-	// returns true if it passes the check
-	// deprecate this FIXME
-	fn preamble_check(&mut self, name: &str, ln: usize) -> bool {
-		if !PREAMBLES.contains(&name) {
-			self.errors.push(Err(ParserError::UnknownPreamble(ln, name.into())));
-			return false;
-		}
-		true
-	}
-	// todo BuildRequires?
-	fn parse_requires(&mut self, sline: &str, ln: usize) -> bool {
+	pub fn parse_requires(&mut self, sline: &str, ln: usize) -> bool {
 		lazy_static! { // move outside FIXME
 			static ref RE1: Regex =
 				Regex::new(r"(?m)^Requires(?:\(([\w,\s]+)\))?:\s*(.+)$").unwrap();
@@ -666,7 +575,7 @@ impl SpecParser {
 		}
 		false
 	}
-	fn arch() -> Result<String> {
+	pub fn arch() -> Result<String> {
 		let binding = Command::new("uname").arg("-m").output()?;
 		let s = core::str::from_utf8(&binding.stdout)?;
 		Ok(s[..s.len() - 1].into()) // remove new line
@@ -674,14 +583,13 @@ impl SpecParser {
 	// not sure where I've seen the docs, but there was one lying around saying you can define multiple
 	// macros with the same name, and when you undefine it the old one recovers (stack?). I don't think
 	// it is a good idea to do it like that (it is simply ridiculous and inefficient) but you can try
-	fn load_macros(&mut self) -> Result<()> {
+	pub fn load_macros(&mut self) -> Result<()> {
 		// run rpm --showrc | grep "^Macro path"
-		let binding = Command::new("sh")
-			.args(["-c", "rpm --showrc|grep '^Macro path'|sed 's/Macro path: //'"])
-			.output()?;
+		let binding = Command::new("sh").args(["-c", "rpm --showrc|grep '^Macro path'|sed 's/Macro path: //'"]).output()?;
 		let binding = core::str::from_utf8(&binding.stdout)?;
 		let paths = binding.trim().split(':');
 
+		// TODO use Consumer::read_til_EOL() instead
 		let re = Regex::new(r"(?m)^%([\w()]+)[\t ]+((\\\n|[^\n])+)$").unwrap();
 		for path in paths {
 			let path = path.replace("%{_target}", Self::arch()?.as_str());
@@ -694,20 +602,14 @@ impl SpecParser {
 				assert_ne!(bytes, 0, "Empty macro definition file '{}'", path.display());
 				for cap in re.captures_iter(std::str::from_utf8(&buf)?) {
 					if let Some(val) = self.macros.get(&cap[1]) {
-						debug!(
-							"Macro Definition duplicated: {} : '{val:?}' | '{}'",
-							&cap[1], &cap[2]
-						);
+						debug!("Macro Definition duplicated: {} : '{val:?}' | '{}'", &cap[1], &cap[2]);
 						continue; // FIXME?
 					}
 					let name = &cap[1];
 					if name.ends_with("()") {
 						let mut content = String::from(&cap[2]);
 						content.push(' '); // yup, we mark it using a space.
-						self.macros.insert(
-							unsafe { name.strip_suffix("()").unwrap_unchecked() }.into(),
-							content,
-						);
+						self.macros.insert(unsafe { name.strip_suffix("()").unwrap_unchecked() }.into(), content);
 					}
 					// we trim() just in case
 					self.macros.insert(cap[1].into(), cap[2].trim().into());
@@ -716,15 +618,15 @@ impl SpecParser {
 		}
 		Ok(())
 	}
-	fn parse<R: std::io::Read>(&mut self, bufread: BufReader<R>) -> Result<()> {
+	pub fn parse<R: std::io::Read>(&mut self, bufread: BufReader<R>) -> Result<()> {
 		let re_preamble = Regex::new(r"(\w+):\s*(.+)").unwrap();
 		let re_dnl = Regex::new(r"^%dnl\b").unwrap();
 		let re_digit = Regex::new(r"\d+$").unwrap();
-		'll: for (line_number, line) in bufread.lines().enumerate() {
-			let line = line?;
+		// FIXME use Consumer::read_til_eol()?
+		// TODO proper section handling
+		for (line_number, line) in bufread.lines().enumerate() {
+			let line = self._expand_macro(&mut Consumer::from(&*line?)).map_err(|e| e.wrap_err(format!("Cannot expand macro on line {line_number}")))?;
 			let sline = line.trim();
-			// todo
-			// * we have to parse %macros here (just like rpm)
 			if sline.is_empty() || sline.starts_with('#') || re_dnl.is_match(sline) {
 				continue;
 			}
@@ -741,25 +643,17 @@ impl SpecParser {
 					let name = &cap[1][..cap[1].len() - sdigit.len()];
 					self.add_list_preamble(name, digit, &cap[2])?;
 				} else {
-					let name = cap[1].to_string();
-					if !self.preamble_check(&name, line_number) {
-						continue 'll;
-					}
 					self.add_preamble(&cap[1], cap[2].into(), line_number)?;
 				}
 			}
-			// ! error?
 		}
 		if !self.errors.is_empty() {
-			return take(&mut self.errors)
-				.into_iter()
-				.map(Result::unwrap_err)
-				.fold(Err(eyre!("Cannot parse spec file")), |report, e| report.error(e));
+			return take(&mut self.errors).into_iter().map(Result::unwrap_err).fold(Err(eyre!("Cannot parse spec file")), |report, e| report.error(e));
 		}
 		Ok(())
 	}
 
-	fn add_list_preamble(&mut self, name: &str, digit: i16, value: &str) -> Result<()> {
+	pub fn add_list_preamble(&mut self, name: &str, digit: i16, value: &str) -> Result<()> {
 		let value = value;
 		let rpm = &mut self.rpm;
 		macro_rules! no_override_ins {
@@ -772,12 +666,12 @@ impl SpecParser {
 		match name {
 			"Source" => no_override_ins!(sources),
 			"Patch" => no_override_ins!(patches),
-			_ => bail!("Failed to match preamble '{name}'"),
+			_ => return Err(eyre!("Failed to match preamble `{name}{digit}` (value `{value}`)")),
 		}
 		Ok(())
 	}
 
-	fn add_preamble(&mut self, name: &str, value: String, ln: usize) -> Result<()> {
+	pub fn add_preamble(&mut self, name: &str, value: String, ln: usize) -> Result<()> {
 		let rpm = &mut self.rpm;
 
 		macro_rules! opt {
@@ -812,10 +706,9 @@ impl SpecParser {
 			}
 		}
 
-		opt!(Name name|Version version|Release release|License license|SourceLicense sourcelicense);
+		opt!(Name name|Version version|Release release|License license|SourceLicense sourcelicense|URL url|BugURL bugurl|ModularityLabel modularitylabel|DistTag disttag|VCS vcs|Distribution distribution|Vendor vendor|Packager packager);
 		opt!(Group group); // todo subpackage
 		opt!(Summary summary); // todo subpackage
-		opt!(URL url|BugURL bugurl|ModularityLabel modularitylabel|DistTag disttag|VCS vcs|Distribution distribution|Vendor vendor|Packager packager);
 		opt!(~AutoReqProv autoreqprov);
 		opt!(~AutoReq autoreq);
 		opt!(~AutoProv autoprov);
@@ -833,13 +726,13 @@ impl SpecParser {
 				}
 				rpm.epoch = Some(value.parse().expect("Failed to decode epoch to int"));
 			}
-			"Provides" => Package::add_query(&mut rpm.provides, &value)?, // todo subpackage
-			"Conflicts" => Package::add_query(&mut rpm.conflicts, &value)?, // todo subpackage
-			"Obsoletes" => Package::add_query(&mut rpm.obsoletes, &value)?, // todo subpackage
-			"Recommends" => Package::add_simple_query(&mut rpm.recommends, &value)?, // todo subpackage
-			"Suggests" => Package::add_simple_query(&mut rpm.suggests, &value)?, // todo subpackage
+			"Provides" => Package::add_query(&mut rpm.provides, &value)?,              // todo subpackage
+			"Conflicts" => Package::add_query(&mut rpm.conflicts, &value)?,            // todo subpackage
+			"Obsoletes" => Package::add_query(&mut rpm.obsoletes, &value)?,            // todo subpackage
+			"Recommends" => Package::add_simple_query(&mut rpm.recommends, &value)?,   // todo subpackage
+			"Suggests" => Package::add_simple_query(&mut rpm.suggests, &value)?,       // todo subpackage
 			"Supplements" => Package::add_simple_query(&mut rpm.supplements, &value)?, // todo subpackage
-			"Enhances" => Package::add_simple_query(&mut rpm.enhances, &value)?, // todo subpackage
+			"Enhances" => Package::add_simple_query(&mut rpm.enhances, &value)?,       // todo subpackage
 			"BuildRequires" => Package::add_query(&mut rpm.buildrequires, &value)?,
 			"OrderWithRequires" => todo!(),
 			"BuildConflicts" => todo!(),
@@ -855,28 +748,22 @@ impl SpecParser {
 	fn _internal_macro(&mut self, name: &str, reader: &mut Consumer) -> Option<String> {
 		match name {
 			"define" | "global" => {
-				let def = reader.read_til_EOL()?;
+				let def = reader.read_til_eol()?;
 				if let Some((name, def)) = def.split_once(' ') {
-					let name: String = if let Some(x) = name.strip_suffix("()") {
-						format!("{x} ").into()
-					} else {
-						name.into()
-					};
+					let name: String = if let Some(x) = name.strip_suffix("()") { format!("{x} ").into() } else { name.into() };
 					self.macros.insert(name, def.into());
-					return Some("".into());
+					Some("".into())
 				} else {
 					error!("Invalid syntax: `%define {def}`");
-					return None;
+					None
 				}
 			}
 			"undefine" => {
 				self.macros.remove(name);
-				return Some("".into());
+				Some("".into())
 			}
 			"load" => unimplemented!(),
-			"expand" => {
-				return self._expand_macro(reader);
-			}
+			"expand" => self._expand_macro(reader).ok(),
 			"expr" => unimplemented!(),
 			"lua" => unimplemented!(),
 			"macrobody" => unimplemented!(),
@@ -908,7 +795,7 @@ impl SpecParser {
 			"P" => unimplemented!(),
 			"trace" => unimplemented!(),
 			"dump" => unimplemented!(),
-			_ => return None,
+			_ => None,
 		}
 	}
 
@@ -920,19 +807,16 @@ impl SpecParser {
 	/// but not:
 	/// ```
 	/// %{macro_name:hai bai -f -a}
-	fn _param_macro_line_args(
-		&mut self, reader: &mut Consumer,
-	) -> Option<(String, Vec<String>, Vec<char>)> {
+	fn _param_macro_line_args(&mut self, reader: &mut Consumer) -> Option<(String, Vec<String>, Vec<char>)> {
 		// we start AFTER %macro_name
 		let mut content = String::new();
 		let mut flags = vec![];
 		let (mut pa, mut pb, mut pc, mut sq, mut dq);
-		gen_read_helper!(reader pa pb pc sq dq);
+		gen_read_helper!(reader pa pb pc sq dq None);
 		macro_rules! exit {
 			() => {
 				exit_chk!();
-				let args =
-					content.split(' ').filter(|x| !x.starts_with('-')).map(|x| x.into()).collect();
+				let args = content.split(' ').filter(|x| !x.starts_with('-')).map(|x| x.into()).collect();
 				return Some((content, args, flags));
 			};
 		}
@@ -1000,14 +884,11 @@ impl SpecParser {
 		exit!();
 	}
 
-	fn _param_macro(
-		&mut self, name: &str, def: &mut Consumer, reader: &mut Consumer,
-	) -> Option<String> {
+	fn _param_macro(&mut self, name: &str, def: &mut Consumer, reader: &mut Consumer) -> Option<String> {
 		let (raw_args, args, flags) = self._param_macro_line_args(reader)?;
 		let mut res = String::new();
-		let mut percent = false;
 		let (mut pa, mut pb, mut pc, mut sq, mut dq);
-		gen_read_helper!(def pa pb pc sq dq);
+		gen_read_helper!(def pa pb pc sq dq None);
 		macro_rules! exit {
 			// for gen_read_helper!()
 			() => {
@@ -1017,31 +898,24 @@ impl SpecParser {
 		}
 		'main: while let Some(ch) = def.next() {
 			chk_ps!(ch);
-			if ch == '%' {
-				if percent {
-					res.push('%');
-					percent = false;
-					continue;
-				}
-				percent = true;
-				continue;
-			}
-			if !percent {
+			if ch != '%' {
 				res.write_char(ch).unwrap();
 				continue;
 			}
-			percent = false;
+			let ch = next!('%');
+			if ch == '%' {
+				res.push('%');
+				continue;
+			}
 			// https://rpm-software-management.github.io/rpm/manual/macros.html
 			match ch {
 				'*' => {
 					let follow = next!('*');
 					if follow == '*' {
-						// %**
-						res.push_str(&raw_args);
+						res.push_str(&raw_args); // %**
 					} else {
-						// %*
 						back!(follow);
-						res.push_str(&args.join(" "));
+						res.push_str(&args.join(" ")); // %*
 					}
 					continue;
 				}
@@ -1056,7 +930,7 @@ impl SpecParser {
 				'{' => {
 					let req_pc = pc - 1;
 					let mut content = String::new();
-					while let Some(ch) = def.next() {
+					for ch in def.by_ref() {
 						chk_ps!(ch);
 						if req_pc != pc {
 							content.push(ch);
@@ -1080,11 +954,7 @@ impl SpecParser {
 						if !content.starts_with('-') {
 							// normal stuff
 							res.push_str(
-								&self
-									._read_raw_macro_use(&mut Consumer::from(&*format!(
-										"{{{content}}}"
-									)))
-									.ok()?, // FIXME (err hdl?)
+								&self._read_raw_macro_use(&mut Consumer::from(&*format!("{{{content}}}"))).ok()?, // FIXME (err hdl?)
 							);
 						}
 						if let Some(content) = content.strip_suffix('*') {
@@ -1094,12 +964,7 @@ impl SpecParser {
 							}
 							let mut argv = raw_args.split(' ');
 							if !notflag {
-								if let Some(n) = argv.clone().enumerate().find_map(|(n, x)| {
-									if x == content {
-										return Some(n);
-									}
-									None
-								}) {
+								if let Some(n) = argv.clone().enumerate().find_map(|(n, x)| if x == content { Some(n) } else { None }) {
 									if let Some(arg) = argv.nth(n + 1) {
 										res.push_str(arg);
 									}
@@ -1108,21 +973,19 @@ impl SpecParser {
 							// if there are no args after -f, add nothing.
 							continue 'main;
 						}
-						if content.len() == 2 {
-							let flag = unsafe { content.chars().last().unwrap_unchecked() };
-							if flag.is_alphabetic() {
-								if flags.contains(&flag) ^ notflag {
-									res.push_str(&expand);
-								}
-								continue 'main;
-							} else {
-								error!("Invalid macro name `%-{flag}`");
-								return None;
-							}
-						} else {
+						if content.len() != 2 {
 							error!("Found `%-{content}` which is not a flag");
 							return None;
 						}
+						let flag = unsafe { content.chars().last().unwrap_unchecked() };
+						if !flag.is_alphabetic() {
+							error!("Invalid macro name `%-{flag}`");
+							return None;
+						}
+						if flags.contains(&flag) ^ notflag {
+							res.push_str(&expand);
+						}
+						continue 'main;
 					}
 					error!("Unexpected EOF while parsing `%{{...`");
 					return None;
@@ -1132,12 +995,11 @@ impl SpecParser {
 					macroname.push(ch);
 					// no need chk_ps!(), must be numeric
 					while let Some(ch) = def.next() {
-						if ch.is_numeric() {
-							macroname.push(ch);
-						} else {
+						if !ch.is_numeric() {
 							def.push(ch);
 							break;
 						}
+						macroname.push(ch);
 					}
 					let ret = match macroname.parse::<usize>() {
 						Ok(n) => args.get(n - 1),
@@ -1158,46 +1020,39 @@ impl SpecParser {
 		Some(res)
 	}
 
-	fn _expand_macro(&mut self, chars: &mut Consumer) -> Option<String> {
+	fn _expand_macro(&mut self, chars: &mut Consumer) -> Result<String> {
 		let mut res = String::new();
-		let mut percent = false;
 		while let Some(ch) = chars.next() {
 			if ch == '%' {
-				if percent {
-					res.push('%');
-					percent = false; // %%%% will be parsed correctly in this way
+				if let Some(ch) = chars.next() {
+					if ch == '%' {
+						res.push('%');
+						continue;
+					}
+					chars.push(ch);
+					res.push_str(&self._read_raw_macro_use(chars)?);
 					continue;
 				}
-				percent = true;
-				continue;
 			}
-			if percent {
-				chars.push(ch);
-				res.push_str(&self._read_raw_macro_use(chars).ok()?);
-				percent = false;
-			} else {
-				res.write_char(ch).unwrap();
-			}
+			res.push(ch);
 		}
-		Some(res)
+		Ok(res)
 	}
 
 	fn _rp_macro(&mut self, name: &str, reader: &mut Consumer) -> Option<String> {
 		debug!("getting %{name}");
-		if name == "lua" {
-			todo!()
-		}
 		if let Some(expanded) = self._internal_macro(name, reader) {
 			return Some(expanded);
 		}
 		let def = self.macros.get(name)?;
+		// Refactor at your own risk: impossible due to RAII. Fail counter: 2
 		if let Some(def) = def.strip_suffix(' ') {
 			// parameterized macro
 			let out = self._param_macro(name, &mut Consumer::from(def), reader)?;
-			self._expand_macro(&mut Consumer::from(&*out))
+			self._expand_macro(&mut Consumer::from(&*out)).ok()
 		} else {
 			// it's just text
-			self._expand_macro(&mut Consumer::from(def.as_str()))
+			self._expand_macro(&mut Consumer::from(def.as_str())).ok()
 		}
 	}
 
@@ -1206,34 +1061,30 @@ impl SpecParser {
 	/// FIXME please REFACTOR me!!
 	fn _read_raw_macro_use(&mut self, chars: &mut Consumer) -> Result<String> {
 		debug!("reading macro");
-		let mut notflag = false;
-		let mut question = false;
+		let (mut notflag, mut question) = (false, false);
 		let mut content = String::new();
 		let l = chars.len();
+		let (mut pa, mut pb, mut pc, mut sq, mut dq);
+		gen_read_helper!(chars pa pb pc sq dq Err(eyre!("Unmatched quotes")));
 		macro_rules! flagmacrohdl {
 			($name:expr, $consumer:expr) => {
+				exit_chk!();
 				let out = self._rp_macro($name, &mut Consumer::from($consumer));
 				if notflag {
 					if question {
 						return Ok("".into());
 					}
 					// when %a is undefined, %{!a} expands to %{!a}, but %!a expands to %a
-					if content.is_empty() {
-						return Ok(out.unwrap_or_else(|| format!("%{}", $name).into()));
-					} else {
-						return Ok(out.unwrap_or_else(|| format!("%{{!{}}}", $name).into()));
-					}
+					return Ok(out.unwrap_or_else(|| if content.is_empty() { format!("%{}", $name) } else { format!("%{{!{}}}", $name) }.into()));
 				}
-				if question {
-					return Ok(out.unwrap_or_default());
-				}
-				return out.ok_or(eyre!("Macro not found: %{content}"));
+				return Ok(out.unwrap_or_default());
 			};
 			($name:expr) => {
 				flagmacrohdl!($name, "")
 			};
 		}
 		while let Some(ch) = chars.next() {
+			chk_ps!(ch);
 			// we read until we encounter '}' or ':' or the end
 			match ch {
 				'!' => notflag = !notflag,
@@ -1244,32 +1095,30 @@ impl SpecParser {
 					question = true;
 				}
 				'{' => {
+					let req_pc = pc - 1;
 					if chars.len() + 1 != l {
-						chars.push('{');
+						back!('{');
 						break;
 					}
 					let mut name = String::new();
 					while let Some(ch) = chars.next() {
-						if ch == '}' {
+						chk_ps!(ch);
+						if pc == req_pc {
 							flagmacrohdl!(&name);
 						}
 						if ch == ':' {
 							let mut content = String::new();
 							for ch in chars.by_ref() {
-								if ch == '}' {
+								chk_ps!(ch);
+								if pc == req_pc {
 									if question {
-										if self.macros.contains_key(&name) ^ notflag {
-											return Ok(self
-												.parse_macro(&mut Consumer::from(&*content))
-												.collect());
-										} else {
-											return Ok("".into());
-										}
+										return Ok(if self.macros.contains_key(&name) ^ notflag { self.parse_macro(&mut Consumer::from(&*content)).collect() } else { "".into() });
 									}
 									flagmacrohdl!(&name, &*content);
 								}
 								content.push(ch);
 							}
+							return Err(eyre!("EOF but `%{{...:...` is not ended with `}}`"));
 						}
 						if ch == '?' {
 							if question {
@@ -1282,62 +1131,60 @@ impl SpecParser {
 							notflag = !notflag;
 							continue;
 						}
-						name.write_char(ch)?;
+						name.push(ch);
 					}
+					return Err(eyre!("EOF while parsing `%{{...`"));
 				}
 				'(' => {
 					if !content.is_empty() {
-						chars.push('(');
+						back!('(');
 						break;
 					}
 					if notflag || question {
 						warn!("flags (! and ?) are not supported for %().");
 					}
 					let mut shellcmd = std::string::String::new();
+					let req_pa = pa - 1;
 					for ch in chars.by_ref() {
-						if ch == ')' {
-							return match Command::new("sh").arg("-c").arg(shellcmd).output() {
-								Ok(out) => Ok(core::str::from_utf8(&out.stdout)?
-									.trim_end_matches('\n')
-									.into()),
-								Err(e) => Err(eyre!(e)),
+						chk_ps!(ch);
+						if pa == req_pa {
+							return match Command::new("sh").arg("-c").arg(&shellcmd).output() {
+								Ok(out) => {
+									if out.status.success() {
+										Ok(core::str::from_utf8(&out.stdout)?.trim_end_matches('\n').into())
+									} else {
+										Err(eyre!("Shell expansion command did not succeed")
+											.note(out.status.code().map_or("No status code".into(), |c| format!("Status code: {c}")))
+											.section(core::str::from_utf8(&out.stdout)?.to_string().header("Stdout:"))
+											.section(core::str::from_utf8(&out.stderr)?.to_string().header("Stderr:")))
+									}
+								}
+								Err(e) => Err(eyre!(e).wrap_err("Shell expansion failed").note(shellcmd)),
 							};
 						}
-						shellcmd.write_char(ch)?;
+						shellcmd.push(ch);
 					}
-					return Err(eyre!("Unexpected end of shell command, for `%({shellcmd}`"));
+					return Err(eyre!("Unexpected end of shell expansion command: `%({shellcmd}`"));
 				}
 				'[' => {
 					todo!("what does %[] mean? www")
 				}
+				_ if ch.is_alphanumeric() || ch == '_' => content.push(ch),
 				_ => {
-					if !(ch.is_alphanumeric() || ch == '_') {
-						chars.push(ch);
-						break;
-					}
-					content.write_char(ch)?;
+					back!(ch);
+					break;
 				}
 			}
 		}
 		flagmacrohdl!(&content);
 	}
 
-	fn new() -> Self {
+	pub fn new() -> Self {
 		Self { rpm: RPMSpec::new(), errors: vec![], macros: HashMap::new() }
 	}
 }
 
-fn _single(value: &Vec<String>) -> &String {
-	assert_eq!(value.len(), 1);
-	&value[0]
-}
-fn _ssin(value: &Vec<String>) -> Option<String> {
-	Some(_single(value).to_owned())
-}
-fn _sbin(value: &Vec<String>) -> Result<bool> {
-	Ok(_single(value).to_owned().parse()?)
-}
-
+#[cfg(test)]
 mod tests {
 	use super::*;
 	use std::fs::File;
@@ -1406,13 +1253,8 @@ mod tests {
 	fn param_macro_args_parsing() {
 		let mut parser = super::SpecParser::new();
 		assert_eq!(
-			parser
-				._param_macro_line_args(&mut Consumer::from("-a hai -b asdfsdklj \\  \n abcd\ne")),
-			Some((
-				"-a hai -b asdfsdklj abcd".into(),
-				vec!["hai".into(), "asdfsdklj".into(), "abcd".into()],
-				vec!['a', 'b']
-			))
+			parser._param_macro_line_args(&mut Consumer::from("-a hai -b asdfsdklj \\  \n abcd\ne")),
+			Some(("-a hai -b asdfsdklj abcd".into(), vec!["hai".into(), "asdfsdklj".into(), "abcd".into()], vec!['a', 'b']))
 		);
 	}
 }
