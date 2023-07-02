@@ -459,6 +459,101 @@ impl<'a> Iterator for SpecMacroParserIter<'a> {
 	}
 }
 
+/// string operations / parsing with consumer
+///
+/// # Requires
+/// - `exit!()`
+///
+/// # Provides
+/// - `exit_chk!()`
+/// - `back!()`
+/// - `chk_ps!()`
+/// - `quote_remain!()`
+/// - `next!()`
+///
+/// FIXME: cannot parse the following:
+/// ```sh
+/// echo 'hai{'
+/// ```
+#[rustfmt::skip] // kamo https://github.com/rust-lang/rustfmt/issues/4609
+macro_rules! gen_read_helper {
+	($reader:ident $pa:ident $pb:ident $pc:ident $sq:ident $dq:ident) => {
+		($pa, $pb, $pc) = (usize::default(), usize::default(), usize::default());
+		($sq, $dq) = (false, false);
+		macro_rules! exit_chk {
+			() => {
+				if $pa != 0 {
+					error!("Unclosed `(` while parsing arguments for parameterized macro ({} time(s))", $pa);
+					return None;
+				}
+				if $pb != 0 {
+					error!("Unclosed `[` while parsing arguments for parameterized macro ({} time(s))", $pb);
+					return None;
+				}
+				if $pc != 0 {
+					error!("Unclosed `{{` while parsing arguments for parameterized macro ({} time(s))", $pc);
+					return None;
+				}
+				if $sq {
+					error!("Unclosed `'` while parsing arguments for parameterized macro ({} time(s))", $sq);
+					return None;
+				}
+				if $dq {
+					error!("Unclosed `\"` while parsing arguments for parameterized macro ({} time(s))", $dq);
+					return None;
+				}
+			};
+		}
+		macro_rules! back {
+			($ch:expr) => {
+				match $ch {
+					'(' => $pa -= 1,
+					')' => $pa += 1,
+					'[' => $pb -= 1,
+					']' => $pb += 1,
+					'{' => $pc -= 1,
+					'}' => $pc += 1,
+					'\'' => $sq = !$sq,
+					'"' => $dq = !$dq,
+					_ => {}
+				}
+				$reader.push($ch);
+			};
+		}
+		macro_rules! chk_ps {
+			($ch:ident) => {
+				match $ch {
+					'(' => $pa += 1,
+					')' => $pa -= 1,
+					'[' => $pb += 1,
+					']' => $pb -= 1,
+					'{' => $pc += 1,
+					'}' => $pc -= 1,
+					'\'' => $sq = !$sq,
+					'"' => $dq = !$dq,
+					_ => {}
+				}
+			};
+		}
+		macro_rules! quote_remain {
+			() => {
+				$pa + $pb + $pc != 0 || $sq || $dq
+			};
+		}
+		macro_rules! next {
+			($c:expr) => {
+				if let Some(ch) = $reader.next() {
+					chk_ps!(ch);
+					ch
+				} else {
+					back!($c);
+					exit!();
+				}
+			};
+		}
+	};
+}
+
 impl SpecParser {
 	fn parse_macro<'a>(&'a mut self, reader: &'a mut Consumer) -> SpecMacroParserIter {
 		SpecMacroParserIter { reader, parser: self, percent: false, buf: String::new() }
@@ -583,10 +678,7 @@ impl SpecParser {
 					let sdigit = &digitcap[0];
 					let digit: i16 = sdigit.parse()?;
 					let name = &cap[1][..cap[1].len() - sdigit.len()];
-					if !self.preamble_check(&format!("{name}#"), line_number) {
-						continue 'll;
-					}
-					self.add_list_preamble(name, digit, cap[2].into())?;
+					self.add_list_preamble(name, digit, &cap[2])?;
 				} else {
 					let name = cap[1].to_string();
 					if !self.preamble_check(&name, line_number) {
@@ -606,25 +698,24 @@ impl SpecParser {
 		Ok(())
 	}
 
-	fn add_list_preamble(&mut self, name: &str, digit: i16, value: String) -> Result<()> {
+	fn add_list_preamble(&mut self, name: &str, digit: i16, value: &str) -> Result<()> {
 		let value = value;
 		let rpm = &mut self.rpm;
 		macro_rules! no_override_ins {
 			($attr:ident) => {{
-				if let Some(old) = rpm.$attr.insert(digit, value) {
-					error!("Overriding preamble `{name}{digit}` (was `{old}`)");
+				if let Some(old) = rpm.$attr.insert(digit, value.into()) {
+					error!("Overriding preamble `{name}{digit}` value `{old}` -> `{value}`");
 				}
 			}};
 		}
 		match name {
 			"Source" => no_override_ins!(sources),
 			"Patch" => no_override_ins!(patches),
-			_ => bail!("BUG: failed to match preamble '{name}'"),
+			_ => bail!("Failed to match preamble '{name}'"),
 		}
 		Ok(())
 	}
 
-	// TODO (wip) call this on the spot? or else macros can't be parsed correctly
 	fn add_preamble(&mut self, name: &str, value: String, ln: usize) -> Result<()> {
 		let rpm = &mut self.rpm;
 
@@ -704,7 +795,165 @@ impl SpecParser {
 		todo!()
 	}
 
-	// design issue: we kinda need to know if it's Macro::Par before we can grab the args...?
+	/// parses:
+	/// ```
+	/// %macro_name -a -b hai bai idk \
+	///   more args idk
+	/// ```
+	/// but not:
+	/// ```
+	/// %{macro_name:hai bai -f -a}
+	fn _param_macro_line_args(
+		&mut self, reader: &mut Consumer,
+	) -> Option<(String, Vec<String>, Vec<char>)> {
+		// we start AFTER %macro_name
+		let mut content = String::new();
+		let mut flags = vec![];
+		let mut pa: usize = 0; // ()
+		let mut pb: usize = 0; // []
+		let mut pc: usize = 0; // {}
+		let mut sq = false; // ''
+		let mut dq = false; // ""
+		gen_read_helper!(reader pa pb pc sq dq);
+		macro_rules! exit {
+			() => {
+				exit_chk!();
+				let args =
+					content.split(' ').filter(|x| !x.starts_with('-')).map(|x| x.into()).collect();
+				return Some((content, args, flags));
+			};
+		}
+		'main: while let Some(ch) = reader.next() {
+			chk_ps!(ch);
+			if ch == '%' {
+				let ch = next!('%');
+				if ch == '%' {
+					content.push('%');
+					continue;
+				}
+				back!(ch);
+				content.push_str(&self._read_raw_macro_use(reader).ok()?);
+				continue;
+			}
+			if ch == '-' {
+				let ch = next!('-');
+				if ch.is_alphabetic() {
+					let next = next!(ch);
+					if "\\ \n".contains(next) {
+						back!(next);
+						flags.push(ch);
+						content.push('-');
+						content.push(ch);
+						continue;
+					} else {
+						error!("Found character `{next}` after `-{ch}` in parameterized macro");
+						return None;
+					}
+				} else {
+					error!("Argument flag `-{ch}` in parameterized macro is not alphabetic");
+					return None;
+				}
+			}
+			if ch == '\\' {
+				let mut got_newline = false;
+				content = content.trim_end().into();
+				content.push(' ');
+				while let Some(ch) = reader.next() {
+					chk_ps!(ch);
+					if ch == '\n' {
+						got_newline = true;
+					} else if !ch.is_whitespace() {
+						if got_newline {
+							back!(ch);
+							continue 'main;
+						} else {
+							error!("Got `{ch}` after `\\` before new line");
+							return None;
+						}
+					}
+				}
+				error!("Unexpected EOF after `\\`");
+			}
+			if ch == '\n' && !quote_remain!() {
+				exit!();
+			}
+			// compress whitespace to ' '
+			if ch.is_whitespace() && content.chars().last().map_or(false, |l| !l.is_whitespace()) {
+				content.push(' ');
+			} else if !ch.is_whitespace() {
+				content.push(ch);
+			}
+		}
+		exit!();
+	}
+
+	fn _param_macro(
+		&mut self, name: &str, def: &mut Consumer, reader: &mut Consumer,
+	) -> Option<String> {
+		let (raw_args, args, flags) = self._param_macro_line_args(reader)?;
+		let mut res = String::new();
+		let mut percent = false;
+		let (mut sq, mut dq);
+		let (mut pa, mut pb, mut pc);
+		gen_read_helper!(def pa pb pc sq dq);
+		macro_rules! exit {
+			() => {
+				return None;
+			};
+		}
+		while let Some(ch) = def.next() {
+			chk_ps!(ch);
+			if ch == '%' {
+				if percent {
+					res.push('%');
+					percent = false;
+					continue;
+				}
+				percent = true;
+				continue;
+			}
+			if percent {
+				percent = false;
+				match ch {
+					'*' => {
+						let follow = next!('*');
+						if follow == '*' {
+							// %**
+							res.push_str(&raw_args);
+						} else {
+							// %*
+							back!(follow);
+							res.push_str(&args.join(" "));
+						}
+						continue;
+					}
+					'#' => {
+						res.push_str(&args.len().to_string());
+						continue;
+					}
+					'0' => {
+						res.push_str(name);
+						continue;
+					}
+					'{' => {
+						todo!();
+					}
+					_ if ch.is_numeric() => {
+						todo!();
+					}
+					_ => {
+						def.push(ch);
+						res.push_str(&self._read_raw_macro_use(def).ok()?);
+					}
+				}
+			} else {
+				res.write_char(ch).unwrap();
+			}
+		}
+		exit_chk!();
+		Some(res)
+	}
+
 	fn _rp_macro(&mut self, name: &str, reader: &mut Consumer) -> Option<String> {
 		debug!("getting %{name}");
 		if name == "lua" {
@@ -740,7 +989,6 @@ impl SpecParser {
 		}
 		Some(res)
 	}
-
 
 	/// parse the stuff after %, and determines `{[()]}`. returns expanded macro.
 	/// Assumption: `chars` is a str Consumer (no reader).
@@ -864,11 +1112,7 @@ impl SpecParser {
 	}
 
 	fn new() -> Self {
-		let mut obj = Self { rpm: RPMSpec::new(), errors: vec![], macros: HashMap::new() };
-		// INTERNAL_MACROS.iter().for_each(|name| {
-		// 	obj.macros.insert((*name).into(), Pork::Done(Macro::Internal));
-		// });
-		obj
+		Self { rpm: RPMSpec::new(), errors: vec![], macros: HashMap::new() }
 	}
 }
 
@@ -926,9 +1170,7 @@ mod tests {
 		let mut parser = super::SpecParser::new();
 		parser.macros.insert("mhai".into(), "hai hai".into());
 		parser.macros.insert("idk".into(), "%!?mhai %?!mhai %{mhai}".into());
-		parser
-			.macros
-			.insert("idk2".into(), "%{?mhai} %{!mhai} %{!?mhai} %{?!mhai}".into());
+		parser.macros.insert("idk2".into(), "%{?mhai} %{!mhai} %{!?mhai} %{?!mhai}".into());
 		parser.macros.insert("aaa".into(), "%idk %idk2".into());
 		assert_eq!(parser._read_raw_macro_use(&mut ("aaa".into()))?, "  hai hai hai hai hai hai  ");
 		Ok(())
@@ -949,4 +1191,18 @@ mod tests {
 		assert_eq!(parser._read_raw_macro_use(&mut ("x".into()))?, "hai");
 		Ok(())
 	}
+	#[test]
+	fn param_macro_args_parsing() {
+		let mut parser = super::SpecParser::new();
+		assert_eq!(
+			parser
+				._param_macro_line_args(&mut Consumer::from("-a hai -b asdfsdklj \\  \n abcd\ne")),
+			Some((
+				"-a hai -b asdfsdklj abcd".into(),
+				vec!["hai".into(), "asdfsdklj".into(), "abcd".into()],
+				vec!['a', 'b']
+			))
+		);
+	}
 }
+// BUG: %{hai:{}} <- this breaks because two `}`
