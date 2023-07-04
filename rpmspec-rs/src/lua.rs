@@ -18,11 +18,6 @@ mod lua_rpm {
 	use base64::{engine::general_purpose::STANDARD, Engine};
 	use rlua::{Context, ExternalError, Result};
 
-	use crate::rpmio::macros::{
-		_dummy_context, define_macro, expand_macros, load_macro_file, macro_is_defined,
-		macro_is_parametric, pop_macro,
-	};
-
 	use super::repl::repl;
 
 	pub(crate) fn b64decode(_: Context, arg: String) -> Result<String> {

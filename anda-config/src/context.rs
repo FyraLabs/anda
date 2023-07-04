@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use hcl::Value;
-use hcl::eval::{Context, Evaluate, FuncArgs, FuncDef};
+use hcl::eval::{Context, FuncArgs, FuncDef};
 
 
 /// HCL Function for loading environment variables
