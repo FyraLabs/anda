@@ -1,7 +1,7 @@
-use std::io::Read;
-use tracing::error;
 use crate::parse::SpecParser;
 use smartstring::alias::String;
+use std::io::Read;
+use tracing::error;
 
 /// string operations / parsing with consumer
 ///
@@ -120,7 +120,7 @@ impl<R: std::io::Read> Consumer<R> {
 		Self { s: s.chars().rev().collect(), r }
 	}
 	#[inline]
-	pub fn push<'a>(&mut self, c: char) {
+	pub fn push(&mut self, c: char) {
 		self.s.push(c)
 	}
 	pub fn read_til_eol(&mut self) -> Option<String> {
@@ -144,6 +144,10 @@ impl<R: std::io::Read> Consumer<R> {
 			};
 		}
 		'main: while let Some(ch) = self.next() {
+			if ch == '\0' {
+				// idk how it happens
+				break;
+			}
 			if ch == '\n' {
 				break;
 			}
@@ -182,6 +186,9 @@ impl<R: std::io::Read> Consumer<R> {
 			error!("Unclosed: {ps:?}");
 			return None;
 		}
+		if out.is_empty() {
+			return None;
+		}
 		Some(out)
 	}
 }
@@ -205,7 +212,7 @@ impl<R: std::io::Read> Iterator for Consumer<R> {
 						return None;
 					}
 				};
-				Some(unsafe { self.s.pop().unwrap_unchecked() })
+				Some(self.s.pop().unwrap())
 			}
 		} else {
 			None
@@ -220,10 +227,10 @@ impl<R: std::io::Read> From<&str> for Consumer<R> {
 }
 
 pub struct SpecMacroParserIter<'a> {
-	reader: &'a mut Consumer,
-	parser: &'a mut SpecParser,
-	percent: bool,
-	buf: String,
+	pub reader: &'a mut Consumer,
+	pub parser: &'a mut SpecParser,
+	pub percent: bool,
+	pub buf: String,
 }
 
 impl<'a> Iterator for SpecMacroParserIter<'a> {

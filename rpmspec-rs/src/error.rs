@@ -7,6 +7,7 @@ pub enum ParserError {
 	Duplicate(usize, String),
 	UnknownModifier(usize, String),
 	UnknownMacro(usize, String),
+	Others(color_eyre::Report),
 }
 
 impl std::error::Error for ParserError {
@@ -16,7 +17,8 @@ impl std::error::Error for ParserError {
 			Self::UnknownPreamble(_, _) => "Preamble not supported",
 			Self::Duplicate(_, _) => "Preamble unexpectedly duplicated",
 			Self::UnknownModifier(_, _) => "Modifier not supported",
-			Self::UnknownMacro(_, _) => "Macro not supported",
+			Self::UnknownMacro(_, _) => "Macro not found",
+			Self::Others(_) => "Parsing Error",
 		}
 	}
 }
@@ -33,6 +35,7 @@ impl std::fmt::Display for ParserError {
 				write!(f, "! {}: Unknown Modifier for {}", line, name)
 			}
 			Self::UnknownMacro(line, name) => write!(f, "! {}: Unknown Macro for {}", line, name),
+			Self::Others(r) => write!(f, "! {r:#}"),
 		}
 	}
 }

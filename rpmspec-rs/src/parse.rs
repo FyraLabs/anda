@@ -1,7 +1,6 @@
 use crate::error::ParserError;
 use crate::util::*;
 use color_eyre::{
-	eyre::bail,
 	eyre::{eyre, Context},
 	Help, Result, SectionExt,
 };
@@ -208,39 +207,42 @@ pub enum RPMSection {
 #[derive(Default)]
 pub(crate) struct RPMSpecPkg {
 	pub name: Option<String>,
-	pub version: Option<String>,
-	pub release: Option<String>,
-	pub epoch: Option<i32>,
+	// pub version: Option<String>,
+	// pub release: Option<String>,
+	// pub epoch: Option<i32>,
 	pub summary: String,
-	pub buildarch: String,
+	// pub buildarch: String,
 	pub requires: RPMRequires,
 	pub description: String,
-	pub gruop: Option<String>,
-	pub files: Vec<String>,
+	pub group: Option<String>,
+	// pub files: Files,
+	pub files: String,
 }
 
 #[derive(Default)]
 pub struct RPMSpec {
-	pub packages: HashMap<String, RPMSpecPkg>,
+	pub(crate) packages: HashMap<String, RPMSpecPkg>,
 
 	// %description
-	pub description: Option<String>,
+	pub description: String,
 	// %prep
-	pub prep: Option<String>,
+	pub prep: String,
 	// %generate_buildrequires
 	pub generate_buildrequires: Option<String>,
 	// %conf
 	pub conf: Option<String>,
 	// %build
-	pub build: Option<String>,
+	pub build: String,
 	// %install
-	pub install: Option<String>,
+	pub install: String,
 	// %check
-	pub check: Option<String>,
+	pub check: String,
 
 	pub scriptlets: Scriptlets,
-	pub files: Files,              // %files
-	pub changelog: Vec<Changelog>, // %changelog
+	//pub files: Files,              // %files
+	//pub changelog: Vec<Changelog>, // %changelog
+	pub files: String,
+	pub changelog: String,
 
 	//* preamble
 	pub name: Option<String>,
@@ -332,20 +334,40 @@ impl SpecParser {
 			for modifier in modifiers.split(',') {
 				let modifier = modifier.trim();
 				let pkgs = pkgs.to_vec();
-				match modifier {
-					"none" => self.rpm.requires.none.extend(pkgs),
-					"pre" => self.rpm.requires.pre.extend(pkgs),
-					"post" => self.rpm.requires.post.extend(pkgs),
-					"preun" => self.rpm.requires.preun.extend(pkgs),
-					"postun" => self.rpm.requires.postun.extend(pkgs),
-					"pretrans" => self.rpm.requires.pretrans.extend(pkgs),
-					"posttrans" => self.rpm.requires.posttrans.extend(pkgs),
-					"verify" => self.rpm.requires.verify.extend(pkgs),
-					"interp" => self.rpm.requires.interp.extend(pkgs),
-					"meta" => self.rpm.requires.meta.extend(pkgs),
-					// _ => bail!("Unknown Modifier '{}' for Requires", modifier),
-					_ => {
-						self.errors.push(Err(ParserError::UnknownModifier(self.count_line, modifier.into())));
+				if let RPMSection::Package(ref p) = self.section {
+					let rpm = self.rpm.packages.get_mut(p).expect("No subpackage when parsing Requires");
+					match modifier {
+						"none" => rpm.requires.none.extend(pkgs),
+						"pre" => rpm.requires.pre.extend(pkgs),
+						"post" => rpm.requires.post.extend(pkgs),
+						"preun" => rpm.requires.preun.extend(pkgs),
+						"postun" => rpm.requires.postun.extend(pkgs),
+						"pretrans" => rpm.requires.pretrans.extend(pkgs),
+						"posttrans" => rpm.requires.posttrans.extend(pkgs),
+						"verify" => rpm.requires.verify.extend(pkgs),
+						"interp" => rpm.requires.interp.extend(pkgs),
+						"meta" => rpm.requires.meta.extend(pkgs),
+						// _ => bail!("Unknown Modifier '{}' for Requires", modifier),
+						_ => {
+							self.errors.push(Err(ParserError::UnknownModifier(self.count_line, modifier.into())));
+						}
+					}
+				} else {
+					match modifier {
+						"none" => self.rpm.requires.none.extend(pkgs),
+						"pre" => self.rpm.requires.pre.extend(pkgs),
+						"post" => self.rpm.requires.post.extend(pkgs),
+						"preun" => self.rpm.requires.preun.extend(pkgs),
+						"postun" => self.rpm.requires.postun.extend(pkgs),
+						"pretrans" => self.rpm.requires.pretrans.extend(pkgs),
+						"posttrans" => self.rpm.requires.posttrans.extend(pkgs),
+						"verify" => self.rpm.requires.verify.extend(pkgs),
+						"interp" => self.rpm.requires.interp.extend(pkgs),
+						"meta" => self.rpm.requires.meta.extend(pkgs),
+						// _ => bail!("Unknown Modifier '{}' for Requires", modifier),
+						_ => {
+							self.errors.push(Err(ParserError::UnknownModifier(self.count_line, modifier.into())));
+						}
 					}
 				}
 			}
@@ -358,6 +380,32 @@ impl SpecParser {
 		let s = core::str::from_utf8(&binding.stdout)?;
 		Ok(s[..s.len() - 1].into()) // remove new line
 	}
+
+	pub fn load_macro_from_file(&mut self, path: std::path::PathBuf) -> Result<()> {
+		lazy_static! {
+			static ref RE: Regex = Regex::new(r"(?m)^%([\w()]+)[\t ]+((\\\n|[^\n])+)$").unwrap();
+		}
+		debug!("Loading macros from {}", path.display());
+		let mut buf = vec![];
+		let bytes = BufReader::new(File::open(&path)?).read_to_end(&mut buf)?;
+		assert_ne!(bytes, 0, "Empty macro definition file '{}'", path.display());
+		for cap in RE.captures_iter(std::str::from_utf8(&buf)?) {
+			if let Some(val) = self.macros.get(&cap[1]) {
+				debug!("Macro Definition duplicated: {} : '{val:?}' | '{}'", &cap[1], &cap[2]);
+				continue; // FIXME?
+			}
+			let name = &cap[1];
+			if name.ends_with("()") {
+				let mut content = String::from(&cap[2]);
+				content.push(' '); // yup, we mark it using a space.
+				self.macros.insert(unsafe { name.strip_suffix("()").unwrap_unchecked() }.into(), content);
+			}
+			// we trim() just in case
+			self.macros.insert(cap[1].into(), cap[2].trim().into());
+		}
+		Ok(())
+	}
+
 	// not sure where I've seen the docs, but there was one lying around saying you can define multiple
 	// macros with the same name, and when you undefine it the old one recovers (stack?). I don't think
 	// it is a good idea to do it like that (it is simply ridiculous and inefficient) but you can try
@@ -368,30 +416,11 @@ impl SpecParser {
 		let paths = binding.trim().split(':');
 
 		// TODO use Consumer::read_til_EOL() instead
-		let re = Regex::new(r"(?m)^%([\w()]+)[\t ]+((\\\n|[^\n])+)$").unwrap();
 		for path in paths {
 			let path = path.replace("%{_target}", Self::arch()?.as_str());
 			debug!(": {path}");
 			for path in glob::glob(path.as_str())? {
-				let path = path?;
-				debug!("{}", path.display());
-				let mut buf = vec![];
-				let bytes = BufReader::new(File::open(&path)?).read_to_end(&mut buf)?;
-				assert_ne!(bytes, 0, "Empty macro definition file '{}'", path.display());
-				for cap in re.captures_iter(std::str::from_utf8(&buf)?) {
-					if let Some(val) = self.macros.get(&cap[1]) {
-						debug!("Macro Definition duplicated: {} : '{val:?}' | '{}'", &cap[1], &cap[2]);
-						continue; // FIXME?
-					}
-					let name = &cap[1];
-					if name.ends_with("()") {
-						let mut content = String::from(&cap[2]);
-						content.push(' '); // yup, we mark it using a space.
-						self.macros.insert(unsafe { name.strip_suffix("()").unwrap_unchecked() }.into(), content);
-					}
-					// we trim() just in case
-					self.macros.insert(cap[1].into(), cap[2].trim().into());
-				}
+				self.load_macro_from_file(path?)?;
 			}
 		}
 		Ok(())
@@ -406,7 +435,7 @@ impl SpecParser {
 			Some(x) => x,
 		};
 		let remain = remain.trim();
-		if !(start.chars().nth(0) == Some('%') && start.chars().nth(1) != Some('%')) {
+		if !(start.starts_with('%') && start.chars().nth(1) != Some('%')) {
 			return Ok(false);
 		}
 		self.section = match &start[1..] {
@@ -452,7 +481,7 @@ impl SpecParser {
 			"files" => {
 				let mut f = None;
 				let mut name: String = "".into();
-				let mut remains = remain.split(" ");
+				let mut remains = remain.split(' ');
 				while let Some(remain) = remains.next() {
 					if let Some(flag) = remain.strip_prefix('-') {
 						match flag {
@@ -525,29 +554,75 @@ impl SpecParser {
 				}
 			}
 			match self.section {
-				RPMSection::Global => todo!(),
-				RPMSection::Package(_) => todo!(),
-				RPMSection::Description(_) => todo!(),
-				RPMSection::Prep => todo!(),
-				RPMSection::Build => todo!(),
-				RPMSection::Install => todo!(),
-				RPMSection::Files(_, _) => todo!(),
-				RPMSection::Changelog => todo!(),
-			}
-			// only then do we check for other preambles
-			for cap in re_preamble.captures_iter(line) {
-				// check for list_preambles
-				if let Some(digitcap) = re_digit.captures(&cap[1]) {
-					let sdigit = &digitcap[0];
-					let digit: i16 = sdigit.parse()?;
-					let name = &cap[1][..cap[1].len() - sdigit.len()];
-					self.add_list_preamble(name, digit, &cap[2])?;
-				} else {
-					self.add_preamble(&cap[1], cap[2].into())?;
+				RPMSection::Global | RPMSection::Package(_) => {
+					if let Some(cap) = re_preamble.captures(line) {
+						// check for list_preambles
+						if let Some(digitcap) = re_digit.captures(&cap[1]) {
+							let sdigit = &digitcap[0];
+							let digit: i16 = sdigit.parse()?;
+							let name = &cap[1][..cap[1].len() - sdigit.len()];
+							self.add_list_preamble(name, digit, &cap[2])?;
+						} else {
+							self.add_preamble(&cap[1], cap[2].into())?;
+						}
+					} else {
+						self.errors.push(Err(ParserError::Others(eyre!("{}: Non-empty non-preamble line: {line}", self.count_line))))
+					}
+				}
+				RPMSection::Description(ref p) => {
+					if p.is_empty() {
+						self.rpm.description.push_str(line);
+						self.rpm.description.push('\n');
+						continue;
+					}
+					let p = self.rpm.packages.get_mut(p).expect("BUG: no subpackage at %description");
+					p.description.push_str(line);
+					p.description.push('\n');
+				}
+				RPMSection::Prep => {
+					self.rpm.prep.push_str(line);
+					self.rpm.prep.push('\n');
+				}
+				RPMSection::Build => {
+					self.rpm.build.push_str(line);
+					self.rpm.build.push('\n');
+				}
+				RPMSection::Install => {
+					self.rpm.install.push_str(line);
+					self.rpm.install.push('\n');
+				}
+				RPMSection::Files(ref p, ref f) => {
+					if let Some(f) = f {
+						if p.is_empty() && self.rpm.files.is_empty() {
+							self.rpm.files.push(' '); // temporary solution
+							self.rpm.files.push_str(f);
+							self.rpm.files.push('\n');
+						} else {
+							let p = self.rpm.packages.get_mut(p).expect("BUG: no subpackage at %files");
+							if p.files.is_empty() {
+								p.files.push(' ');
+								p.files.push_str(f);
+								p.files.push('\n');
+							}
+						}
+					}
+					if p.is_empty() {
+						self.rpm.files.push_str(line);
+						self.rpm.files.push('\n');
+						continue;
+					}
+					let p = self.rpm.packages.get_mut(p).expect("BUG: no subpackage at %files");
+					p.files.push_str(line);
+					p.files.push('\n');
+				}
+				RPMSection::Changelog => {
+					self.rpm.changelog.push_str(line);
+					self.rpm.changelog.push('\n');
 				}
 			}
 		}
 		if !self.errors.is_empty() {
+			println!("{:#?}", self.errors);
 			return take(&mut self.errors).into_iter().map(Result::unwrap_err).fold(Err(eyre!("Cannot parse spec file")), |report, e| report.error(e));
 		}
 		Ok(())
@@ -584,7 +659,7 @@ impl SpecParser {
 						);
 						self.errors.push(Err(ParserError::Duplicate(self.count_line, stringify!($x).into())));
 					}
-					rpm.name = Some(value);
+					rpm.$y = Some(value);
 					return Ok(());
 				}
 			};
@@ -606,9 +681,29 @@ impl SpecParser {
 			}
 		}
 
-		opt!(Name name|Version version|Release release|License license|SourceLicense sourcelicense|URL url|BugURL bugurl|ModularityLabel modularitylabel|DistTag disttag|VCS vcs|Distribution distribution|Vendor vendor|Packager packager);
-		opt!(Group group); // todo subpackage
-		opt!(Summary summary); // todo subpackage
+		if let RPMSection::Package(ref pkg) = self.section {
+			let rpm = self.rpm.packages.get_mut(pkg).expect("BUG: no subpackage in rpm.packages");
+			if name == "Group" {
+				if let Some(ref old) = rpm.group {
+					warn!("overriding existing Group preamble value `{old}` to `{value}`");
+					self.errors.push(Err(ParserError::Duplicate(self.count_line, "Group".into())));
+				}
+				rpm.name = Some(value);
+				return Ok(());
+			};
+			if name == "Summary" {
+				if !rpm.summary.is_empty() {
+					warn!("overriding existing Summary preamble value `{}` to `{value}`", rpm.summary);
+					self.errors.push(Err(ParserError::Duplicate(self.count_line, "Summary".into())));
+				}
+				rpm.name = Some(value);
+				return Ok(());
+			};
+			self.errors.push(Err(ParserError::UnknownPreamble(self.count_line, name.into())));
+			return Ok(());
+		}
+
+		opt!(Name name|Version version|Release release|License license|SourceLicense sourcelicense|URL url|BugURL bugurl|ModularityLabel modularitylabel|DistTag disttag|VCS vcs|Distribution distribution|Vendor vendor|Packager packager|Group group|Summary summary);
 		opt!(~AutoReqProv autoreqprov);
 		opt!(~AutoReq autoreq);
 		opt!(~AutoProv autoprov);
@@ -640,7 +735,7 @@ impl SpecParser {
 			"Prefix" => todo!(),
 			"DocDir" => todo!(),
 			"RemovePathPostfixes" => todo!(),
-			_ => bail!("BUG: failed to match preamble '{name}'"),
+			_ => self.errors.push(Err(ParserError::UnknownPreamble(self.count_line, name.into()))),
 		}
 		Ok(())
 	}
@@ -649,9 +744,16 @@ impl SpecParser {
 		match name {
 			"define" | "global" => {
 				let def = reader.read_til_eol()?;
+				let def = def.trim();
 				if let Some((name, def)) = def.split_once(' ') {
-					let name: String = if let Some(x) = name.strip_suffix("()") { format!("{x} ").into() } else { name.into() };
-					self.macros.insert(name, def.into());
+					let mut def: String = def.into();
+					let name: String = if let Some(x) = name.strip_suffix("()") {
+						def.push(' ');
+						x.into()
+					} else {
+						name.into()
+					};
+					self.macros.insert(name, def);
 					Some("".into())
 				} else {
 					error!("Invalid syntax: `%define {def}`");
@@ -662,10 +764,27 @@ impl SpecParser {
 				self.macros.remove(name);
 				Some("".into())
 			}
-			"load" => unimplemented!(),
+			"load" => {
+				let mut s = String::new();
+				for ch in reader {
+					s.push(ch);
+				}
+				self.load_macro_from_file(std::path::PathBuf::from(&*s)).ok()?;
+				Some("".into())
+			},
 			"expand" => self._expand_macro(reader).ok(),
 			"expr" => unimplemented!(),
-			"lua" => unimplemented!(),
+			"lua" => {
+				// let mut content: String = "".into();
+				// for ch in reader {
+				// 	content.push(ch);
+				// }
+				// match RPMLua::run(self, |ctx| ctx.load(&content).exec()) {
+				// 	Ok(())=> Some()
+				// }
+				// todo!()
+				Some("".into()) // FIXME TODO
+			}
 			"macrobody" => unimplemented!(),
 			"quote" => unimplemented!(),
 			"gsub" => unimplemented!(),
@@ -1095,7 +1214,7 @@ impl SpecParser {
 			// when %a is undefined, %{!a} expands to %{!a}, but %!a expands to %a
 			return Ok(out.unwrap_or_else(|| if content.is_empty() { format!("%{content}") } else { format!("%{{!{content}}}") }.into()));
 		}
-		return Ok(out.unwrap_or_default());
+		Ok(out.unwrap_or_default())
 	}
 
 	pub fn new() -> Self {
@@ -1115,8 +1234,8 @@ mod tests {
 
 		let mut sp = SpecParser::new();
 		sp.parse(f)?;
-		println!("{}", sp.rpm.name.unwrap_or_default());
-		println!("{}", sp.rpm.summary.unwrap_or_default());
+		println!("Name: {}", sp.rpm.name.unwrap_or_default());
+		println!("Summary: {}", sp.rpm.summary.unwrap_or_default());
 		Ok(())
 	}
 	#[test]
