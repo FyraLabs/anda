@@ -21,30 +21,25 @@ use tracing::error;
 /// ```
 #[rustfmt::skip] // kamo https://github.com/rust-lang/rustfmt/issues/4609
 macro_rules! gen_read_helper {
-	($reader:ident $pa:ident $pb:ident $pc:ident $sq:ident $dq:ident $ret:expr) => {
+	($reader:ident $pa:ident $pb:ident $pc:ident $sq:ident $dq:ident) => {
 		($pa, $pb, $pc) = (usize::default(), usize::default(), usize::default());
 		($sq, $dq) = (false, false);
 		macro_rules! exit_chk {
 			() => {
 				if $pa != 0 {
-					error!("Unclosed `(` while parsing arguments for parameterized macro ({} time(s))", $pa);
-					return $ret;
+					return Err(eyre!("Unclosed `(` while parsing arguments for parameterized macro ({} time(s))", $pa));
 				}
 				if $pb != 0 {
-					error!("Unclosed `[` while parsing arguments for parameterized macro ({} time(s))", $pb);
-					return $ret;
+					return Err(eyre!("Unclosed `[` while parsing arguments for parameterized macro ({} time(s))", $pb));
 				}
 				if $pc != 0 {
-					error!("Unclosed `{{` while parsing arguments for parameterized macro ({} time(s))", $pc);
-					return $ret;
+					return Err(eyre!("Unclosed `{{` while parsing arguments for parameterized macro ({} time(s))", $pc));
 				}
 				if $sq {
-					error!("Unclosed `'` while parsing arguments for parameterized macro ({} time(s))", $sq);
-					return $ret;
+					return Err(eyre!("Unclosed `'` while parsing arguments for parameterized macro ({} time(s))", $sq));
 				}
 				if $dq {
-					error!("Unclosed `\"` while parsing arguments for parameterized macro ({} time(s))", $dq);
-					return $ret;
+					return Err(eyre!("Unclosed `\"` while parsing arguments for parameterized macro ({} time(s))", $dq));
 				}
 			};
 		}
@@ -113,14 +108,30 @@ macro_rules! gen_read_helper {
 pub struct Consumer<R: std::io::Read = std::fs::File> {
 	s: String,
 	r: Option<std::io::BufReader<R>>,
+	pub l: usize,
+	pub c: usize,
+	pub b: usize,
+	_nl_c: usize,
 }
 
 impl<R: std::io::Read> Consumer<R> {
 	pub fn new(s: String, r: Option<std::io::BufReader<R>>) -> Self {
-		Self { s: s.chars().rev().collect(), r }
+		Self { s: s.chars().rev().collect(), r, l: 0, c: 0, b: 0, _nl_c: 0 }
+	}
+	pub fn pos(&mut self, l: usize, c: usize, b: usize) {
+		self.l = l;
+		self.c = c;
+		self.b = b;
 	}
 	#[inline]
 	pub fn push(&mut self, c: char) {
+		if c == '\n' {
+			self.l -= 1;
+			self.c = self._nl_c;
+		} else {
+			self.c -= 1;
+		}
+		self.b -= 1;
 		self.s.push(c)
 	}
 	pub fn read_til_eol(&mut self) -> Option<String> {
@@ -198,6 +209,14 @@ impl<R: std::io::Read> Iterator for Consumer<R> {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(c) = self.s.pop() {
+			if c == '\n' {
+				self.l += 1;
+				self._nl_c = self.c;
+				self.c = 0;
+			} else {
+				self.c += 1;
+			}
+			self.b += 1;
 			return Some(c);
 		}
 		if let Some(ref mut r) = self.r {
@@ -212,7 +231,16 @@ impl<R: std::io::Read> Iterator for Consumer<R> {
 						return None;
 					}
 				};
-				Some(self.s.pop().unwrap())
+				let c = unsafe { self.s.pop().unwrap_unchecked() };
+				if c == '\n' {
+					self.l += 1;
+					self._nl_c = self.c;
+					self.c = 0;
+				} else {
+					self.c += 1;
+				}
+				self.b += 1;
+				Some(c)
 			}
 		} else {
 			None
@@ -222,7 +250,7 @@ impl<R: std::io::Read> Iterator for Consumer<R> {
 
 impl<R: std::io::Read> From<&str> for Consumer<R> {
 	fn from(value: &str) -> Self {
-		Consumer { s: value.chars().rev().collect(), r: None }
+		Consumer { s: value.chars().rev().collect(), r: None, l: 0, c: 0, b: 0, _nl_c: 0 }
 	}
 }
 

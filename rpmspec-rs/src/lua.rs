@@ -9,7 +9,10 @@
 /// there are two things: `rpm` and `posix`. See more information:
 /// https://rpm-software-management.github.io/rpm/manual/lua.html
 use rlua::Lua;
-use std::process::Command;
+use std::{
+	process::Command,
+	sync::{Arc, Mutex},
+};
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use rlua::{Context, ExternalError, Result};
@@ -32,10 +35,10 @@ impl RPMLua<'_> {
 	pub(crate) fn b64encode(_: Context, arg: String) -> Result<String> {
 		Ok(STANDARD.encode(arg))
 	}
-	pub(crate) fn call(_: Context, arg: String) {
+	pub(crate) fn call(_: Context, arg: String) -> Result<()> {
 		todo!()
 	}
-	pub(crate) fn define(rpmparser: &mut SpecParser, _: Context, arg: String) -> Result<()> {
+	pub(crate) fn define(rpmparser: Arc<Mutex<SpecParser>>, _: Context, arg: String) -> Result<()> {
 		if let Some((name, def)) = arg.split_once(' ') {
 			let mut def: String = def.into();
 			let name: String = if let Some(x) = name.strip_suffix("()") {
@@ -44,7 +47,8 @@ impl RPMLua<'_> {
 			} else {
 				name.into()
 			};
-			rpmparser.macros.insert(name.into(), def.into());
+			let mut p = rpmparser.lock().unwrap();
+			p.macros.insert(name.into(), def.into());
 			Ok(())
 		} else {
 			Err("Invalid syntax: `%define {def}`".to_lua_err())
@@ -53,61 +57,67 @@ impl RPMLua<'_> {
 	pub(crate) fn execute(_: Context, args: Vec<String>) -> Result<i32> {
 		Ok(Command::new(&args[0]).args(&args[1..]).status().map_err(|e| e.to_lua_err())?.code().unwrap_or(-1))
 	}
-	pub(crate) fn expand(rpmparser: &mut SpecParser, _: Context, arg: &str) -> Result<String> {
-		Ok(rpmparser.parse_macro(&mut arg.into()).collect())
+	pub(crate) fn expand(rpmparser: Arc<Mutex<SpecParser>>, _: Context, arg: &str) -> Result<String> {
+		let mut p = rpmparser.lock().unwrap();
+		Ok(p.parse_macro(&mut arg.into()).collect::<String>())
 	}
 	pub(crate) fn interactive(_: Context, _: String) -> Result<()> {
 		repl(); // lazy
 		// todo mimic
 		Ok(())
 	}
-	pub(crate) fn isdefined(rpmparser: &SpecParser, _: Context, name: &str) -> Result<(bool, bool)> {
-		if let Some(def) = rpmparser.macros.get(name) {
+	pub(crate) fn isdefined(rpmparser: Arc<Mutex<SpecParser>>, _: Context, name: &str) -> Result<(bool, bool)> {
+		if let Some(def) = rpmparser.lock().unwrap().macros.get(name) {
 			return Ok((true, def.ends_with(' ')));
 		}
 		Ok((false, false))
 	}
-	pub(crate) fn load(rpmparser: &mut SpecParser, _: Context, arg: String) -> Result<()> {
-		rpmparser.load_macro_from_file(std::path::PathBuf::from(arg)).map_err(|e| e.to_lua_err())
+	pub(crate) fn load(rpmparser: Arc<Mutex<SpecParser>>, _: Context, arg: String) -> Result<()> {
+		rpmparser.lock().unwrap().load_macro_from_file(std::path::PathBuf::from(arg)).map_err(|e| e.to_lua_err())
 	}
-	pub(crate) fn redirect2null(_: Context, arg: i32) {
+	pub(crate) fn redirect2null(_: Context, arg: i32)  -> Result<()>{
 		todo!()
 	}
-	pub(crate) fn register(_: Context, arg: String) {
+	pub(crate) fn register(_: Context, arg: String) -> Result<()> {
 		todo!()
 	}
-	pub(crate) fn undefine(rpmparser: &mut SpecParser, _: Context, name: String) -> Result<()> {
-		rpmparser.macros.remove(&*name).ok_or_else(|| "error undefining macro".to_lua_err())?;
+	pub(crate) fn undefine(rpmparser: Arc<Mutex<SpecParser>>, _: Context, name: String) -> Result<()> {
+		rpmparser.lock().unwrap().macros.remove(&*name).ok_or_else(|| "error undefining macro".to_lua_err())?;
 		Ok(())
 	}
-	pub(crate) fn unregister(_: Context, arg: String) {
+	pub(crate) fn unregister(_: Context, arg: String) -> Result<()> {
 		todo!()
 	}
-	pub(crate) fn vercmp(_: Context, (s1, s2): (String, String)) {
+	pub(crate) fn vercmp(_: Context, (s1, s2): (String, String)) -> Result<()> {
 		todo!()
 	}
-	pub(crate) fn run(rpmparser: &mut SpecParser, f: impl FnOnce(Context) -> Result<()>) -> Result<()> {
+	pub(crate) fn run(rpmparser: Arc<Mutex<SpecParser>>, f: impl FnOnce(Context) -> Result<()>) -> Result<()> {
 		let lua = Lua::new();
 		lua.context(|ctx| -> rlua::Result<()> {
 			let rpm = ctx.create_table()?;
 			rpm.set("b64encode", ctx.create_function(Self::b64encode)?)?;
 			rpm.set("b64decode", ctx.create_function(Self::b64decode)?)?;
-			// rpm.set("expand", ctx.create_function(|ctx, arg: String| Self::expand(rpmparser, ctx, &arg))?)?;
-			// rpm.set("define", ctx.create_function(|ctx, arg| Self::define(rpmparser, ctx, arg))?)?;
-			// rpm.set("undefine", ctx.create_function(|ctx, arg| Self::undefine(rpmparser, ctx, arg))?)?;
-			// rpm.set("isdefined", ctx.create_function(|ctx, arg: String| Self::isdefined(rpmparser, ctx, &arg))?)?;
-			// rpm.set("load", ctx.create_function(|ctx, arg| Self::load(rpmparser, ctx, arg))?)?;
-			// rpm.set("register", ctx.create_function(lua_rpm::register)?)?;
-			// rpm.set("unregister", ctx.create_function(lua_rpm::unregister)?)?;
-			// rpm.set("call", ctx.create_function(lua_rpm::call)?)?;
+			let p = rpmparser.clone();
+			rpm.set("expand", ctx.create_function(move |ctx, arg: String| Self::expand(p.clone(), ctx, &arg))?)?;
+			let p = rpmparser.clone();
+			rpm.set("define", ctx.create_function(move |ctx, arg| Self::define(p.clone(), ctx, arg))?)?;
+			let p = rpmparser.clone();
+			rpm.set("undefine", ctx.create_function(move |ctx, arg| Self::undefine(p.clone(), ctx, arg))?)?;
+			let p = rpmparser.clone();
+			rpm.set("isdefined", ctx.create_function(move |ctx, arg: String| Self::isdefined(p.clone(), ctx, &arg))?)?;
+			let p = rpmparser.clone();
+			rpm.set("load", ctx.create_function(move |ctx, arg| Self::load(p.clone(), ctx, arg))?)?;
+			rpm.set("register", ctx.create_function(Self::register)?)?;
+			rpm.set("unregister", ctx.create_function(Self::unregister)?)?;
+			rpm.set("call", ctx.create_function(Self::call)?)?;
 			rpm.set("interactive", ctx.create_function(Self::interactive)?)?;
-			// rpm.set("execute", ctx.create_function(lua_rpm::execute)?)?;
-			// rpm.set("redirect2null", ctx.create_function(lua_rpm::redirect2null)?)?;
-			// rpm.set("vercmp", ctx.create_function(lua_rpm::vercmp)?)?;
-			// rpm.set("ver", ctx.create_function(lua_rpm::ver_new)?)?;
-			// rpm.set("open", ctx.create_function(lua_rpm::open)?)?;
-			// rpm.set("splitargs", ctx.create_function(lua_rpm::splitargs)?)?;
-			// rpm.set("unsplitargs", ctx.create_function(lua_rpm::unsplitargs)?)?;
+			rpm.set("execute", ctx.create_function(Self::execute)?)?;
+			rpm.set("redirect2null", ctx.create_function(Self::redirect2null)?)?;
+			rpm.set("vercmp", ctx.create_function(Self::vercmp)?)?;
+			// rpm.set("ver", ctx.create_function(Self::ver_new)?)?;
+			// rpm.set("open", ctx.create_function(Self::open)?)?;
+			// rpm.set("splitargs", ctx.create_function(Self::splitargs)?)?;
+			// rpm.set("unsplitargs", ctx.create_function(Self::unsplitargs)?)?;
 			Ok(())
 		})?;
 		Ok(())

@@ -10,6 +10,19 @@ pub enum ParserError {
 	Others(color_eyre::Report),
 }
 
+impl Clone for ParserError {
+	fn clone(&self) -> Self {
+		match self {
+			Self::NoPreamble(s) => Self::NoPreamble(s.clone()),
+			Self::UnknownPreamble(a, b) => Self::UnknownPreamble(*a, b.clone()),
+			Self::Duplicate(a, b) => Self::Duplicate(*a, b.clone()),
+			Self::UnknownModifier(a, b) => Self::UnknownModifier(*a, b.clone()),
+			Self::UnknownMacro(a, b) => Self::UnknownMacro(*a, b.clone()),
+			Self::Others(r) => Self::Others(color_eyre::eyre::eyre!(r.to_string())), // unfortunate?
+		}
+	}
+}
+
 impl std::error::Error for ParserError {
 	fn description(&self) -> &str {
 		match self {
