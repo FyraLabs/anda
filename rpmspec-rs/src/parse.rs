@@ -291,13 +291,13 @@ impl Changelogs {
 		self.changelogs = RE_CHANGELOG
 			.captures_iter(&self.raw)
 			.map(|cap| {
-				let mut cl = Changelog::default();
-				cl.date = chrono::NaiveDate::parse_from_str(&cap[1], "%a %b %d %Y").map_err(|e| eyre!(e).wrap_err("Cannot parse date in %changelog"))?;
-				cl.version = cap.get(10).map(|v| v.as_str().into());
-				cl.maintainer = cap[6].into();
-				cl.email = cap.get(8).map(|email| email.as_str().into());
-				cl.message = cap[11].trim().into();
-				Ok(cl)
+				Ok(Changelog {
+					date: chrono::NaiveDate::parse_from_str(&cap[1], "%a %b %d %Y").map_err(|e| eyre!(e).wrap_err("Cannot parse date in %changelog"))?,
+					version: cap.get(10).map(|v| v.as_str().into()),
+					maintainer: cap[6].into(),
+					email: cap.get(8).map(|email| email.as_str().into()),
+					message: cap[11].trim().into(),
+				})
 			})
 			.collect::<Result<Box<[Changelog]>>>()?;
 		Ok(())

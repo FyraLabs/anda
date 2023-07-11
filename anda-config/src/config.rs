@@ -21,7 +21,6 @@ pub struct Manifest {
     pub config: Config,
 }
 
-
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
 pub struct Config {
     pub mock_config: Option<String>,
@@ -208,7 +207,6 @@ pub fn prefix_config(config: Manifest, prefix: &str) -> Manifest {
 pub fn generate_alias(config: &mut Manifest) {
     fn append_vec(vec: &mut Option<Vec<String>>, value: &str) {
         if let Some(vec) = vec {
-
             if vec.contains(&value.to_string()) {
                 return;
             }
@@ -220,17 +218,21 @@ pub fn generate_alias(config: &mut Manifest) {
     }
 
     for (name, project) in config.project.iter_mut() {
-        
         if config.config.strip_prefix.is_some() || config.config.strip_suffix.is_some() {
             let mut new_name = name.clone();
             if let Some(strip_prefix) = &config.config.strip_prefix {
-                new_name = new_name.strip_prefix(strip_prefix).unwrap_or(&new_name).to_string();
+                new_name = new_name
+                    .strip_prefix(strip_prefix)
+                    .unwrap_or(&new_name)
+                    .to_string();
             }
             if let Some(strip_suffix) = &config.config.strip_suffix {
-                new_name = new_name.strip_suffix(strip_suffix).unwrap_or(&new_name).to_string();
+                new_name = new_name
+                    .strip_suffix(strip_suffix)
+                    .unwrap_or(&new_name)
+                    .to_string();
             }
 
-            
             if name.clone() != new_name {
                 append_vec(&mut project.alias, &new_name);
             }

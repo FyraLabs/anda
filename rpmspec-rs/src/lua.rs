@@ -11,7 +11,7 @@
 /// https://rpm-software-management.github.io/rpm/manual/lua.html
 use parking_lot::Mutex;
 use rlua::Lua;
-use std::{sync::Arc, fmt::Write};
+use std::{fmt::Write, sync::Arc};
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use rlua::{Context, ExternalError, Result};
@@ -92,7 +92,7 @@ impl RPMLua<'_> {
 	}
 	pub(crate) fn run(rpmparser: Arc<Mutex<SpecParser>>, script: &str) -> Result<String> {
 		let lua = Lua::new();
-		let mut anda_out = Arc::new(Mutex::new(String::new()));
+		let anda_out = Arc::new(Mutex::new(String::new()));
 		lua.context(|ctx| -> rlua::Result<()> {
 			let rpm = ctx.create_table()?;
 			rpm.set("b64encode", ctx.create_function(Self::b64encode)?)?;
@@ -122,13 +122,16 @@ impl RPMLua<'_> {
 			let globals = ctx.globals();
 			globals.set("rpm", rpm)?;
 			let anda_out = anda_out.clone();
-			globals.set("print", ctx.create_function(move |_, s: String| {
-				anda_out.lock().write_str(&s).map_err(|e| e.to_lua_err())?;
-				Ok(())
-			})?)?;
+			globals.set(
+				"print",
+				ctx.create_function(move |_, s: String| {
+					anda_out.lock().write_str(&s).map_err(|e| e.to_lua_err())?;
+					Ok(())
+				})?,
+			)?;
 			ctx.load(script).exec()?;
 			Ok(())
 		})?;
-		Ok(std::mem::take(anda_out.get_mut()))
+		Ok(Arc::try_unwrap(anda_out).unwrap().into_inner())
 	}
 }

@@ -19,14 +19,7 @@ pub(crate) fn repl() {
 				match lua.load(&line).eval::<MultiValue>() {
 					Ok(values) => {
 						editor.add_history_entry(line);
-						println!(
-							"{}",
-							values
-								.iter()
-								.map(|value| format!("{:?}", value))
-								.collect::<Vec<_>>()
-								.join("\t")
-						);
+						println!("{}", values.iter().map(|value| format!("{:?}", value)).collect::<Vec<_>>().join("\t"));
 						break;
 					}
 					Err(Error::SyntaxError { incomplete_input: true, .. }) => {

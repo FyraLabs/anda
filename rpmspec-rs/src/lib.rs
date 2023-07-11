@@ -12,5 +12,6 @@
 
 mod error;
 mod parse;
-#[macro_use] mod util;
+#[macro_use]
+mod util;
 pub mod lua;
