@@ -101,7 +101,7 @@ impl CommandLog for Command {
     async fn log(&mut self) -> Result<()> {
         // let cmd_name = self;
         // make process name a constant string that we can reuse every time we call print_log
-        let process = self.as_std().get_program().into_string().unwrap();
+        let process = self.as_std().get_program().to_str().unwrap().to_string();
         let args = self
             .as_std()
             .get_args()
