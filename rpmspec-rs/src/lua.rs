@@ -34,7 +34,7 @@ impl RPMLua<'_> {
 	pub(crate) fn b64encode(_: Context, arg: String) -> Result<String> {
 		Ok(STANDARD.encode(arg))
 	}
-	pub(crate) fn call(_: Context, arg: String) -> Result<()> {
+	pub(crate) fn call(_: Context, _arg: String) -> Result<()> {
 		todo!()
 	}
 	pub(crate) fn define(rpmparser: Arc<Mutex<SpecParser>>, _: Context, arg: String) -> Result<()> {
@@ -74,20 +74,20 @@ impl RPMLua<'_> {
 	pub(crate) fn load(rpmparser: Arc<Mutex<SpecParser>>, _: Context, arg: String) -> Result<()> {
 		rpmparser.lock().load_macro_from_file(std::path::PathBuf::from(arg)).map_err(|e| e.to_lua_err())
 	}
-	pub(crate) fn redirect2null(_: Context, arg: i32) -> Result<()> {
+	pub(crate) fn redirect2null(_: Context, _arg: i32) -> Result<()> {
 		todo!()
 	}
-	pub(crate) fn register(_: Context, arg: String) -> Result<()> {
+	pub(crate) fn register(_: Context, _arg: String) -> Result<()> {
 		todo!()
 	}
 	pub(crate) fn undefine(rpmparser: Arc<Mutex<SpecParser>>, _: Context, name: String) -> Result<()> {
 		rpmparser.lock().macros.remove(&*name).ok_or_else(|| "error undefining macro".to_lua_err())?;
 		Ok(())
 	}
-	pub(crate) fn unregister(_: Context, arg: String) -> Result<()> {
+	pub(crate) fn unregister(_: Context, _arg: String) -> Result<()> {
 		todo!()
 	}
-	pub(crate) fn vercmp(_: Context, (s1, s2): (String, String)) -> Result<()> {
+	pub(crate) fn vercmp(_: Context, (_s1, _s2): (String, String)) -> Result<()> {
 		todo!()
 	}
 	pub(crate) fn run(rpmparser: Arc<Mutex<SpecParser>>, script: &str) -> Result<String> {
