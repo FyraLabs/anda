@@ -1,3 +1,4 @@
+#![warn(clippy::disallowed_types)]
 /// Handlers for Lua \
 /// FYI RPM spec has tight integration with Lua \
 ///
@@ -8,11 +9,9 @@
 /// aka. `rlua::UserData` \
 /// there are two things: `rpm` and `posix`. See more information:
 /// https://rpm-software-management.github.io/rpm/manual/lua.html
+use parking_lot::Mutex;
 use rlua::Lua;
-use std::{
-	process::Command,
-	sync::{Arc, Mutex},
-};
+use std::{sync::Arc, fmt::Write};
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use rlua::{Context, ExternalError, Result};
@@ -41,13 +40,13 @@ impl RPMLua<'_> {
 	pub(crate) fn define(rpmparser: Arc<Mutex<SpecParser>>, _: Context, arg: String) -> Result<()> {
 		if let Some((name, def)) = arg.split_once(' ') {
 			let mut def: String = def.into();
-			let name: String = if let Some(x) = name.strip_suffix("()") {
+			let name: String = if let Some(name) = name.strip_suffix("()") {
 				def.push(' ');
 				name.into()
 			} else {
 				name.into()
 			};
-			let mut p = rpmparser.lock().unwrap();
+			let mut p = rpmparser.lock();
 			p.macros.insert(name.into(), def.into());
 			Ok(())
 		} else {
@@ -55,10 +54,10 @@ impl RPMLua<'_> {
 		}
 	}
 	pub(crate) fn execute(_: Context, args: Vec<String>) -> Result<i32> {
-		Ok(Command::new(&args[0]).args(&args[1..]).status().map_err(|e| e.to_lua_err())?.code().unwrap_or(-1))
+		Ok(std::process::Command::new(&args[0]).args(&args[1..]).status().map_err(|e| e.to_lua_err())?.code().unwrap_or(-1))
 	}
 	pub(crate) fn expand(rpmparser: Arc<Mutex<SpecParser>>, _: Context, arg: &str) -> Result<String> {
-		let mut p = rpmparser.lock().unwrap();
+		let mut p = rpmparser.lock();
 		Ok(p.parse_macro(&mut arg.into()).collect::<String>())
 	}
 	pub(crate) fn interactive(_: Context, _: String) -> Result<()> {
@@ -67,22 +66,22 @@ impl RPMLua<'_> {
 		Ok(())
 	}
 	pub(crate) fn isdefined(rpmparser: Arc<Mutex<SpecParser>>, _: Context, name: &str) -> Result<(bool, bool)> {
-		if let Some(def) = rpmparser.lock().unwrap().macros.get(name) {
+		if let Some(def) = rpmparser.lock().macros.get(name) {
 			return Ok((true, def.ends_with(' ')));
 		}
 		Ok((false, false))
 	}
 	pub(crate) fn load(rpmparser: Arc<Mutex<SpecParser>>, _: Context, arg: String) -> Result<()> {
-		rpmparser.lock().unwrap().load_macro_from_file(std::path::PathBuf::from(arg)).map_err(|e| e.to_lua_err())
+		rpmparser.lock().load_macro_from_file(std::path::PathBuf::from(arg)).map_err(|e| e.to_lua_err())
 	}
-	pub(crate) fn redirect2null(_: Context, arg: i32)  -> Result<()>{
+	pub(crate) fn redirect2null(_: Context, arg: i32) -> Result<()> {
 		todo!()
 	}
 	pub(crate) fn register(_: Context, arg: String) -> Result<()> {
 		todo!()
 	}
 	pub(crate) fn undefine(rpmparser: Arc<Mutex<SpecParser>>, _: Context, name: String) -> Result<()> {
-		rpmparser.lock().unwrap().macros.remove(&*name).ok_or_else(|| "error undefining macro".to_lua_err())?;
+		rpmparser.lock().macros.remove(&*name).ok_or_else(|| "error undefining macro".to_lua_err())?;
 		Ok(())
 	}
 	pub(crate) fn unregister(_: Context, arg: String) -> Result<()> {
@@ -91,8 +90,9 @@ impl RPMLua<'_> {
 	pub(crate) fn vercmp(_: Context, (s1, s2): (String, String)) -> Result<()> {
 		todo!()
 	}
-	pub(crate) fn run(rpmparser: Arc<Mutex<SpecParser>>, f: impl FnOnce(Context) -> Result<()>) -> Result<()> {
+	pub(crate) fn run(rpmparser: Arc<Mutex<SpecParser>>, script: &str) -> Result<String> {
 		let lua = Lua::new();
+		let mut anda_out = Arc::new(Mutex::new(String::new()));
 		lua.context(|ctx| -> rlua::Result<()> {
 			let rpm = ctx.create_table()?;
 			rpm.set("b64encode", ctx.create_function(Self::b64encode)?)?;
@@ -118,8 +118,17 @@ impl RPMLua<'_> {
 			// rpm.set("open", ctx.create_function(Self::open)?)?;
 			// rpm.set("splitargs", ctx.create_function(Self::splitargs)?)?;
 			// rpm.set("unsplitargs", ctx.create_function(Self::unsplitargs)?)?;
+
+			let globals = ctx.globals();
+			globals.set("rpm", rpm)?;
+			let anda_out = anda_out.clone();
+			globals.set("print", ctx.create_function(move |_, s: String| {
+				anda_out.lock().write_str(&s).map_err(|e| e.to_lua_err())?;
+				Ok(())
+			})?)?;
+			ctx.load(script).exec()?;
 			Ok(())
 		})?;
-		Ok(())
+		Ok(std::mem::take(anda_out.get_mut()))
 	}
 }

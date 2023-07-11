@@ -104,7 +104,6 @@ impl CommandLog for Command {
         let process = self
             .as_std()
             .get_program()
-            .to_owned()
             .into_string()
             .unwrap();
         let args = self

@@ -1,23 +1,37 @@
+#![warn(clippy::disallowed_types)]
+use crate::error::ParserError;
 use crate::util::*;
-use crate::{error::ParserError, lua::RPMLua};
 use color_eyre::{
 	eyre::{eyre, Context},
 	Help, Result, SectionExt,
 };
-use lazy_static::lazy_static;
+use parking_lot::Mutex;
 use regex::Regex;
 use smartstring::alias::String;
-use std::mem::{replace, swap};
 use std::{
 	collections::HashMap,
 	fmt::Write,
 	fs::File,
 	io::{BufReader, Read},
 	mem::take,
+	num::ParseIntError,
 	process::Command,
-	sync::{Arc, Mutex},
+	sync::Arc,
 };
 use tracing::{debug, error, warn};
+
+const PKGNAMECHARSET: &str = "_-";
+
+lazy_static::lazy_static! {
+	static ref RE_PKGQCOND: Regex = Regex::new(r"\s+(>=?|<=?|=)\s+(\d+:)?([\w\d.^~]+)-([\w\d.^~]+)(.*)").unwrap();
+	static ref RE_REQ1: Regex = Regex::new(r"(?m)^Requires(?:\(([\w,\s]+)\))?:\s*(.+)$").unwrap();
+	static ref RE_REQ2: Regex = Regex::new(r"(?m)([\w-]+)(?:\s*([>=<]{1,2})\s*([\d._~^]+))?").unwrap();
+	static ref RE_FILE: Regex = Regex::new(r"(?m)^(%\w+(\(.+\))?\s+)?(.+)$").unwrap();
+	static ref RE_CHANGELOG: Regex = Regex::new(r"(?m)^\*[ \t]*((\w{3})[ \t]+(\w{3})[ \t]+(\d+)[ \t]+(\d+))[ \t]+(\S+)([ \t]+<([\w@.+]+)>)?([ \t]+-[ \t]+([\d.-^~_\w]+))?$((\n^[^*\n]*)+)").unwrap();
+	static ref RE_PREAMBLE: Regex = Regex::new(r"(\w+):\s*(.+)").unwrap();
+	static ref RE_DNL: Regex = Regex::new(r"^%dnl\b").unwrap();
+	static ref RE_DIGIT: Regex = Regex::new(r"\d+$").unwrap();
+}
 
 #[derive(Default, Clone, Copy, Debug)]
 pub enum PkgQCond {
@@ -50,11 +64,6 @@ pub struct Package {
 	pub epoch: Option<u32>,
 	pub condition: PkgQCond,
 }
-lazy_static! {
-	static ref RE_PKGQCOND: Regex = Regex::new(r"\s+(>=?|<=?|=)\s+(\d+:)?([\w\d.^~]+)-([\w\d.^~]+)(.*)").unwrap();
-}
-
-const PKGNAMECHARSET: &str = "_-";
 
 impl Package {
 	pub fn new(name: String) -> Self {
@@ -148,14 +157,15 @@ pub struct Scriptlets {
 	pub transfiletriggerpostun: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone)]
 pub enum ConfigFileMod {
+	#[default]
 	None,
 	MissingOK,
 	NoReplace,
 }
-#[derive(Debug)]
 
+#[derive(Debug, Clone)]
 pub enum VerifyFileMod {
 	FileDigest, // or 'md5'
 	Size,
@@ -168,31 +178,130 @@ pub enum VerifyFileMod {
 	Caps,
 }
 
-#[derive(Default, Debug)]
-pub struct Files {
+#[derive(Default, Debug, Clone)]
+pub struct RPMFile {
 	// %artifact
-	pub artifact: Vec<String>,
+	pub artifact: bool,
 	// %ghost
-	pub ghost: Vec<String>,
+	pub ghost: bool,
 	// %config
-	pub config: HashMap<String, ConfigFileMod>,
+	pub config: ConfigFileMod,
 	// %dir
-	pub dir: Vec<String>,
+	pub dir: bool,
 	// %readme (obsolete) = %doc
 	// %doc
-	pub doc: Vec<String>,
+	pub doc: bool,
 	// %license
-	pub license: Vec<String>,
+	pub license: bool,
 	// %verify
-	pub verify: HashMap<String, VerifyFileMod>,
+	pub verify: Option<VerifyFileMod>,
+
+	pub path: String,
+	pub mode: u16,
+	pub user: String,
+	pub group: String,
 }
 
+#[derive(Default, Clone, Debug)]
+pub struct RPMFiles {
+	pub incl: String,
+	pub files: Box<[RPMFile]>,
+	pub raw: String,
+}
+
+impl RPMFiles {
+	fn parse(&mut self) -> Result<()> {
+		//? http://ftp.rpm.org/max-rpm/s1-rpm-inside-files-list-directives.html
+		self.files = RE_FILE
+			.captures_iter(&self.raw)
+			.map(|cap| {
+				let mut f = RPMFile::default();
+				if let Some(name) = cap.get(1) {
+					let name = name.as_str();
+					if let Some(m) = cap.get(2) {
+						let x = m.as_str().strip_prefix('(').expect("RE_FILE not matching parens `(...)` but found capture group 2");
+						let x = x.strip_suffix(')').expect("RE_FILE not matching parens `(...)` but found capture group 2");
+						let ss: Vec<&str> = x.split(',').map(|s| s.trim()).collect();
+						if name.starts_with("%attr(") {
+							let Some([mode, user, group]) = ss.get(0..=2) else {
+								return Err(eyre!("Expected 3 arguments in `%attr(...)`"));
+							};
+							let (mode, user, group) = (*mode, *user, *group);
+							if mode != "-" {
+								f.mode = mode.parse().map_err(|e: ParseIntError| eyre!(e).wrap_err("Cannot parse file mode"))?;
+							}
+							if user != "-" {
+								f.user = user.into();
+							}
+							if group != "-" {
+								f.group = group.into();
+							}
+							f.path = cap.get(3).expect("No RE grp 3 in %files?").as_str().into();
+							return Ok(f);
+						}
+						if name.starts_with("%verify(") {
+							todo!()
+						}
+						if name.starts_with("%defattr(") {
+							todo!()
+						}
+						if name.starts_with("%config(") {
+							todo!()
+						}
+						return Err(eyre!("Unknown %files directive: %{name}"));
+					}
+					match name {
+						"%artifact " => f.artifact = true,
+						"%ghost " => f.ghost = true,
+						"%config " => f.config = ConfigFileMod::MissingOK,
+						"%dir " => f.dir = true,
+						"%doc " => f.doc = true,
+						"%readme " => f.doc = true,
+						"%license " => f.license = true,
+						_ => return Err(eyre!("Unknown %files directive: %{name}")),
+					}
+				}
+				f.path = cap.get(3).expect("No RE grp 3 in %files?").as_str().into();
+				Ok(f)
+			})
+			.collect::<Result<Box<[RPMFile]>>>()?;
+		Ok(())
+	}
+}
+
+// todo %if
+
+#[derive(Default, Clone, Debug)]
 pub struct Changelog {
-	pub date: String, // ! any other?
+	pub date: chrono::NaiveDate,
 	pub version: Option<String>,
 	pub maintainer: String,
-	pub email: String,
+	pub email: Option<String>,
 	pub message: String,
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct Changelogs {
+	pub changelogs: Box<[Changelog]>,
+	pub raw: String,
+}
+
+impl Changelogs {
+	fn parse(&mut self) -> Result<()> {
+		self.changelogs = RE_CHANGELOG
+			.captures_iter(&self.raw)
+			.map(|cap| {
+				let mut cl = Changelog::default();
+				cl.date = chrono::NaiveDate::parse_from_str(&cap[1], "%a %b %d %Y").map_err(|e| eyre!(e).wrap_err("Cannot parse date in %changelog"))?;
+				cl.version = cap.get(10).map(|v| v.as_str().into());
+				cl.maintainer = cap[6].into();
+				cl.email = cap.get(8).map(|email| email.as_str().into());
+				cl.message = cap[11].trim().into();
+				Ok(cl)
+			})
+			.collect::<Result<Box<[Changelog]>>>()?;
+		Ok(())
+	}
 }
 
 #[derive(Default, Clone, Debug)]
@@ -219,8 +328,14 @@ pub(crate) struct RPMSpecPkg {
 	pub requires: RPMRequires,
 	pub description: String,
 	pub group: Option<String>,
-	// pub files: Files,
-	pub files: String,
+	pub provides: Vec<Package>,
+	pub conflicts: Vec<Package>,
+	pub obsoletes: Vec<Package>,
+	pub recommends: Vec<Package>,
+	pub suggests: Vec<Package>,
+	pub supplements: Vec<Package>,
+	pub enhances: Vec<Package>,
+	pub files: RPMFiles,
 }
 
 #[derive(Default, Clone, Debug)]
@@ -243,10 +358,8 @@ pub struct RPMSpec {
 	pub check: String,
 
 	pub scriptlets: Scriptlets,
-	//pub files: Files,              // %files
-	//pub changelog: Vec<Changelog>, // %changelog
-	pub files: String,
-	pub changelog: String,
+	pub files: RPMFiles,
+	pub changelog: Changelogs,
 
 	//* preamble
 	pub name: Option<String>,
@@ -324,13 +437,7 @@ impl SpecParser {
 	}
 
 	pub fn parse_requires(&mut self, sline: &str) -> Result<bool> {
-		lazy_static! { // move outside FIXME
-			static ref RE1: Regex =
-				Regex::new(r"(?m)^Requires(?:\(([\w,\s]+)\))?:\s*(.+)$").unwrap();
-			static ref RE2: Regex =
-				Regex::new(r"(?m)([\w-]+)(?:\s*([>=<]{1,2})\s*([\d._~^]+))?").unwrap();
-		}
-		if let Some(caps) = RE1.captures(sline) {
+		if let Some(caps) = RE_REQ1.captures(sline) {
 			let spkgs = caps[caps.len()].trim();
 			let mut pkgs = vec![];
 			Package::add_query(&mut pkgs, spkgs)?; // fixme
@@ -383,8 +490,9 @@ impl SpecParser {
 		Ok(s[..s.len() - 1].into()) // remove new line
 	}
 
+	// todo rewrite
 	pub fn load_macro_from_file(&mut self, path: std::path::PathBuf) -> Result<()> {
-		lazy_static! {
+		lazy_static::lazy_static! {
 			static ref RE: Regex = Regex::new(r"(?m)^%([\w()]+)[\t ]+((\\\n|[^\n])+)$").unwrap();
 		}
 		debug!("Loading macros from {}", path.display());
@@ -531,14 +639,11 @@ impl SpecParser {
 	}
 
 	pub fn parse<R: std::io::Read>(&mut self, bufread: BufReader<R>) -> Result<()> {
-		let re_preamble = Regex::new(r"(\w+):\s*(.+)").unwrap();
-		let re_dnl = Regex::new(r"^%dnl\b").unwrap();
-		let re_digit = Regex::new(r"\d+$").unwrap();
 		let mut consumer = Consumer::new("".into(), Some(bufread));
 		while let Some(line) = consumer.read_til_eol() {
 			let raw_line = self._expand_macro(&mut Consumer::from(&*line))?;
 			let line = raw_line.trim();
-			if line.is_empty() || line.starts_with('#') || re_dnl.is_match(line) {
+			if line.is_empty() || line.starts_with('#') || RE_DNL.is_match(line) {
 				continue;
 			}
 			if self._handle_section(line)? {
@@ -557,9 +662,9 @@ impl SpecParser {
 			}
 			match self.section {
 				RPMSection::Global | RPMSection::Package(_) => {
-					if let Some(cap) = re_preamble.captures(line) {
+					if let Some(cap) = RE_PREAMBLE.captures(line) {
 						// check for list_preambles
-						if let Some(digitcap) = re_digit.captures(&cap[1]) {
+						if let Some(digitcap) = RE_DIGIT.captures(&cap[1]) {
 							let sdigit = &digitcap[0];
 							let digit: i16 = sdigit.parse()?;
 							let name = &cap[1][..cap[1].len() - sdigit.len()];
@@ -593,33 +698,29 @@ impl SpecParser {
 					self.rpm.install.push_str(line);
 					self.rpm.install.push('\n');
 				}
-				RPMSection::Files(ref p, ref f) => {
+				RPMSection::Files(ref p, ref mut f) => {
 					if let Some(f) = f {
-						if p.is_empty() && self.rpm.files.is_empty() {
-							self.rpm.files.push(' '); // temporary solution
-							self.rpm.files.push_str(f);
-							self.rpm.files.push('\n');
+						if p.is_empty() && self.rpm.files.incl.is_empty() {
+							self.rpm.files.incl = take(f);
 						} else {
 							let p = self.rpm.packages.get_mut(p).expect("BUG: no subpackage at %files");
-							if p.files.is_empty() {
-								p.files.push(' ');
-								p.files.push_str(f);
-								p.files.push('\n');
+							if p.files.incl.is_empty() {
+								p.files.incl = take(f);
 							}
 						}
 					}
 					if p.is_empty() {
-						self.rpm.files.push_str(line);
-						self.rpm.files.push('\n');
+						self.rpm.files.raw.push_str(line);
+						self.rpm.files.raw.push('\n');
 						continue;
 					}
 					let p = self.rpm.packages.get_mut(p).expect("BUG: no subpackage at %files");
-					p.files.push_str(line);
-					p.files.push('\n');
+					p.files.raw.push_str(line);
+					p.files.raw.push('\n');
 				}
 				RPMSection::Changelog => {
-					self.rpm.changelog.push_str(line);
-					self.rpm.changelog.push('\n');
+					self.rpm.changelog.raw.push_str(line);
+					self.rpm.changelog.raw.push('\n');
 				}
 			}
 		}
@@ -627,6 +728,9 @@ impl SpecParser {
 			println!("{:#?}", self.errors);
 			return take(&mut self.errors).into_iter().map(Result::unwrap_err).fold(Err(eyre!("Cannot parse spec file")), |report, e| report.error(e));
 		}
+		self.rpm.changelog.parse()?;
+		self.rpm.files.parse()?;
+		self.rpm.packages.values_mut().try_for_each(|p| p.files.parse())?;
 		Ok(())
 	}
 
@@ -684,7 +788,7 @@ impl SpecParser {
 		}
 
 		if let RPMSection::Package(ref pkg) = self.section {
-			let rpm = self.rpm.packages.get_mut(pkg).expect("BUG: no subpackage in rpm.packages");
+			let rpm = rpm.packages.get_mut(pkg).expect("BUG: no subpackage in rpm.packages");
 			if name == "Group" {
 				if let Some(ref old) = rpm.group {
 					warn!("overriding existing Group preamble value `{old}` to `{value}`");
@@ -698,11 +802,30 @@ impl SpecParser {
 					warn!("overriding existing Summary preamble value `{}` to `{value}`", rpm.summary);
 					self.errors.push(Err(ParserError::Duplicate(self.count_line, "Summary".into())));
 				}
-				rpm.name = Some(value);
+				rpm.summary = value;
 				return Ok(());
 			};
-			self.errors.push(Err(ParserError::UnknownPreamble(self.count_line, name.into())));
-			return Ok(());
+			if name == "Provides" {
+				return Package::add_query(&mut rpm.provides, &value);
+			}
+			if name == "Conflicts" {
+				return Package::add_query(&mut rpm.conflicts, &value);
+			}
+			if name == "Obsoletes" {
+				return Package::add_query(&mut rpm.obsoletes, &value);
+			}
+			if name == "Recommends" {
+				return Package::add_simple_query(&mut rpm.recommends, &value);
+			}
+			if name == "Suggests" {
+				return Package::add_simple_query(&mut rpm.suggests, &value);
+			}
+			if name == "Supplements" {
+				return Package::add_simple_query(&mut rpm.supplements, &value);
+			}
+			if name == "Enhances" {
+				return Package::add_simple_query(&mut rpm.enhances, &value);
+			}
 		}
 
 		opt!(Name name|Version version|Release release|License license|SourceLicense sourcelicense|URL url|BugURL bugurl|ModularityLabel modularitylabel|DistTag disttag|VCS vcs|Distribution distribution|Vendor vendor|Packager packager|Group group|Summary summary);
@@ -723,13 +846,13 @@ impl SpecParser {
 				}
 				rpm.epoch = Some(value.parse().expect("Failed to decode epoch to int"));
 			}
-			"Provides" => Package::add_query(&mut rpm.provides, &value)?,              // todo subpackage
-			"Conflicts" => Package::add_query(&mut rpm.conflicts, &value)?,            // todo subpackage
-			"Obsoletes" => Package::add_query(&mut rpm.obsoletes, &value)?,            // todo subpackage
-			"Recommends" => Package::add_simple_query(&mut rpm.recommends, &value)?,   // todo subpackage
-			"Suggests" => Package::add_simple_query(&mut rpm.suggests, &value)?,       // todo subpackage
-			"Supplements" => Package::add_simple_query(&mut rpm.supplements, &value)?, // todo subpackage
-			"Enhances" => Package::add_simple_query(&mut rpm.enhances, &value)?,       // todo subpackage
+			"Provides" => Package::add_query(&mut rpm.provides, &value)?,
+			"Conflicts" => Package::add_query(&mut rpm.conflicts, &value)?,
+			"Obsoletes" => Package::add_query(&mut rpm.obsoletes, &value)?,
+			"Recommends" => Package::add_simple_query(&mut rpm.recommends, &value)?,
+			"Suggests" => Package::add_simple_query(&mut rpm.suggests, &value)?,
+			"Supplements" => Package::add_simple_query(&mut rpm.supplements, &value)?,
+			"Enhances" => Package::add_simple_query(&mut rpm.enhances, &value)?,
 			"BuildRequires" => Package::add_query(&mut rpm.buildrequires, &value)?,
 			"OrderWithRequires" => todo!(),
 			"BuildConflicts" => todo!(),
@@ -784,10 +907,10 @@ impl SpecParser {
 				// HACK: `Arc<Mutex<SpecParser>>` as rlua fns are of `Fn` but they need `&mut SpecParser`.
 				// HACK: The mutex needs to momentarily *own* `self`.
 				let parser = Arc::new(Mutex::new(take(self)));
-				let out = RPMLua::run(parser.clone(), |ctx| ctx.load(&content).exec());
-				std::mem::swap(self, &mut Arc::try_unwrap(parser).unwrap().into_inner().unwrap()); // break down Arc then break down Mutex
+				let out = crate::lua::RPMLua::run(parser.clone(), &content);
+				std::mem::swap(self, &mut Arc::try_unwrap(parser).unwrap().into_inner()); // break down Arc then break down Mutex
 				match out {
-					Ok(()) => todo!(),
+					Ok(s) => Some(s.into()),
 					Err(e) => {
 						error!("%lua failed: {e:#}");
 						None
@@ -917,7 +1040,7 @@ impl SpecParser {
 		macro_rules! exit {
 			// for gen_read_helper!()
 			() => {
-				exit_chk!(); // maybe? FIXME
+				exit_chk!();
 				return Ok("".into());
 			};
 		}
@@ -977,10 +1100,9 @@ impl SpecParser {
 							}
 						};
 						if !content.starts_with('-') {
-							// normal stuff
-							res.push_str(
-								&self._read_raw_macro_use(&mut Consumer::from(&*format!("{{{content}}}")))?, // FIXME (err hdl?)
-							);
+							// normal %macros
+							res.push_str(&self._read_raw_macro_use(&mut Consumer::from(&*format!("{{{content}}}")))?);
+							continue 'main;
 						}
 						if let Some(content) = content.strip_suffix('*') {
 							if content.len() != 2 {

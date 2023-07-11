@@ -18,7 +18,10 @@ impl Clone for ParserError {
 			Self::Duplicate(a, b) => Self::Duplicate(*a, b.clone()),
 			Self::UnknownModifier(a, b) => Self::UnknownModifier(*a, b.clone()),
 			Self::UnknownMacro(a, b) => Self::UnknownMacro(*a, b.clone()),
-			Self::Others(r) => Self::Others(color_eyre::eyre::eyre!(r.to_string())), // unfortunate?
+			Self::Others(r) => {
+				tracing::warn!("Cloning ParserError::Others(color_eyre::Report):\n{r:#}");
+				Self::Others(color_eyre::eyre::eyre!(r.to_string()))
+			}
 		}
 	}
 }
