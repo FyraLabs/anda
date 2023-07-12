@@ -10,8 +10,6 @@ use regex::Regex;
 use smartstring::alias::String;
 use std::{
 	collections::HashMap,
-	fmt::Write,
-	fs::File,
 	io::{BufReader, Read},
 	mem::take,
 	num::ParseIntError,
@@ -81,7 +79,7 @@ impl Package {
 			if ch.is_alphanumeric() || PKGNAMECHARSET.contains(ch) {
 				return Err(eyre!("Invalid character `{ch}` found in package query.").note(format!("query: `{query}`")));
 			}
-			last.write_char(ch)?;
+			last.push(ch);
 		}
 		if !last.is_empty() {
 			pkgs.push(Package::new(last));
@@ -90,33 +88,31 @@ impl Package {
 	}
 	pub fn add_query(pkgs: &mut Vec<Self>, query: &str) -> Result<()> {
 		let query = query.trim(); // just in case
-		if let Some((name, rest)) = query.split_once(|c: char| !c.is_alphanumeric() && !PKGNAMECHARSET.contains(c)) {
-			// the part that matches the good name is `name`. Check the rest.
-			let mut pkg = Package::new(name.into());
-			if let Some(caps) = RE_PKGQCOND.captures(rest) {
-				pkg.condition = caps[1].into();
-				if let Some(epoch) = caps.get(2) {
-					let epoch = epoch.as_str().strip_suffix(':').expect("epoch no `:` by RE_PKGQCOND");
-					pkg.epoch = Some(epoch.parse().map_err(|e| eyre!("Cannot parse epoch to u32: `{epoch}`").error(e).suggestion("Epoch can only be positive integers"))?);
-				}
-				pkg.version = Some(caps[3].into());
-				pkg.release = Some(caps[4].into());
-				pkgs.push(pkg);
-				if let Some(rest) = caps.get(5) {
-					return Self::add_query(pkgs, rest.as_str().trim_start_matches(|c| " ,".contains(c)));
-				}
-				Ok(())
-			} else {
-				Self::add_query(pkgs, rest.trim_start_matches(|c| " ,".contains(c)))
-			}
-		} else {
+		let Some((name, rest)) = query.split_once(|c: char| !c.is_alphanumeric() && !PKGNAMECHARSET.contains(c)) else {
 			// check if query matches pkg name
 			if query.chars().any(|c| !c.is_alphanumeric() && !PKGNAMECHARSET.contains(c)) {
 				return Err(eyre!("Invalid package name `{query}`").suggestion("Use only alphanumerics, underscores and dashes."));
 			}
 			pkgs.push(Self::new(query.into()));
-			Ok(())
+			return Ok(())
+		};
+		// the part that matches the good name is `name`. Check the rest.
+		let mut pkg = Package::new(name.into());
+		let Some(caps) = RE_PKGQCOND.captures(rest) else {
+			return Self::add_query(pkgs, rest.trim_start_matches(|c| " ,".contains(c)));
+		};
+		pkg.condition = caps[1].into();
+		if let Some(epoch) = caps.get(2) {
+			let epoch = epoch.as_str().strip_suffix(':').expect("epoch no `:` by RE_PKGQCOND");
+			pkg.epoch = Some(epoch.parse().map_err(|e| eyre!("Cannot parse epoch to u32: `{epoch}`").error(e).suggestion("Epoch can only be positive integers"))?);
 		}
+		pkg.version = Some(caps[3].into());
+		pkg.release = Some(caps[4].into());
+		pkgs.push(pkg);
+		if let Some(rest) = caps.get(5) {
+			return Self::add_query(pkgs, rest.as_str().trim_start_matches(|c| " ,".contains(c)));
+		}
+		Ok(())
 	}
 }
 
@@ -269,8 +265,6 @@ impl RPMFiles {
 	}
 }
 
-// todo %if
-
 #[derive(Default, Clone, Debug)]
 pub struct Changelog {
 	pub date: chrono::NaiveDate,
@@ -422,9 +416,10 @@ impl RPMSpec {
 #[derive(Default, Clone, Debug)]
 pub struct SpecParser {
 	pub rpm: RPMSpec,
-	pub errors: Vec<Result<(), ParserError>>,
+	errors: Vec<ParserError>,
 	pub macros: HashMap<String, String>,
-	pub section: RPMSection,
+	section: RPMSection,
+	cond: Vec<(bool, bool)>, // current, before
 
 	pub(crate) count_line: usize,
 	pub(crate) count_col: usize,
@@ -437,52 +432,31 @@ impl SpecParser {
 	}
 
 	pub fn parse_requires(&mut self, sline: &str) -> Result<bool> {
-		if let Some(caps) = RE_REQ1.captures(sline) {
-			let spkgs = caps[caps.len()].trim();
-			let mut pkgs = vec![];
-			Package::add_query(&mut pkgs, spkgs)?; // fixme
-			let modifiers = if caps.len() == 2 { &caps[2] } else { "none" };
-			for modifier in modifiers.split(',') {
-				let modifier = modifier.trim();
-				let pkgs = pkgs.to_vec();
-				if let RPMSection::Package(ref p) = self.section {
-					let rpm = self.rpm.packages.get_mut(p).expect("No subpackage when parsing Requires");
-					match modifier {
-						"none" => rpm.requires.none.extend(pkgs),
-						"pre" => rpm.requires.pre.extend(pkgs),
-						"post" => rpm.requires.post.extend(pkgs),
-						"preun" => rpm.requires.preun.extend(pkgs),
-						"postun" => rpm.requires.postun.extend(pkgs),
-						"pretrans" => rpm.requires.pretrans.extend(pkgs),
-						"posttrans" => rpm.requires.posttrans.extend(pkgs),
-						"verify" => rpm.requires.verify.extend(pkgs),
-						"interp" => rpm.requires.interp.extend(pkgs),
-						"meta" => rpm.requires.meta.extend(pkgs),
-						_ => {
-							self.errors.push(Err(ParserError::UnknownModifier(self.count_line, modifier.into())));
-						}
-					}
-				} else {
-					match modifier {
-						"none" => self.rpm.requires.none.extend(pkgs),
-						"pre" => self.rpm.requires.pre.extend(pkgs),
-						"post" => self.rpm.requires.post.extend(pkgs),
-						"preun" => self.rpm.requires.preun.extend(pkgs),
-						"postun" => self.rpm.requires.postun.extend(pkgs),
-						"pretrans" => self.rpm.requires.pretrans.extend(pkgs),
-						"posttrans" => self.rpm.requires.posttrans.extend(pkgs),
-						"verify" => self.rpm.requires.verify.extend(pkgs),
-						"interp" => self.rpm.requires.interp.extend(pkgs),
-						"meta" => self.rpm.requires.meta.extend(pkgs),
-						_ => {
-							self.errors.push(Err(ParserError::UnknownModifier(self.count_line, modifier.into())));
-						}
-					}
-				}
+		let Some(caps) = RE_REQ1.captures(sline) else {
+			return Ok(false);
+		};
+		let mut pkgs = vec![];
+		Package::add_query(&mut pkgs, caps[2].trim())?;
+		let modifiers = if caps.len() == 2 { &caps[2] } else { "none" };
+		for modifier in modifiers.split(',') {
+			let modifier = modifier.trim();
+			let pkgs = pkgs.to_vec();
+			let r = if let RPMSection::Package(ref p) = self.section { &mut self.rpm.packages.get_mut(p).expect("No subpackage when parsing Requires").requires } else { &mut self.rpm.requires };
+			match modifier {
+				"none" => r.none.extend(pkgs),
+				"pre" => r.pre.extend(pkgs),
+				"post" => r.post.extend(pkgs),
+				"preun" => r.preun.extend(pkgs),
+				"postun" => r.postun.extend(pkgs),
+				"pretrans" => r.pretrans.extend(pkgs),
+				"posttrans" => r.posttrans.extend(pkgs),
+				"verify" => r.verify.extend(pkgs),
+				"interp" => r.interp.extend(pkgs),
+				"meta" => r.meta.extend(pkgs),
+				_ => self.errors.push(ParserError::UnknownModifier(self.count_line, modifier.into())),
 			}
-			return Ok(true);
 		}
-		Ok(false)
+		Ok(true)
 	}
 	pub fn arch() -> Result<String> {
 		let binding = Command::new("uname").arg("-m").output()?;
@@ -497,7 +471,7 @@ impl SpecParser {
 		}
 		debug!("Loading macros from {}", path.display());
 		let mut buf = vec![];
-		let bytes = BufReader::new(File::open(&path)?).read_to_end(&mut buf)?;
+		let bytes = BufReader::new(std::fs::File::open(&path)?).read_to_end(&mut buf)?;
 		assert_ne!(bytes, 0, "Empty macro definition file '{}'", path.display());
 		for cap in RE.captures_iter(std::str::from_utf8(&buf)?) {
 			if let Some(val) = self.macros.get(&cap[1]) {
@@ -505,13 +479,12 @@ impl SpecParser {
 				continue; // FIXME?
 			}
 			let name = &cap[1];
-			if name.ends_with("()") {
-				let mut content = String::from(&cap[2]);
-				content.push(' '); // yup, we mark it using a space.
-				self.macros.insert(unsafe { name.strip_suffix("()").unwrap_unchecked() }.into(), content);
+			if let Some(name) = name.strip_suffix("()") {
+				self.macros.insert(name.into(), format!("{} ", &cap[2]).into());
+			} else {
+				// we trim() just in case
+				self.macros.insert(cap[1].into(), cap[2].trim().into());
 			}
-			// we trim() just in case
-			self.macros.insert(cap[1].into(), cap[2].trim().into());
 		}
 		Ok(())
 	}
@@ -540,15 +513,75 @@ impl SpecParser {
 		if l.contains('\n') {
 			return Ok(false);
 		}
-		let (start, remain) = match l.split_once(' ') {
-			None => return Ok(false),
-			Some(x) => x,
+		if let Some((false, _)) = self.cond.last() {
+			return Ok(true); // false condition, skip parsing
+		}
+		let Some((start, remain)) = l.split_once(' ') else {
+			return Ok(false);
 		};
 		let remain = remain.trim();
 		if !(start.starts_with('%') && start.chars().nth(1) != Some('%')) {
 			return Ok(false);
 		}
 		self.section = match &start[1..] {
+			"if" => {
+				let c = remain.parse().map_or(true, |n: isize| n != 0);
+				self.cond.push((c, c));
+				return Ok(true);
+			}
+			"ifarch" => {
+				let c = remain == Self::arch()?;
+				self.cond.push((c, c));
+				return Ok(true);
+			}
+			"ifnarch" => {
+				let c = remain != Self::arch()?;
+				self.cond.push((c, c));
+				return Ok(true);
+			}
+			"elifarch" => {
+				let Some((a, b)) = self.cond.last_mut() else { return Err(eyre!("%elifarch found without %if/%ifarch"))};
+				if *b {
+					*a = false;
+				} else {
+					*a = remain == Self::arch()?;
+					*b = *a;
+				}
+				return Ok(true);
+			}
+			"elifnarch" => {
+				let Some((a, b)) = self.cond.last_mut() else { return Err(eyre!("%elifarch found without %if/%ifarch"))};
+				if *b {
+					*a = false;
+				} else {
+					*a = remain != Self::arch()?;
+					*b = *a;
+				}
+				return Ok(true);
+			}
+			"elif" => {
+				let Some((a, b)) = self.cond.last_mut() else {return Err(eyre!("%elif found without %if"))};
+				if *b {
+					*a = false;
+				} else {
+					*a = remain.parse().map_or(true, |n: isize| n != 0);
+					*b = *a;
+				}
+				return Ok(true);
+			}
+			"else" => {
+				let Some((a, b)) = self.cond.last_mut() else {return Err(eyre!("%else found without %if"))};
+				if *b {
+					*a = false;
+				} else {
+					*a = !(*a);
+					// *b = *a; (doesn't matter)
+				}
+				return Ok(true);
+			}
+			"endif" => {
+				return if self.cond.pop().is_none() { Err(eyre!("%endif found without %if")) } else { Ok(true) };
+			}
 			"description" => RPMSection::Description(if !remain.is_empty() {
 				let (_, mut args, flags) = self._param_macro_line_args(&mut remain.into()).map_err(|e| e.wrap_err("Cannot parse arguments to %description"))?;
 				if let Some(x) = flags.iter().find(|x| **x != 'n') {
@@ -596,30 +629,28 @@ impl SpecParser {
 					if let Some(flag) = remain.strip_prefix('-') {
 						match flag {
 							"f" => {
-								if let Some(next) = remains.next() {
-									if next.starts_with('-') {
-										return Err(eyre!("Expected argument for %files after `-f`, found flag `{next}`"));
-									}
-									if let Some(old) = f {
-										return Err(eyre!("Unexpected duplicated `-f`").note(format!("Old: {old}")).note(format!("New: {next}")));
-									}
-									f = Some(next.into());
-								} else {
+								let Some(next) = remains.next() else {
 									return Err(eyre!("Expected argument for %files after `-f`"));
+								};
+								if next.starts_with('-') {
+									return Err(eyre!("Expected argument for %files after `-f`, found flag `{next}`"));
 								}
+								if let Some(old) = f {
+									return Err(eyre!("Unexpected duplicated `-f`").note(format!("Old: {old}")).note(format!("New: {next}")));
+								}
+								f = Some(next.into());
 							}
 							"n" => {
-								if let Some(next) = remains.next() {
-									if next.starts_with('-') {
-										return Err(eyre!("Expected argument for %files after `-n`, found flag `{next}`"));
-									}
-									if !name.is_empty() {
-										return Err(eyre!("The name of the subpackage is already set.").note(format!("Old: {name}")).note(format!("New: {next}")));
-									}
-									name = next.into();
-								} else {
+								let Some(next) = remains.next() else {
 									return Err(eyre!("Expected argument for %files after `-n`"));
+								};
+								if next.starts_with('-') {
+									return Err(eyre!("Expected argument for %files after `-n`, found flag `{next}`"));
 								}
+								if !name.is_empty() {
+									return Err(eyre!("The name of the subpackage is already set.").note(format!("Old: {name}")).note(format!("New: {next}")));
+								}
+								name = next.into();
 							}
 							_ => return Err(eyre!("Unexpected flag `-{flag}` for %files")),
 						}
@@ -662,19 +693,19 @@ impl SpecParser {
 			}
 			match self.section {
 				RPMSection::Global | RPMSection::Package(_) => {
-					if let Some(cap) = RE_PREAMBLE.captures(line) {
-						// check for list_preambles
-						if let Some(digitcap) = RE_DIGIT.captures(&cap[1]) {
-							let sdigit = &digitcap[0];
-							let digit: i16 = sdigit.parse()?;
-							let name = &cap[1][..cap[1].len() - sdigit.len()];
-							self.add_list_preamble(name, digit, &cap[2])?;
-						} else {
-							self.add_preamble(&cap[1], cap[2].into())?;
-						}
-					} else {
-						self.errors.push(Err(ParserError::Others(eyre!("{}: Non-empty non-preamble line: {line}", self.count_line))))
-					}
+					let Some(cap) = RE_PREAMBLE.captures(line) else {
+						self.errors.push(ParserError::Others(eyre!("{}: Non-empty non-preamble line: {line}", self.count_line)));
+						continue;
+					};
+					// check for list_preambles
+					let Some(digitcap) = RE_DIGIT.captures(&cap[1]) else {
+						self.add_preamble(&cap[1], cap[2].into())?;
+						continue;
+					};
+					let sdigit = &digitcap[0];
+					let digit = sdigit.parse()?;
+					let name = &cap[1][..cap[1].len() - sdigit.len()];
+					self.add_list_preamble(name, digit, &cap[2])?;
 				}
 				RPMSection::Description(ref p) => {
 					if p.is_empty() {
@@ -726,7 +757,7 @@ impl SpecParser {
 		}
 		if !self.errors.is_empty() {
 			println!("{:#?}", self.errors);
-			return take(&mut self.errors).into_iter().map(Result::unwrap_err).fold(Err(eyre!("Cannot parse spec file")), |report, e| report.error(e));
+			return take(&mut self.errors).into_iter().fold(Err(eyre!("Cannot parse spec file")), |report, e| report.error(e));
 		}
 		self.rpm.changelog.parse()?;
 		self.rpm.files.parse()?;
@@ -763,7 +794,7 @@ impl SpecParser {
 							"overriding existing {} preamble value `{old}` to `{value}`",
 							stringify!($x)
 						);
-						self.errors.push(Err(ParserError::Duplicate(self.count_line, stringify!($x).into())));
+						self.errors.push(ParserError::Duplicate(self.count_line, stringify!($x).into()));
 					}
 					rpm.$y = Some(value);
 					return Ok(());
@@ -789,42 +820,31 @@ impl SpecParser {
 
 		if let RPMSection::Package(ref pkg) = self.section {
 			let rpm = rpm.packages.get_mut(pkg).expect("BUG: no subpackage in rpm.packages");
-			if name == "Group" {
-				if let Some(ref old) = rpm.group {
-					warn!("overriding existing Group preamble value `{old}` to `{value}`");
-					self.errors.push(Err(ParserError::Duplicate(self.count_line, "Group".into())));
+			match name {
+				"Group" => {
+					if let Some(ref old) = rpm.group {
+						warn!("overriding existing Group preamble value `{old}` to `{value}`");
+						self.errors.push(ParserError::Duplicate(self.count_line, "Group".into()));
+					}
+					rpm.name = Some(value);
+					return Ok(());
 				}
-				rpm.name = Some(value);
-				return Ok(());
-			};
-			if name == "Summary" {
-				if !rpm.summary.is_empty() {
-					warn!("overriding existing Summary preamble value `{}` to `{value}`", rpm.summary);
-					self.errors.push(Err(ParserError::Duplicate(self.count_line, "Summary".into())));
+				"Summary" => {
+					if !rpm.summary.is_empty() {
+						warn!("overriding existing Summary preamble value `{}` to `{value}`", rpm.summary);
+						self.errors.push(ParserError::Duplicate(self.count_line, "Summary".into()));
+					}
+					rpm.summary = value;
+					return Ok(());
 				}
-				rpm.summary = value;
-				return Ok(());
-			};
-			if name == "Provides" {
-				return Package::add_query(&mut rpm.provides, &value);
-			}
-			if name == "Conflicts" {
-				return Package::add_query(&mut rpm.conflicts, &value);
-			}
-			if name == "Obsoletes" {
-				return Package::add_query(&mut rpm.obsoletes, &value);
-			}
-			if name == "Recommends" {
-				return Package::add_simple_query(&mut rpm.recommends, &value);
-			}
-			if name == "Suggests" {
-				return Package::add_simple_query(&mut rpm.suggests, &value);
-			}
-			if name == "Supplements" {
-				return Package::add_simple_query(&mut rpm.supplements, &value);
-			}
-			if name == "Enhances" {
-				return Package::add_simple_query(&mut rpm.enhances, &value);
+				"Provides" => return Package::add_query(&mut rpm.provides, &value),
+				"Obsoletes" => return Package::add_query(&mut rpm.obsoletes, &value),
+				"Conflicts" => return Package::add_query(&mut rpm.conflicts, &value),
+				"Suggests" => return Package::add_simple_query(&mut rpm.suggests, &value),
+				"Recommends" => return Package::add_simple_query(&mut rpm.recommends, &value),
+				"Enhances" => return Package::add_simple_query(&mut rpm.enhances, &value),
+				"Supplements" => return Package::add_simple_query(&mut rpm.supplements, &value),
+				_ => {} // get to global below
 			}
 		}
 
@@ -860,7 +880,7 @@ impl SpecParser {
 			"Prefix" => todo!(),
 			"DocDir" => todo!(),
 			"RemovePathPostfixes" => todo!(),
-			_ => self.errors.push(Err(ParserError::UnknownPreamble(self.count_line, name.into()))),
+			_ => self.errors.push(ParserError::UnknownPreamble(self.count_line, name.into())),
 		}
 		Ok(())
 	}
@@ -870,40 +890,32 @@ impl SpecParser {
 			"define" | "global" => {
 				let def = reader.read_til_eol()?;
 				let def = def.trim();
-				if let Some((name, def)) = def.split_once(' ') {
-					let mut def: String = def.into();
-					let name: String = if let Some(x) = name.strip_suffix("()") {
-						def.push(' ');
-						x.into()
-					} else {
-						name.into()
-					};
-					self.macros.insert(name, def);
-					Some("".into())
-				} else {
+				let Some((name, def)) = def.split_once(' ') else {
 					error!("Invalid syntax: `%define {def}`");
-					None
-				}
+					return None
+				};
+				let mut def: String = def.into();
+				let name: String = if let Some(x) = name.strip_suffix("()") {
+					def.push(' ');
+					x.into()
+				} else {
+					name.into()
+				};
+				self.macros.insert(name, def);
+				Some("".into())
 			}
 			"undefine" => {
 				self.macros.remove(name);
 				Some("".into())
 			}
 			"load" => {
-				let mut s = String::new();
-				for ch in reader {
-					s.push(ch);
-				}
-				self.load_macro_from_file(std::path::PathBuf::from(&*s)).ok()?;
+				self.load_macro_from_file(std::path::PathBuf::from(&*reader.collect::<String>())).ok()?;
 				Some("".into())
 			}
 			"expand" => self._expand_macro(reader).ok(),
 			"expr" => unimplemented!(),
 			"lua" => {
-				let mut content: String = "".into();
-				for ch in reader {
-					content.push(ch);
-				}
+				let content: String = reader.collect();
 				// HACK: `Arc<Mutex<SpecParser>>` as rlua fns are of `Fn` but they need `&mut SpecParser`.
 				// HACK: The mutex needs to momentarily *own* `self`.
 				let parser = Arc::new(Mutex::new(take(self)));
@@ -985,20 +997,18 @@ impl SpecParser {
 			}
 			if ch == '-' {
 				let ch = next!('-');
-				if ch.is_ascii_alphabetic() {
-					let next = next!(ch);
-					if "\\ \n".contains(next) {
-						back!(next);
-						flags.push(ch);
-						content.push('-');
-						content.push(ch);
-						continue;
-					} else {
-						return Err(eyre!("Found character `{next}` after `-{ch}` in parameterized macro"));
-					}
-				} else {
+				if !ch.is_ascii_alphabetic() {
 					return Err(eyre!("Argument flag `-{ch}` in parameterized macro is not alphabetic"));
 				}
+				let next = next!(ch);
+				if !"\\ \n".contains(next) {
+					return Err(eyre!("Found character `{next}` after `-{ch}` in parameterized macro"));
+				}
+				back!(next);
+				flags.push(ch);
+				content.push('-');
+				content.push(ch);
+				continue;
 			}
 			if ch == '\\' {
 				let mut got_newline = false;
@@ -1012,9 +1022,8 @@ impl SpecParser {
 						if got_newline {
 							back!(ch);
 							continue 'main;
-						} else {
-							return Err(eyre!("Got `{ch}` after `\\` before new line"));
 						}
+						return Err(eyre!("Got `{ch}` after `\\` before new line"));
 					}
 				}
 				error!("Unexpected EOF after `\\`");
@@ -1047,7 +1056,7 @@ impl SpecParser {
 		'main: while let Some(ch) = def.next() {
 			chk_ps!(ch);
 			if ch != '%' {
-				res.write_char(ch).unwrap();
+				res.push(ch);
 				continue;
 			}
 			let ch = next!('%');
@@ -1208,7 +1217,6 @@ impl SpecParser {
 	}
 
 	/// parse the stuff after %, and determines `{[()]}`. returns expanded macro.
-	/// Assumption: `chars` is a str Consumer (no reader).
 	/// FIXME please REFACTOR me!!
 	pub(crate) fn _read_raw_macro_use(&mut self, chars: &mut Consumer) -> Result<String> {
 		debug!("reading macro");
