@@ -111,12 +111,12 @@ pub struct Consumer<R: std::io::Read = std::fs::File> {
 	pub l: usize,
 	pub c: usize,
 	pub b: usize,
-	_nl_c: usize,
+	lastc: usize,
 }
 
 impl<R: std::io::Read> Consumer<R> {
-	pub fn new(s: String, r: Option<std::io::BufReader<R>>) -> Self {
-		Self { s: s.chars().rev().collect(), r, l: 0, c: 0, b: 0, _nl_c: 0 }
+	pub fn new(s: &str, r: Option<std::io::BufReader<R>>) -> Self {
+		Self { s: s.chars().rev().collect(), r, l: 0, c: 0, b: 0, lastc: 0 }
 	}
 	pub fn pos(&mut self, l: usize, c: usize, b: usize) {
 		self.l = l;
@@ -127,12 +127,12 @@ impl<R: std::io::Read> Consumer<R> {
 	pub fn push(&mut self, c: char) {
 		if c == '\n' {
 			self.l -= 1;
-			self.c = self._nl_c;
+			self.c = self.lastc;
 		} else {
 			self.c -= 1;
 		}
 		self.b -= 1;
-		self.s.push(c)
+		self.s.push(c);
 	}
 	pub fn read_til_eol(&mut self) -> Option<String> {
 		let mut ps = vec![];
@@ -211,7 +211,7 @@ impl<R: std::io::Read> Iterator for Consumer<R> {
 		if let Some(c) = self.s.pop() {
 			if c == '\n' {
 				self.l += 1;
-				self._nl_c = self.c;
+				self.lastc = self.c;
 				self.c = 0;
 			} else {
 				self.c += 1;
@@ -234,7 +234,7 @@ impl<R: std::io::Read> Iterator for Consumer<R> {
 				let c = unsafe { self.s.pop().unwrap_unchecked() };
 				if c == '\n' {
 					self.l += 1;
-					self._nl_c = self.c;
+					self.lastc = self.c;
 					self.c = 0;
 				} else {
 					self.c += 1;
@@ -250,7 +250,7 @@ impl<R: std::io::Read> Iterator for Consumer<R> {
 
 impl<R: std::io::Read> From<&str> for Consumer<R> {
 	fn from(value: &str) -> Self {
-		Consumer { s: value.chars().rev().collect(), r: None, l: 0, c: 0, b: 0, _nl_c: 0 }
+		Self { s: value.chars().rev().collect(), r: None, l: 0, c: 0, b: 0, lastc: 0 }
 	}
 }
 

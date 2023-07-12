@@ -1,6 +1,7 @@
 use smartstring::alias::String;
 
 #[derive(Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub enum ParserError {
 	NoPreamble(String),
 	UnknownPreamble(usize, String),
@@ -42,15 +43,15 @@ impl std::error::Error for ParserError {
 impl std::fmt::Display for ParserError {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match self {
-			Self::NoPreamble(name) => write!(f, "! Preamble not found for {}", name),
+			Self::NoPreamble(name) => write!(f, "! Preamble not found for {name}"),
 			Self::UnknownPreamble(line, name) => {
-				write!(f, "! {}: Unknown Preamble for {}", line, name)
+				write!(f, "! {line}: Unknown Preamble for {name}")
 			}
-			Self::Duplicate(line, name) => write!(f, "! {}: Duplicate Preamble for {}", line, name),
+			Self::Duplicate(line, name) => write!(f, "! {line}: Duplicate Preamble for {name}"),
 			Self::UnknownModifier(line, name) => {
-				write!(f, "! {}: Unknown Modifier for {}", line, name)
+				write!(f, "! {line}: Unknown Modifier for {name}")
 			}
-			Self::UnknownMacro(line, name) => write!(f, "! {}: Unknown Macro for {}", line, name),
+			Self::UnknownMacro(line, name) => write!(f, "! {line}: Unknown Macro for {name}"),
 			Self::Others(r) => write!(f, "! {r:#}"),
 		}
 	}

@@ -9,9 +9,13 @@
 //! defined in the spec files and various other files in the macros directory.
 //! They are also picked up from ~/.rpmrc and /etc/rpmrc.
 //!
+#![warn(clippy::pedantic)]
+#![warn(clippy::nursery)]
+#![warn(clippy::disallowed_types)]
+#![warn(clippy::all)]
 
-mod error;
-mod parse;
+pub mod error;
+pub mod parse;
 #[macro_use]
 mod util;
 pub mod lua;
