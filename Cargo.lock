@@ -603,18 +603,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "file-matcher"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d54a429ce9698e7d0de61e7f570477cc2d2f8b3f48f976b2edcfdbd797c085eb"
-dependencies = [
- "fs_extra",
- "regex",
- "serde",
- "wildmatch",
-]
-
-[[package]]
 name = "flatpak"
 version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -641,12 +629,6 @@ checksum = "a9c384f161156f5260c24a097c56119f9be8c798586aecc13afbcbe7b7e26bf8"
 dependencies = [
  "percent-encoding",
 ]
-
-[[package]]
-name = "fs_extra"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "generic-array"
@@ -1235,8 +1217,6 @@ version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e68e84bfb01f0507134eac1e9b410a12ba379d064eab48c50ba4ce329a527b70"
 dependencies = [
- "serde",
- "serde_json",
  "thiserror",
  "ucd-trie",
 ]
@@ -1453,13 +1433,10 @@ dependencies = [
  "base64",
  "chrono",
  "color-eyre",
- "file-matcher",
  "glob",
  "lazy_format",
  "lazy_static",
  "parking_lot",
- "pest",
- "pest_derive",
  "regex",
  "rlua",
  "rustyline 10.1.1",
@@ -2054,12 +2031,6 @@ name = "wasm-bindgen-shared"
 version = "0.2.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed9d5b4305409d1fc9482fee2d7f9bcbf24b3972bf59817ef757e23982242a93"
-
-[[package]]
-name = "wildmatch"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee583bdc5ff1cf9db20e9db5bb3ff4c3089a8f6b8b31aff265c9aba85812db86"
 
 [[package]]
 name = "winapi"

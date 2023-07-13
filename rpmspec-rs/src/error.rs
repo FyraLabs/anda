@@ -1,13 +1,23 @@
+//! [`ParserError`] used in rpmspec-rs.
+//! Yes. You heard me. The only error is [`ParserError`] and everything else is
+//! unfortunately String.
 use smartstring::alias::String;
 
+/// Errors for some special parsing issues
 #[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub enum ParserError {
+	/// A preamble is required but it is not found.
 	NoPreamble(String),
+	/// The preamble specified is invalid.
 	UnknownPreamble(usize, String),
+	/// A preamble that cannot be specified more than once was found duplicate.d
 	Duplicate(usize, String),
+	/// A modifier (such as `pre` in `Requires(pre):`) is found to be invalid.
 	UnknownModifier(usize, String),
+	/// A macro was not found. If you see this, probably something wrong with rpmspec-rs.
 	UnknownMacro(usize, String),
+	/// A color_eyre::Report. Some sort of syntax error.
 	Others(color_eyre::Report),
 }
 

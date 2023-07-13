@@ -12,7 +12,7 @@
 #![warn(clippy::pedantic)]
 #![warn(clippy::nursery)]
 #![warn(clippy::disallowed_types)]
-#![warn(clippy::all)]
+#![warn(missing_docs)]
 
 pub mod error;
 pub mod parse;

@@ -82,6 +82,10 @@ macro_rules! gen_read_helper {
 		}
 		#[allow(unused_macros)]
 		macro_rules! next {
+			(#) => {{
+				let Some(ch) = $reader.next() else { exit!(); };
+				ch
+			}};
 			($c:expr) => {
 				if let Some(ch) = $reader.next() {
 					chk_ps!(ch);
@@ -91,6 +95,14 @@ macro_rules! gen_read_helper {
 					exit!();
 				}
 			};
+			(~$c:expr) => {
+				if let Some(ch) = $reader.next() {
+					ch
+				} else {
+					$reader.push($c);
+					exit!();
+				}
+			}
 		}
 	};
 }
