@@ -11,16 +11,42 @@ use tracing::error;
 /// # Provides
 /// - `exit_chk!()`
 /// - `back!()`
-/// - `chk_ps!()`
-/// - `quote_remain!()`
 /// - `next!()`
-///
-/// FIXME: cannot parse the following:
-/// ```sh
-/// echo 'hai{'
-/// ```
 #[rustfmt::skip] // kamo https://github.com/rust-lang/rustfmt/issues/4609
 macro_rules! gen_read_helper {
+	($reader:ident $quotes:ident) => {
+		macro_rules! exit_chk {
+			() => {
+				if !$quotes.is_empty() {
+					return Err(eyre!("Unclosed quotes: `{}`", $quotes));
+				}
+			};
+		}
+		#[allow(unused_macros)]
+		macro_rules! next {
+			(#) => {{
+				let Some(ch) = $reader.next() else { exit!(); };
+				ch
+			}};
+			($c:expr) => {
+				if let Some(ch) = $reader.next() {
+					textproc::chk_ps(&mut $quotes, ch);
+					ch
+				} else {
+					back!($c);
+					exit!();
+				}
+			};
+			(~$c:expr) => {
+				if let Some(ch) = $reader.next() {
+					ch
+				} else {
+					$reader.push($c);
+					exit!();
+				}
+			};
+		}
+	};
 	($reader:ident $pa:ident $pb:ident $pc:ident $sq:ident $dq:ident) => {
 		($pa, $pb, $pc) = (usize::default(), usize::default(), usize::default());
 		($sq, $dq) = (false, false);
@@ -43,6 +69,7 @@ macro_rules! gen_read_helper {
 				}
 			};
 		}
+		#[allow(unused_macros)]
 		macro_rules! back {
 			($ch:expr) => {
 				match $ch {
@@ -289,7 +316,7 @@ impl<'a> Iterator for SpecMacroParserIter<'a> {
 			}
 			if self.percent {
 				self.reader.push(ch);
-				match self.parser._read_raw_macro_use(self.reader) {
+				match self.parser._use_raw_macro(self.reader) {
 					Ok(s) => {
 						self.buf = s.chars().rev().collect();
 						return self.buf.pop();
@@ -308,3 +335,97 @@ impl<'a> Iterator for SpecMacroParserIter<'a> {
 
 // somehow you need this to export the macro
 pub(crate) use gen_read_helper;
+
+pub mod textproc {
+	use color_eyre::{eyre::eyre, Result};
+	use smartstring::alias::String;
+	use tracing::{debug, warn};
+
+	use crate::parse::SpecParser;
+
+	use super::Consumer;
+
+	pub fn chk_ps(quotes: &mut String, ch: char) -> Result<()> {
+		if ch == '\'' {
+			if quotes.ends_with('\'') {
+				quotes.pop();
+			} else {
+				quotes.push('\'');
+			}
+		} else if ch == '"' {
+			if quotes.ends_with('"') {
+				quotes.pop();
+			} else {
+				quotes.push('"');
+			}
+		} else if "([{".contains(ch) {
+			quotes.push(ch);
+		} else if ")]}".contains(ch) {
+			match quotes.pop().ok_or_else(|| eyre!("Found `{ch}` but there are no quotes to close"))? {
+				'(' if ch != ')' => return Err(eyre!("Expected `)`, Found `{ch}` before closing `(`")),
+				'[' if ch != ']' => return Err(eyre!("Expected `]`, Found `{ch}` before closing `['")),
+				'{' if ch != '}' => return Err(eyre!("Expected `}}`, Found `{ch}` before closing `{{`")),
+				_ => {}
+			}
+		}
+		Ok(())
+	}
+
+	pub fn back(reader: &mut Consumer, quotes: &mut String, ch: char) -> Result<()> {
+		if ch == '\'' {
+			if quotes.ends_with('\'') {
+				quotes.pop();
+			} else {
+				quotes.push('\'');
+			}
+		}
+		if ch == '"' {
+			if quotes.ends_with('"') {
+				quotes.pop();
+			} else {
+				quotes.push('"');
+			}
+		}
+		match ch {
+			')' => quotes.push('('),
+			']' => quotes.push('['),
+			'}' => quotes.push('{'),
+			'(' if quotes.pop() != Some('(') => return Err(eyre!("BUG: pushing back `(` failed quotes check")),
+			'[' if quotes.pop() != Some('[') => return Err(eyre!("BUG: pushing back `[` failed quotes check")),
+			'{' if quotes.pop() != Some('{') => return Err(eyre!("BUG: pushing back `{{` failed quotes check")),
+			_ => {}
+		}
+		reader.push(ch);
+		Ok(())
+	}
+
+	/// Check for `?` and `!` in macro invocation, returns true if processed.
+	pub fn flag(question: &mut bool, notflag: &mut bool, ch: char) -> bool {
+		if ch == '!' {
+			*notflag = !*notflag;
+			return true;
+		}
+		if ch == '?' {
+			if *question {
+				warn!("Seeing double `?` flag in macro use. Ignoring.");
+			}
+			*question = true;
+			return true;
+		}
+		false
+	}
+
+	/// Expand macros depending on `notflag`.
+	///
+	/// when %a is undefined, %{!a} expands to %{!a}, but %!a expands to %a.
+	pub fn macro_expand_notflagproc(parser: &mut SpecParser, notflag: bool, reader: &mut Consumer, content: &str, name: &str) -> String {
+		let out = parser._rp_macro(name, reader);
+		if notflag {
+			return out.unwrap_or_else(|e| {
+				debug!("_rp_macro: {e:#}");
+				if content.is_empty() { format!("%{name}") } else { format!("%{{!{name}}}") }.into()
+			});
+		}
+		out.unwrap_or_default()
+	}
+}
