@@ -43,14 +43,9 @@ impl RPMSpec {
         Err("No release preamble in spec".into())
     }
     pub fn version(&mut self, ver: &str) -> Result<(), Box<EvalAltResult>> {
-        let re = regex::Regex::new(r"Version:(\s+)([\d.^+abcdef]+)\n").unwrap();
-        let m = re.captures(self.f.as_str());
-        if m.is_none() {
-            return Err("No version preamble in spec".into());
-        }
-        let m = unsafe { m.unwrap_unchecked() };
-        let ver = ver.strip_prefix('v').unwrap_or(ver);
-        let ver = ver.replace('-', ".");
+        let re = regex::Regex::new(r"Version:(\s+)(\S+)\n").unwrap();
+        let Some(m) = re.captures(self.f.as_str()) else { return Err("No version preamble in spec".into()) };
+        let ver = ver.strip_prefix('v').unwrap_or(ver).replace('-', ".");
         if ver != m[2] {
             info!("{}: {} —→ {ver}", self.name, &m[2]);
             self.f = re.replace(&self.f, format!("Version:{}{ver}\n", &m[1])).to_string();
@@ -84,10 +79,7 @@ impl RPMSpec {
             info!("{}: Source{i}: {p}", self.name);
             capw = Some(cap);
         }
-        if capw.is_none() {
-            return Err("No source preamble in spec".into());
-        }
-        let cap = capw.unwrap();
+        let Some(cap) = capw else { return Err("No source preamble in spec".into()) };
         self.f = self.f.replace(&cap[0], &format!("Source{i}:{}{p}\n", &cap[2]));
         self.changed = true;
         Ok(())
