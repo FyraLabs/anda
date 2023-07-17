@@ -9,10 +9,10 @@ pub enum OCIBackend {
 }
 
 impl OCIBackend {
-    pub fn command(&self) -> Command {
+    pub fn command(self) -> Command {
         let cmd = match self {
-            OCIBackend::Docker => "docker",
-            OCIBackend::Podman => "podman",
+            Self::Docker => "docker",
+            Self::Podman => "podman",
         };
 
         Command::new(cmd)
@@ -27,7 +27,7 @@ pub struct OCIBuilder {
 }
 
 impl OCIBuilder {
-    pub fn new(context: String, tag: String, version: String) -> Self {
+    pub const fn new(context: String, tag: String, version: String) -> Self {
         Self { context, tag, version, label: Vec::new() }
     }
 
@@ -36,7 +36,7 @@ impl OCIBuilder {
     }
 
     // We use string here because we want to let people use stuff like git contexts
-    pub fn build(&self, dockerfile: String, backend: OCIBackend, latest: bool) {
+    pub fn build(&self, dockerfile: &str, backend: OCIBackend, latest: bool) {
         let mut cmd = backend.command();
 
         let real_tag = &format!("{}:{}", &self.tag, self.version);
@@ -44,7 +44,7 @@ impl OCIBuilder {
         cmd.arg("build")
             .arg(&self.context)
             .arg("-f")
-            .arg(&dockerfile)
+            .arg(dockerfile)
             .arg("-t")
             .env("DOCKER_BUILDKIT", "1")
             .arg(real_tag);
@@ -61,13 +61,13 @@ impl OCIBuilder {
 
 pub fn build_oci(
     backend: OCIBackend,
-    dockerfile: String,
+    dockerfile: &str,
     latest: bool,
-    tag: String,
-    version: String,
-    context: String,
+    tag: &str,
+    version: &str,
+    context: &str,
 ) -> Vec<String> {
-    let mut builder = OCIBuilder::new(context, tag.clone(), version.clone());
+    let mut builder = OCIBuilder::new(context.to_string(), tag.to_string(), version.to_string());
     builder.add_label(format!("com.fyralabs.anda.version={}", env!("CARGO_PKG_VERSION")));
 
     builder.build(dockerfile, backend, latest);

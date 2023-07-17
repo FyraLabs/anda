@@ -47,7 +47,7 @@ pub struct RPMOptions {
 }
 
 impl RPMOptions {
-    pub fn new(mock_config: Option<String>, sources: PathBuf, resultdir: PathBuf) -> Self {
+    pub const fn new(mock_config: Option<String>, sources: PathBuf, resultdir: PathBuf) -> Self {
         Self {
             mock_config,
             with: Vec::new(),
@@ -107,8 +107,8 @@ impl FromStr for RPMBuilder {
     type Err = Report;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "mock" => Ok(RPMBuilder::Mock),
-            "rpmbuild" => Ok(RPMBuilder::Rpmbuild),
+            "mock" => Ok(Self::Mock),
+            "rpmbuild" => Ok(Self::Rpmbuild),
             _ => Err(eyre!("Invalid RPM builder: {s}")),
         }
     }
@@ -117,8 +117,8 @@ impl FromStr for RPMBuilder {
 impl From<crate::cli::RPMBuilder> for RPMBuilder {
     fn from(builder: crate::cli::RPMBuilder) -> Self {
         match builder {
-            crate::cli::RPMBuilder::Mock => RPMBuilder::Mock,
-            crate::cli::RPMBuilder::Rpmbuild => RPMBuilder::Rpmbuild,
+            crate::cli::RPMBuilder::Mock => Self::Mock,
+            crate::cli::RPMBuilder::Rpmbuild => Self::Rpmbuild,
         }
     }
 }
@@ -126,7 +126,7 @@ impl From<crate::cli::RPMBuilder> for RPMBuilder {
 impl RPMBuilder {
     /// WARN: this will consume `options`!
     pub async fn build(&self, spec: &Path, options: &mut RPMOptions) -> Result<Vec<PathBuf>> {
-        if let RPMBuilder::Mock = self {
+        if matches!(self, Self::Mock) {
             let mut mock = MockBackend::new(
                 take(&mut options.mock_config),
                 take(&mut options.sources),
@@ -135,16 +135,16 @@ impl RPMBuilder {
             for extra_repo in options.extra_repos.iter_mut().flatten() {
                 mock.add_extra_repo(take(extra_repo));
             }
-            for (k, v) in options.macros.iter() {
+            for (k, v) in &options.macros {
                 mock.def_macro(k, v);
             }
-            for with_flags in options.with.iter_mut() {
+            for with_flags in &mut options.with {
                 mock.with_flags_mut().push(take(with_flags));
             }
-            for without_flags in options.without.iter_mut() {
+            for without_flags in &mut options.without {
                 mock.without_flags_mut().push(take(without_flags));
             }
-            for config_opt in options.config_opts.iter_mut() {
+            for config_opt in &mut options.config_opts {
                 mock.add_config_opt(take(config_opt));
             }
             mock.no_mirror(options.no_mirror);
@@ -157,15 +157,15 @@ impl RPMBuilder {
             let mut rpmbuild =
                 RPMBuildBackend::new(take(&mut options.sources), take(&mut options.resultdir));
 
-            for (k, v) in options.macros.iter() {
+            for (k, v) in &options.macros {
                 rpmbuild.def_macro(k, v);
             }
 
-            for with_flags in options.with.iter_mut() {
+            for with_flags in &mut options.with {
                 rpmbuild.with_flags_mut().push(take(with_flags));
             }
 
-            for without_flags in options.without.iter_mut() {
+            for without_flags in &mut options.without {
                 rpmbuild.without_flags_mut().push(take(without_flags));
             }
 
@@ -278,7 +278,7 @@ impl RPMExtraOptions for MockBackend {
 }
 
 impl MockBackend {
-    pub fn new(mock_config: Option<String>, sources: PathBuf, resultdir: PathBuf) -> Self {
+    pub const fn new(mock_config: Option<String>, sources: PathBuf, resultdir: PathBuf) -> Self {
         Self {
             mock_config,
             with: Vec::new(),
@@ -335,19 +335,19 @@ impl MockBackend {
 
         cmd.arg("--verbose");
 
-        for repo in self.extra_repos.iter() {
+        for repo in &self.extra_repos {
             cmd.arg("-a").arg(repo);
         }
 
-        for with in self.with.iter() {
+        for with in &self.with {
             cmd.arg("--with").arg(with);
         }
 
-        for without in self.without.iter() {
+        for without in &self.without {
             cmd.arg("--without").arg(without);
         }
 
-        for (name, value) in self.macros.iter() {
+        for (name, value) in &self.macros {
             cmd.arg("-D").arg(format!("{name} {value}"));
         }
 
@@ -355,7 +355,7 @@ impl MockBackend {
             cmd.arg("--config-opts").arg("mirrored=False");
         }
 
-        for opt in self.config_opts.iter() {
+        for opt in &self.config_opts {
             cmd.arg("--config-opts").arg(opt);
         }
 
@@ -363,7 +363,7 @@ impl MockBackend {
             cmd.arg("--scm-enable");
         }
 
-        for scm in self.scm_opts.iter() {
+        for scm in &self.scm_opts {
             cmd.arg("--scm-option").arg(scm);
         }
         cmd
@@ -483,22 +483,22 @@ impl RPMExtraOptions for RPMBuildBackend {
 }
 
 impl RPMBuildBackend {
-    pub fn new(sources: PathBuf, resultdir: PathBuf) -> Self {
+    pub const fn new(sources: PathBuf, resultdir: PathBuf) -> Self {
         Self { sources, resultdir, with: Vec::new(), without: Vec::new(), macros: BTreeMap::new() }
     }
 
     pub fn rpmbuild(&self) -> Command {
         let mut cmd = Command::new("rpmbuild");
 
-        for with in self.with.iter() {
+        for with in &self.with {
             cmd.arg("--with").arg(with);
         }
 
-        for without in self.without.iter() {
+        for without in &self.without {
             cmd.arg("--without").arg(without);
         }
 
-        for (name, value) in self.macros.iter() {
+        for (name, value) in &self.macros {
             cmd.arg("-D").arg(format!("{name} {value}"));
         }
 

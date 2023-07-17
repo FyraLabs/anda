@@ -28,24 +28,26 @@ pub struct Config {
 }
 
 impl Manifest {
+    #[must_use]
     pub fn find_key_for_value(&self, value: &Project) -> Option<&String> {
         self.project.iter().find_map(|(key, val)| if val == value { Some(key) } else { None })
     }
 
+    #[must_use]
     pub fn get_project(&self, key: &str) -> Option<&Project> {
-        if let Some(project) = self.project.get(key) {
-            Some(project)
-        } else {
-            // check for alias
-            self.project.iter().find_map(|(_k, v)| {
-                if let Some(alias) = &v.alias {
+        self.project.get(key).map_or_else(
+            || {
+                self.project.iter().find_map(|(_k, v)| {
+                    let Some(alias) = &v.alias else { return None };
                     if alias.contains(&key.to_string()) {
-                        return Some(v);
+                        Some(v)
+                    } else {
+                        None
                     }
-                }
-                None
-            })
-        }
+                })
+            },
+            Some,
+        )
     }
 }
 
@@ -88,6 +90,7 @@ pub struct Docker {
 }
 
 /// Turn a string into a BTreeMap<String, String>
+#[must_use]
 pub fn parse_map(input: &str) -> Option<BTreeMap<String, String>> {
     let mut map = BTreeMap::new();
     for item in input.split(',') {
@@ -116,7 +119,11 @@ pub struct Flatpak {
     pub post_script: Option<PathBuf>,
 }
 
-pub fn to_string(config: Manifest) -> Result<String, hcl::Error> {
+/// Converts a [`Manifest`] to `String` (.hcl).
+///
+/// # Errors
+/// - [`hcl::Error`] : Cannot convert to HCL.
+pub fn to_string(config: &Manifest) -> Result<String, hcl::Error> {
     let config = hcl::to_string(&config)?;
     Ok(config)
 }
@@ -176,10 +183,11 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
     check_config(config)
 }
 
+#[must_use]
 pub fn prefix_config(mut config: Manifest, prefix: &str) -> Manifest {
     let mut new_config = config.clone();
 
-    for (project_name, project) in config.project.iter_mut() {
+    for (project_name, project) in &mut config.project {
         // set project name to prefix
         let new_project_name = format!("{prefix}/{project_name}");
         // modify project data
@@ -236,7 +244,7 @@ pub fn generate_alias(config: &mut Manifest) {
         }
     }
 
-    for (name, project) in config.project.iter_mut() {
+    for (name, project) in &mut config.project {
         if config.config.strip_prefix.is_some() || config.config.strip_suffix.is_some() {
             let mut new_name = name.clone();
             if let Some(strip_prefix) = &config.config.strip_prefix {
@@ -263,8 +271,11 @@ pub fn load_from_string(config: &str) -> Result<Manifest, ProjectError> {
     check_config(config)
 }
 
-// Lints and checks the config for errors.
-pub fn check_config(config: Manifest) -> Result<Manifest, ProjectError> {
+/// Lints and checks the config for errors.
+/// 
+/// # Errors
+/// - nothing. This function literally does nothing. For now.
+pub const fn check_config(config: Manifest) -> Result<Manifest, ProjectError> {
     // do nothing for now
     Ok(config)
 }
@@ -291,11 +302,11 @@ mod test_parser {
 
         let body = hcl::parse(config).unwrap();
 
-        print!("{:#?}", body);
+        print!("{body:#?}");
 
         let config = load_from_string(config);
 
-        println!("{:#?}", config);
+        println!("{config:#?}");
     }
 
     #[test]

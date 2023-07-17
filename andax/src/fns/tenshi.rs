@@ -1,8 +1,14 @@
-/// Tenshi module for AndaX
+/// Tenshi module for `AndaX`
 /// Various utility functions for Andaman Scripting
 use crate::error::AndaxRes;
 
-use rhai::{plugin::*, Dynamic, EvalAltResult as RhaiE};
+use rhai::{
+    plugin::{
+        export_module, mem, FnAccess, FnNamespace, ImmutableString, Module, NativeCallContext,
+        PluginFunction, RhaiResult, TypeId,
+    },
+    Dynamic, EvalAltResult as RhaiE,
+};
 type Res<T = ()> = Result<T, Box<RhaiE>>;
 
 #[export_module]
@@ -12,9 +18,9 @@ pub mod ar {
     use std::io::Read;
     use tracing::{debug, trace};
     #[rhai_fn(return_raw, global)]
-    pub(crate) fn template(ctx: NativeCallContext, tmpl: rhai::Map, input: String) -> Res<String> {
+    pub fn template(ctx: NativeCallContext, tmpl: rhai::Map, input: String) -> Res<String> {
         let mut hcl = anda_config::context::hcl_context();
-        for (k, v) in tmpl.into_iter() {
+        for (k, v) in tmpl {
             let key = k.to_string();
             // turn value into a hcl::Value::Object
             let value = hcl::value::to_value(v).ehdl(&ctx)?;
@@ -49,11 +55,7 @@ pub mod ar {
 
     /// Function that takes in an object map and a file path
     #[rhai_fn(return_raw, global)]
-    pub(crate) fn template_file(
-        ctx: NativeCallContext,
-        map: rhai::Map,
-        path: String,
-    ) -> Res<String> {
+    pub fn template_file(ctx: NativeCallContext, map: rhai::Map, path: String) -> Res<String> {
         let mut file = std::fs::File::open(&path).ehdl(&ctx)?;
         let mut buf = String::new();
         file.read_to_string(&mut buf).ehdl(&ctx)?;
@@ -65,14 +67,14 @@ pub mod ar {
 
     /// turns a map into json
     #[rhai_fn(return_raw, global)]
-    pub(crate) fn to_json(ctx: NativeCallContext, map: rhai::Map) -> Res<String> {
+    pub fn to_json(ctx: NativeCallContext, map: rhai::Map) -> Res<String> {
         let json = serde_json::to_string(&map).ehdl(&ctx)?;
         Ok(json)
     }
 
     /// turns a json string into a map
     #[rhai_fn(return_raw, global)]
-    pub(crate) fn from_json(ctx: NativeCallContext, json: String) -> Res<rhai::Map> {
+    pub fn from_json(ctx: NativeCallContext, json: String) -> Res<rhai::Map> {
         let map = serde_json::from_str(&json).ehdl(&ctx)?;
         Ok(map)
     }

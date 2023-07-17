@@ -18,8 +18,8 @@ pub enum FlatpakArtifact {
 impl Display for FlatpakArtifact {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FlatpakArtifact::Ref(ref r) => write!(f, "ref {}", r),
-            FlatpakArtifact::Bundle(ref b) => write!(f, "bundle {}", b.display()),
+            Self::Ref(ref r) => write!(f, "ref {r}"),
+            Self::Bundle(ref b) => write!(f, "bundle {}", b.display()),
         }
     }
 }
@@ -41,7 +41,7 @@ pub struct FlatpakBuilder {
 }
 
 impl FlatpakBuilder {
-    pub fn new(output_dir: PathBuf, output_repo: PathBuf, bundles_dir: PathBuf) -> Self {
+    pub const fn new(output_dir: PathBuf, output_repo: PathBuf, bundles_dir: PathBuf) -> Self {
         Self {
             output_dir,
             output_repo,

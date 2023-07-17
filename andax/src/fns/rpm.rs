@@ -1,21 +1,35 @@
-use color_eyre::Result;
-use rhai::{CustomType, EvalAltResult};
+use rhai::CustomType;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
-use tracing::info;
+use tracing::{info, error};
 
+lazy_static::lazy_static! {
+    static ref RE_RELEASE: regex::Regex = regex::Regex::new(r"Release:(\s+)(.+?)\n").unwrap();
+    static ref RE_VERSION: regex::Regex = regex::Regex::new(r"Version:(\s+)(\S+)\n").unwrap();
+    static ref RE_DEFINE: regex::Regex = regex::Regex::new(r"(?m)%define(\s+)(\S+)(\s+)(\S+)$").unwrap();
+    static ref RE_GLOBAL: regex::Regex = regex::Regex::new(r"(?m)%global(\s+)(\S+)(\s+)(\S+)$").unwrap();
+    static ref RE_SOURCE: regex::Regex = regex::Regex::new(r"Source(\d+):(\s+)([^\n]+)\n").unwrap();
+}
+
+/// Update RPM spec files
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RPMSpec {
+    /// Name of project
     pub name: String,
+    /// AndaX chkupdate script of project
     pub chkupdate: PathBuf,
+    /// Path to spec file
     pub spec: PathBuf,
+    /// RPM spec file content
     pub f: String,
+    /// Denotes if the spec file has been changed
     pub changed: bool,
 }
 
 impl RPMSpec {
+    /// Creates a new RPMSpec file representation
     pub fn new<T, U>(name: String, chkupdate: T, spec: U) -> Self
     where
         T: Into<PathBuf> + AsRef<Path>,
@@ -29,70 +43,63 @@ impl RPMSpec {
             spec: spec.into(),
         }
     }
-    pub fn reset_release(&mut self) -> Result<(), Box<EvalAltResult>> {
-        self.release("1")
+    /// Resets the release number to 1
+    pub fn reset_release(&mut self) {
+        self.release("1");
     }
-    pub fn release(&mut self, rel: &str) -> Result<(), Box<EvalAltResult>> {
-        let re = regex::Regex::new(r"Release:(\s+)(.+?)\n").unwrap();
-        let m = re.captures(self.f.as_str());
-        if let Some(m) = m {
-            self.f = re.replace(&self.f, format!("Release:{}{rel}%{{?dist}}\n", &m[1])).to_string();
-            self.changed = true;
-            return Ok(());
-        }
-        Err("No release preamble in spec".into())
+    /// Sets the release number in the spec file
+    pub fn release(&mut self, rel: &str) {
+        let m = RE_RELEASE.captures(self.f.as_str());
+        let Some(m) = m else { return error!("No `Release:` preamble for {}", self.name) };
+        self.f =
+            RE_RELEASE.replace(&self.f, format!("Release:{}{rel}%{{?dist}}\n", &m[1])).to_string();
+        self.changed = true;
     }
-    pub fn version(&mut self, ver: &str) -> Result<(), Box<EvalAltResult>> {
-        let re = regex::Regex::new(r"Version:(\s+)(\S+)\n").unwrap();
-        let Some(m) = re.captures(self.f.as_str()) else { return Err("No version preamble in spec".into()) };
+    /// Sets the version in the spec file
+    pub fn version(&mut self, ver: &str) {
+        let Some(m) = RE_VERSION.captures(self.f.as_str()) else { return error!("No `Version:` preamble for {}", self.name) };
         let ver = ver.strip_prefix('v').unwrap_or(ver).replace('-', ".");
         if ver != m[2] {
             info!("{}: {} —→ {ver}", self.name, &m[2]);
-            self.f = re.replace(&self.f, format!("Version:{}{ver}\n", &m[1])).to_string();
-            self.reset_release()?;
+            self.f = RE_VERSION.replace(&self.f, format!("Version:{}{ver}\n", &m[1])).to_string();
+            self.reset_release();
         }
-        Ok(())
     }
-    pub fn define(&mut self, name: &str, val: &str) -> Result<(), Box<EvalAltResult>> {
-        let re = regex::Regex::new(r"(?m)%define(\s+)(\S+)(\s+)(\S+)$").unwrap();
-        if let Some(cap) = re.captures_iter(self.f.as_str()).find(|cap| &cap[2] == name) {
-            self.f = self.f.replace(&cap[0], &format!("%define{}{name}{}{val}", &cap[1], &cap[3]));
-            self.changed = true;
-            return Ok(());
-        }
-        Err(format!("No `%define {name}` in spec").into())
+    /// Change the value of a `%define` macro by the name
+    pub fn define(&mut self, name: &str, val: &str) {
+        let Some(cap) = RE_DEFINE.captures_iter(self.f.as_str()).find(|cap| &cap[2] == name) else { return error!("No `Version:` preamble for {}", self.name) };
+        self.f = self.f.replace(&cap[0], &format!("%define{}{name}{}{val}", &cap[1], &cap[3]));
+        self.changed = true;
     }
-    pub fn global(&mut self, name: &str, val: &str) -> Result<(), Box<EvalAltResult>> {
-        let re = regex::Regex::new(r"(?m)%global(\s+)(\S+)(\s+)(\S+)$").unwrap();
-        if let Some(cap) = re.captures_iter(self.f.as_str()).find(|cap| &cap[2] == name) {
-            self.f = self.f.replace(&cap[0], &format!("%global{}{name}{}{val}", &cap[1], &cap[3]));
-            self.changed = true;
-            return Ok(());
-        }
-        Err(format!("No `%global {name}` in spec").into())
+    /// Change the value of a `%global` macro by the name
+    pub fn global(&mut self, name: &str, val: &str) {
+        let Some(cap) = RE_GLOBAL.captures_iter(self.f.as_str()).find(|cap| &cap[2] == name)  else { return error!("No `Version:` preamble for {}", self.name) };
+        self.f = self.f.replace(&cap[0], &format!("%global{}{name}{}{val}", &cap[1], &cap[3]));
+        self.changed = true;
     }
-    pub fn source(&mut self, i: i64, p: &str) -> Result<(), Box<EvalAltResult>> {
-        let re = regex::Regex::new(r"Source(\d+):(\s+)([^\n]+)\n").unwrap();
-        let mut capw = None;
+    /// Change the `SourceN:` preamble value by `N`
+    pub fn source(&mut self, i: i64, p: &str) {
         let si = i.to_string();
-        for cap in re.captures_iter(self.f.as_str()).filter(|cap| cap[1] == si) {
-            info!("{}: Source{i}: {p}", self.name);
-            capw = Some(cap);
-        }
-        let Some(cap) = capw else { return Err("No source preamble in spec".into()) };
+        let Some(cap) = RE_SOURCE.captures_iter(self.f.as_str()).find(|cap| cap[1] == si) else { return error!("No `Source{i}:` preamble for {}", self.name)};
+        info!("{}: Source{i}: {p}", self.name);
         self.f = self.f.replace(&cap[0], &format!("Source{i}:{}{p}\n", &cap[2]));
         self.changed = true;
-        Ok(())
     }
+    /// Write the updated spec file content
+    ///
+    /// # Errors
+    /// - happens only if the writing part failed :3
     pub fn write(self) -> std::io::Result<()> {
         if self.changed {
             fs::write(self.spec, self.f)?;
         }
         Ok(())
     }
+    /// Get the spec file content
     pub fn get(&mut self) -> String {
         self.f.clone()
     }
+    /// Override the spec file content manually
     pub fn set(&mut self, ff: String) {
         self.changed = true;
         self.f = ff;

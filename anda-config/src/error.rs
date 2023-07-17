@@ -13,22 +13,22 @@ pub enum ProjectError {
 
 impl From<hcl::error::Error> for ProjectError {
     fn from(e: hcl::error::Error) -> Self {
-        ProjectError::HclError(e)
+        Self::HclError(e)
     }
 }
 
 impl std::fmt::Display for ProjectError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ProjectError::NoManifest => write!(f, "No manifest found"),
-            ProjectError::InvalidManifest(e) => write!(f, "Invalid manifest: {}", e),
-            ProjectError::Other(msg) => write!(f, "{}", msg),
-            ProjectError::HclError(e) => write!(
+            Self::NoManifest => write!(f, "No manifest found"),
+            Self::InvalidManifest(e) => write!(f, "Invalid manifest: {e}"),
+            Self::Other(msg) => write!(f, "{msg}"),
+            Self::HclError(e) => write!(
                 f,
                 "Error parsing HCL: {e}{}",
                 e.location().map(|l| format!(" at {}:{}", l.line, l.col)).unwrap_or_default()
             ),
-            ProjectError::Multiple(errors) => {
+            Self::Multiple(errors) => {
                 write!(f, "Multiple errors:")?;
                 for error in errors {
                     write!(f, "\n - {error}")?;

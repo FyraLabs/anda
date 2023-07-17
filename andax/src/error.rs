@@ -32,7 +32,7 @@ impl Display for TbErr {
     }
 }
 
-pub(crate) trait AndaxRes<T> {
+pub trait AndaxRes<T> {
     fn ehdl(self, ctx: &rhai::NativeCallContext) -> Result<T, Box<EvalAltResult>>;
 }
 
@@ -59,7 +59,7 @@ where
     }
 }
 
-pub(crate) const EARTH: &str = r#"
+pub const EARTH: &str = r#"
 .    .    *  .   .  .   .  *     .  .        . .   .     .  *   .     .  .   .
    *  .    .    *  .     .         .    * .     .  *  .    .   .   *   . .    .
 . *      .   .    .  .     .  *      .      .        .     .-o--.   .    *  .

@@ -8,7 +8,6 @@ license = "MIT"
 exclude = [
     "anda-build",
     "anda-config",
-    "rpmspec-rs",
     "andax",
     ".devcontainer",
     ".github",
@@ -57,6 +56,5 @@ itertools = "0.10.5"
 members = [
     "anda-config",
     "xtask",
-    "rpmspec-rs",
     "andax",
 ]

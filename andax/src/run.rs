@@ -1,7 +1,7 @@
 use crate::{
     error::{
         AndaxError as AErr,
-        TbErr::{self, *},
+        TbErr::{self, Arb, Report, Rhai},
     },
     fns as f,
 };
@@ -9,13 +9,15 @@ use directories::BaseDirs;
 use lazy_static::lazy_static;
 use regex::Regex;
 use rhai::{
-    module_resolvers::ModuleResolversCollection, packages::Package, plugin::*, Engine,
-    EvalAltResult as RhaiE, NativeCallContext as Ctx, Scope,
+    module_resolvers::ModuleResolversCollection,
+    packages::Package,
+    plugin::{exported_module, Dynamic, EvalAltResult, Position},
+    Engine, EvalAltResult as RhaiE, NativeCallContext as Ctx, Scope,
 };
 use std::{collections::BTreeMap, io::BufRead, path::Path};
 use tracing::{debug, error, instrument, trace, warn};
 
-pub(crate) fn rf<T>(ctx: Ctx, res: color_eyre::Result<T>) -> Result<T, Box<RhaiE>>
+pub fn rf<T>(ctx: &Ctx, res: color_eyre::Result<T>) -> Result<T, Box<RhaiE>>
 where
     T: rhai::Variant + Clone,
 {
@@ -131,22 +133,20 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
             }
             // replace tabs to avoid wrong position when print
             let sl = die!(sl, "{proj}: Cannot read line: {}").replace('\t', " ");
-            let m = if let Some(x) = WORD_REGEX.find_at(sl.as_str(), col - 1) {
+            let m = WORD_REGEX.find_at(sl.as_str(), col - 1).map_or(1, |x| {
                 let r = x.range();
-                if r.start != col - 1 {
-                    1
-                } else {
+                if r.start == col - 1 {
                     r.len()
+                } else {
+                    1
                 }
-            } else {
-                1
-            };
+            });
             let ln = line.to_string().len();
             let lns = " ".repeat(ln);
-            let _l = "─".repeat(ln);
-            let _r = "─".repeat(sl.len() + 2);
+            let l = "─".repeat(ln);
+            let r = "─".repeat(sl.len() + 2);
             let mut code = format!(
-                "─{_l}─┬{_r}\n {lns} │ {scr}:{line}:{col}\n─{_l}─┼{_r}\n {line} │ {sl}\n {lns} │ {}{}",
+                "─{l}─┬{r}\n {lns} │ {scr}:{line}:{col}\n─{l}─┼{r}\n {line} │ {sl}\n {lns} │ {}{}",
                 " ".repeat(col - 1),
                 "🭶".repeat(m)
             );
@@ -169,15 +169,16 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
     error!("{proj}: {scr:?} (no position data)\n{nanitozo}");
 }
 
+/// Handles an exception thrown while executing an AndaX script.
 pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
     trace!("{name}: Generating traceback");
     if let EvalAltResult::ErrorRuntime(ref run_err, pos) = err {
         match run_err.clone().try_cast::<AErr>() {
-            Some(AErr::RustReport(rhai_fn, fn_src, oerr)) => {
-                return _tb(name, scr, Report(oerr), pos, rhai_fn.as_str(), fn_src.as_str());
+            Some(AErr::RustReport(rhai_fn, fn_src, others)) => {
+                return _tb(name, scr, Report(others), pos, rhai_fn.as_str(), fn_src.as_str());
             }
-            Some(AErr::RustError(rhai_fn, fn_src, oerr)) => {
-                return _tb(name, scr, Arb(oerr), pos, rhai_fn.as_str(), fn_src.as_str());
+            Some(AErr::RustError(rhai_fn, fn_src, others)) => {
+                return _tb(name, scr, Arb(others), pos, rhai_fn.as_str(), fn_src.as_str());
             }
             Some(AErr::Exit(b)) => {
                 if b {
@@ -195,6 +196,7 @@ pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
     _tb(name, scr, Rhai(err), pos, "", "");
 }
 
+/// Executes an AndaX script.
 pub fn run<'a>(
     name: &'a str,
     scr: &'a Path,
@@ -276,9 +278,9 @@ fn hint(sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> 
     }
 }
 fn hint_ear(sl: &str, lns: &str, ear: &EvalAltResult, rhai_fn: &str) -> Option<String> {
+    use EvalAltResult::{ErrorMismatchOutputType, ErrorRuntime};
     trace!(?rhai_fn, "Hinting for EvalAltResult");
     gen_h!(lns);
-    use EvalAltResult::*;
     match ear {
         ErrorRuntime(d, _) => {
             if d.is_string() {

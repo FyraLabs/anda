@@ -1,3 +1,9 @@
+//! Andaman, a package build toolchain for RPM, OCI and Flatpak.
+#![warn(clippy::pedantic)]
+#![warn(clippy::nursery)]
+#![warn(clippy::disallowed_types)]
+#![warn(missing_docs)]
+#![allow(clippy::module_name_repetitions)]
 #![deny(rust_2018_idioms)]
 
 mod artifacts;
@@ -64,9 +70,7 @@ async fn main() -> Result<()> {
                 // match the errors
                 match e.kind() {
                     std::io::ErrorKind::NotFound => {}
-                    e => {
-                        println!("Error cleaning up build directory: {:?}", e);
-                    }
+                    e => println!("Error cleaning up build directory: {e:?}"),
                 }
             }
         }
@@ -74,12 +78,11 @@ async fn main() -> Result<()> {
         Command::List => {
             let config = anda_config::load_from_file(&cli.config)?;
 
-            for (project_name, project) in config.project.iter() {
-                let project_alias = if let Some(alias) = &project.alias {
-                    format!(" ({})", alias.join(", "))
-                } else {
-                    "".to_string()
-                };
+            for (project_name, project) in &config.project {
+                let project_alias = project
+                    .alias
+                    .as_ref()
+                    .map_or_else(String::new, |alias| format!(" ({})", alias.join(", ")));
 
                 println!("{project_name}{project_alias}");
             }
@@ -96,7 +99,7 @@ async fn main() -> Result<()> {
         }
         Command::CI => {
             let config = anda_config::load_from_file(&cli.config)?;
-            let entries = util::fetch_build_entries(config)?;
+            let entries = util::fetch_build_entries(config);
 
             println!("build_matrix={}", serde_json::to_string(&entries)?);
         }

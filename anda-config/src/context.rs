@@ -5,21 +5,24 @@ use hcl::Value;
 
 // once_cell for global context
 use once_cell::sync::OnceCell;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 // todo: let this be mutable
 static GLOBAL_CONTEXT: OnceCell<Mutex<Context>> = OnceCell::new();
 
-/// HCL Function for loading environment variables
-pub fn env_func(args: FuncArgs) -> Result<Value, String> {
-    let env = std::env::vars().collect::<BTreeMap<String, String>>();
-    let key = args[0].as_str().unwrap();
-    let value = env.get(key).unwrap();
-    Ok(Value::String(value.to_string()))
-}
-
 /// Generate Context for HCL evaluation
+/// 
+/// # Panics
+/// - cannot lock mutex (poison?)
+/// - cannot convert FuncArgs to str
+/// - cannot find FuncArgs as key in environment variables
 pub fn hcl_context() -> Context<'static> {
+    let env_func = |args: FuncArgs| {
+        let env = std::env::vars().collect::<BTreeMap<String, String>>();
+        let key = args[0].as_str().unwrap();
+        let value = env.get(key).unwrap();
+        Ok(Value::String(value.to_string()))
+    };
     let c = GLOBAL_CONTEXT.get_or_init(|| {
         dotenv::dotenv().ok();
         let mut ctx = Context::new();
@@ -29,13 +32,11 @@ pub fn hcl_context() -> Context<'static> {
         let env = std::env::vars().collect::<BTreeMap<String, String>>();
         let mut map = hcl::Map::new();
 
-        for (key, value) in env.iter() {
-            map.insert(key.to_string(), Value::String(value.to_string()));
-        }
+        map.extend(env.into_iter().map(|(k,v)| (k, Value::String(v))));
 
         ctx.declare_var("env", Value::Object(map));
 
         Mutex::new(ctx)
     });
-    c.lock().unwrap().clone()
+    c.lock().clone()
 }

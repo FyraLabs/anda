@@ -27,12 +27,12 @@ impl FromStr for PackageType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "rpm" => Ok(PackageType::Rpm),
-            "docker" => Ok(PackageType::Docker),
-            "podman" => Ok(PackageType::Podman),
-            "flatpak" => Ok(PackageType::Flatpak),
-            "rpm-ostree" => Ok(PackageType::RpmOstree),
-            "all" => Ok(PackageType::All),
+            "rpm" => Ok(Self::Rpm),
+            "docker" => Ok(Self::Docker),
+            "podman" => Ok(Self::Podman),
+            "flatpak" => Ok(Self::Flatpak),
+            "rpm-ostree" => Ok(Self::RpmOstree),
+            "all" => Ok(Self::All),
             _ => Err(format!("Invalid package type: {s}")),
         }
     }

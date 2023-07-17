@@ -1,6 +1,12 @@
 use crate::error::AndaxRes;
 use anda_config::load_from_file;
-use rhai::{plugin::*, EvalAltResult};
+use rhai::{
+    plugin::{
+        export_module, mem, Dynamic, FnAccess, FnNamespace, ImmutableString, Module,
+        NativeCallContext, PluginFunction, RhaiResult, TypeId,
+    },
+    EvalAltResult,
+};
 use std::path::PathBuf;
 
 type Res<T> = Result<T, Box<EvalAltResult>>;
@@ -8,7 +14,7 @@ type Res<T> = Result<T, Box<EvalAltResult>>;
 #[export_module]
 pub mod ar {
     #[rhai_fn(return_raw)]
-    pub(crate) fn load_file(ctx: NativeCallContext, path: &str) -> Res<rhai::Map> {
+    pub fn load_file(ctx: NativeCallContext, path: &str) -> Res<rhai::Map> {
         let m = load_from_file(&PathBuf::from(path)).ehdl(&ctx)?;
         let mut manifest = rhai::Map::new();
         let mut conf = rhai::Map::new();
@@ -44,7 +50,7 @@ fn _pb(pb: Option<PathBuf>) -> Dynamic {
     pb.map_or(().into(), |s| s.to_str().unwrap_or("").into())
 }
 fn _rpm(o: Option<anda_config::RpmBuild>) -> Dynamic {
-    o.map(|r| {
+    o.map_or(().into(), |r| {
         let mut m = rhai::Map::new();
         m.insert("spec".into(), r.spec.to_str().unwrap_or("").into());
         m.insert("sources".into(), _pb(r.sources));
@@ -60,10 +66,9 @@ fn _rpm(o: Option<anda_config::RpmBuild>) -> Dynamic {
         m.insert("opts".into(), r.opts.unwrap_or_default().into());
         m.into()
     })
-    .unwrap_or_else(|| ().into())
 }
 fn _docker(o: Option<anda_config::Docker>) -> Dynamic {
-    o.map(|d| {
+    o.map_or(().into(), |d| {
         let mut m = rhai::Map::new();
         m.insert(
             "image".into(),
@@ -82,15 +87,13 @@ fn _docker(o: Option<anda_config::Docker>) -> Dynamic {
         );
         m.into()
     })
-    .unwrap_or_else(|| ().into())
 }
 fn _flatpak(o: Option<anda_config::Flatpak>) -> Dynamic {
-    o.map(|f| {
+    o.map_or(().into(), |f| {
         let mut m = rhai::Map::new();
         m.insert("manifest".into(), _pb(Some(f.manifest)));
         m.insert("pre_script".into(), _pb(f.pre_script));
         m.insert("post_script".into(), _pb(f.post_script));
         m.into()
     })
-    .unwrap_or_else(|| ().into())
 }

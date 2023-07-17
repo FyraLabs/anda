@@ -23,6 +23,7 @@ lazy_static! {
     static ref DEFAULT_ARCHES: [String; 2] = ["x86_64".to_string(), "aarch64".to_string()];
 }
 
+#[derive(Copy, Clone)]
 enum ConsoleOut {
     Stdout,
     Stderr,
@@ -34,7 +35,7 @@ pub struct BuildEntry {
     pub arch: String,
 }
 
-pub fn fetch_build_entries(config: Manifest) -> Result<Vec<BuildEntry>> {
+pub fn fetch_build_entries(config: Manifest) -> Vec<BuildEntry> {
     let changed_files = get_changed_files(Path::new(".")).unwrap_or_default();
     let changed_dirs: HashSet<_> = changed_files
         .iter()
@@ -57,13 +58,13 @@ pub fn fetch_build_entries(config: Manifest) -> Result<Vec<BuildEntry>> {
                 continue;
             }
 
-            for arch in project.arches.unwrap_or(DEFAULT_ARCHES.to_vec()) {
+            for arch in project.arches.unwrap_or_else(|| DEFAULT_ARCHES.to_vec()) {
                 entries.push(BuildEntry { pkg: name.clone(), arch: arch.clone() });
             }
         }
     }
 
-    Ok(entries)
+    entries
 }
 
 // #[test]
@@ -84,18 +85,6 @@ pub trait CommandLog {
 #[async_trait]
 impl CommandLog for Command {
     async fn log(&mut self) -> Result<()> {
-        // let cmd_name = self;
-        // make process name a constant string that we can reuse every time we call print_log
-        let process = self.as_std().get_program().to_owned().into_string().unwrap();
-        let args =
-            self.as_std().get_args().map(|a| a.to_str().unwrap()).collect::<Vec<&str>>().join(" ");
-        debug!("Running command: {process} {args}",);
-        let c = self.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
-
-        // copy self
-
-        let mut output = c.spawn().unwrap();
-
         fn print_log(process: &str, output: &str, out: ConsoleOut) {
             // check if no_color is set
             let no_color = std::env::var("NO_COLOR").is_ok();
@@ -115,8 +104,19 @@ impl CommandLog for Command {
             println!("{formatter}");
         }
 
-        // handles so we can run both at the same time
+        // let cmd_name = self;
+        // make process name a constant string that we can reuse every time we call print_log
+        let process = self.as_std().get_program().to_owned().into_string().unwrap();
+        let args =
+            self.as_std().get_args().map(|a| a.to_str().unwrap()).collect::<Vec<&str>>().join(" ");
+        debug!("Running command: {process} {args}",);
+        let c = self.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
 
+        // copy self
+
+        let mut output = c.spawn().unwrap();
+
+        // handles so we can run both at the same time
         let mut tasks = vec![];
         // stream stdout
 
@@ -162,6 +162,7 @@ impl CommandLog for Command {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
                     info!("Received ctrl-c, sending sigint to child process");
+                    #[allow(clippy::cast_possible_wrap)]
                     signal::kill(Pid::from_raw(output.id().unwrap() as i32), signal::Signal::SIGINT).unwrap();
 
                     // exit program
@@ -264,7 +265,7 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
         std::fs::create_dir(path)?;
     }
 
-    let mut config = Manifest { project: BTreeMap::new(), config: Default::default() };
+    let mut config = Manifest { project: BTreeMap::new(), config: anda_config::Config::default() };
 
     // use ignore to scan for files
     let walk = ignore::WalkBuilder::new(path).build();
@@ -336,12 +337,12 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
             }
         }
     }
-    println!("{}", anda_config::config::to_string(config)?);
+    println!("{}", anda_config::config::to_string(&config)?);
 
     Ok(())
 }
 
-pub(crate) fn convert_filter(filter: log::LevelFilter) -> tracing_subscriber::filter::LevelFilter {
+pub const fn convert_filter(filter: log::LevelFilter) -> tracing_subscriber::filter::LevelFilter {
     match filter {
         log::LevelFilter::Off => tracing_subscriber::filter::LevelFilter::OFF,
         log::LevelFilter::Error => tracing_subscriber::filter::LevelFilter::ERROR,

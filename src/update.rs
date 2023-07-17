@@ -14,7 +14,7 @@ pub fn update(
     fls: BTreeMap<String, String>,
 ) -> Result<()> {
     let mut handlers = vec![];
-    'p: for (name, mut proj) in cfg.project.into_iter() {
+    'p: for (name, mut proj) in cfg.project {
         if let Some(scr) = &proj.update {
             trace!(name, scr = scr.to_str(), "Th start");
             let mut lbls = std::mem::take(&mut proj.labels);

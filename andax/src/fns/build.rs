@@ -1,7 +1,10 @@
-/// This file contains functions for andax
-/// which implements procedures from building RPMs
-/// see anda rpm_spec.rs
-use rhai::plugin::*;
+//! This file contains functions for andax
+//! which implements procedures from building RPMs
+//! see `anda::rpm_spec.rs`
+use rhai::plugin::{
+    export_module, mem, Dynamic, FnAccess, FnNamespace, ImmutableString, Module, NativeCallContext,
+    PluginFunction, RhaiResult, TypeId,
+};
 
 // 正にこうです。 :3
 macro_rules! rpmargs {
@@ -33,10 +36,10 @@ macro_rules! rpmargs {
 
 #[export_module]
 pub mod ar {
-    pub(crate) fn cmd_srpm(spec: &str, sources: Option<&str>) -> Vec<String> {
+    pub fn cmd_srpm(spec: &str, sources: Option<&str>) -> Vec<String> {
         rpmargs!("--buildsrpm", spec, sources)
     }
-    pub(crate) fn cmd_rpm(spec: &str, sources: Option<&str>) -> Vec<String> {
+    pub fn cmd_rpm(spec: &str, sources: Option<&str>) -> Vec<String> {
         rpmargs!("--rebuild", spec, sources)
     }
 }
