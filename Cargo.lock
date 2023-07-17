@@ -41,7 +41,7 @@ dependencies = [
 
 [[package]]
 name = "anda"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "anda-config",
  "andax",
@@ -75,7 +75,7 @@ dependencies = [
 
 [[package]]
 name = "anda-config"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "chrono",
  "dotenv",
@@ -97,7 +97,7 @@ dependencies = [
 
 [[package]]
 name = "andax"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anda-config",
  "color-eyre",
