@@ -47,14 +47,17 @@ type T = Result<(i32, String, String), Box<EvalAltResult>>;
 #[export_module]
 pub mod ar {
     /// get the return code from the return value of `sh()`
+    #[rhai_fn(global)]
     pub fn sh_rc(o: (i32, String, String)) -> i32 {
         o.0
     }
     /// get stdout from the return value of `sh()` 
+    #[rhai_fn(global)]
     pub fn sh_stdout(o: (i32, String, String)) -> String {
         o.1
     }
     /// get stderr from the return value of `sh()`
+    #[rhai_fn(global)]
     pub fn sh_stderr(o: (i32, String, String)) -> String {
         o.2
     }
