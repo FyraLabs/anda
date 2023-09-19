@@ -1,23 +1,15 @@
 //! Utility functions and types
-
-use std::{
-    collections::{BTreeMap, HashSet},
-    path::Path,
-};
-
 use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
-use async_trait::async_trait;
-use cmd_lib::log;
 use color_eyre::{eyre::eyre, Result};
 use console::style;
-use lazy_static::lazy_static;
-use log::{debug, info};
+use cmd_lib::log::{debug, info, LevelFilter};
 use nix::{sys::signal, unistd::Pid};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, path::Path};
 use tokio::{io::AsyncBufReadExt, process::Command};
 
-lazy_static! {
+lazy_static::lazy_static! {
     static ref BUILDARCH_REGEX: Regex = Regex::new("BuildArch:\\s*(.+)").unwrap();
     static ref EXCLUSIVEARCH_REGEX: Regex = Regex::new("ExclusiveArch:\\s*(.+)").unwrap();
     static ref DEFAULT_ARCHES: [String; 2] = ["x86_64".to_string(), "aarch64".to_string()];
@@ -37,7 +29,7 @@ pub struct BuildEntry {
 
 pub fn fetch_build_entries(config: Manifest) -> Vec<BuildEntry> {
     let changed_files = get_changed_files(Path::new(".")).unwrap_or_default();
-    let changed_dirs: HashSet<_> = changed_files
+    let changed_dirs: std::collections::HashSet<_> = changed_files
         .iter()
         .map(|f| f.trim_end_matches(|x| x != '/').trim_end_matches('/'))
         .collect();
@@ -77,11 +69,11 @@ pub fn fetch_build_entries(config: Manifest) -> Vec<BuildEntry> {
 ///
 /// This trait implements custom logging for commands in a format of `{command} | {line}`
 /// It also implements Ctrl-C handling for the command, and will send a SIGINT to the command
-#[async_trait]
+#[async_trait::async_trait]
 pub trait CommandLog {
     async fn log(&mut self) -> Result<()>;
 }
-#[async_trait]
+#[async_trait::async_trait]
 impl CommandLog for Command {
     async fn log(&mut self) -> Result<()> {
         fn print_log(process: &str, output: &str, out: ConsoleOut) {
@@ -278,16 +270,11 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
                 {
                     debug!("Found spec file: {}", path.display());
                     // ask if we want to add spec to project
-                    let add_spec: bool = {
-                        if yes {
-                            true
-                        } else {
-                            prompt_default(
-                                format!("Add spec file `{}` to manifest?", path.display()),
-                                true,
-                            )?
-                        }
-                    };
+                    let add_spec = yes
+                        || prompt_default(
+                            format!("Add spec file `{}` to manifest?", path.display()),
+                            true,
+                        )?;
 
                     if add_spec {
                         let project_name = path.file_stem().unwrap().to_str().unwrap();
@@ -304,21 +291,16 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
             if path.extension().unwrap_or_default().eq("dockerfile")
                 || path.file_name().unwrap_or_default().to_str().unwrap().eq("Dockerfile")
             {
-                let add_oci: bool = {
-                    if yes {
-                        true
-                    } else {
-                        prompt_default(
-                            format!("Add Dockerfile `{}` to manifest?", path.display()),
-                            true,
-                        )?
-                    }
-                };
+                let add_oci = yes
+                    || prompt_default(
+                        format!("Add Dockerfile `{}` to manifest?", path.display()),
+                        true,
+                    )?;
 
                 if add_oci {
                     // create a new project called docker
 
-                    let mut docker = Docker { ..Default::default() };
+                    let mut docker = Docker::default();
 
                     let image = DockerImage {
                         dockerfile: Some(path.display().to_string()),
@@ -341,13 +323,13 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
     Ok(())
 }
 
-pub const fn convert_filter(filter: log::LevelFilter) -> tracing_subscriber::filter::LevelFilter {
+pub const fn convert_filter(filter: LevelFilter) -> tracing_subscriber::filter::LevelFilter {
     match filter {
-        log::LevelFilter::Off => tracing_subscriber::filter::LevelFilter::OFF,
-        log::LevelFilter::Error => tracing_subscriber::filter::LevelFilter::ERROR,
-        log::LevelFilter::Warn => tracing_subscriber::filter::LevelFilter::WARN,
-        log::LevelFilter::Info => tracing_subscriber::filter::LevelFilter::INFO,
-        log::LevelFilter::Debug => tracing_subscriber::filter::LevelFilter::DEBUG,
-        log::LevelFilter::Trace => tracing_subscriber::filter::LevelFilter::TRACE,
+        LevelFilter::Off => tracing_subscriber::filter::LevelFilter::OFF,
+        LevelFilter::Error => tracing_subscriber::filter::LevelFilter::ERROR,
+        LevelFilter::Warn => tracing_subscriber::filter::LevelFilter::WARN,
+        LevelFilter::Info => tracing_subscriber::filter::LevelFilter::INFO,
+        LevelFilter::Debug => tracing_subscriber::filter::LevelFilter::DEBUG,
+        LevelFilter::Trace => tracing_subscriber::filter::LevelFilter::TRACE,
     }
 }
