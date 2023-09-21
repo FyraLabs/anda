@@ -80,7 +80,7 @@ fn module_resolver() -> ModuleResolversCollection {
 
     resolv
 }
-fn gen_en() -> (Engine, Scope<'static>) {
+pub(crate) fn gen_en() -> (Engine, Scope<'static>) {
     let mut sc = Scope::new();
     sc.push("USER_AGENT", f::tsunagu::USER_AGENT);
     sc.push("IS_WIN32", cfg!(windows));
@@ -127,44 +127,41 @@ pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str
             }};
         }
         let f = die!(f, "{proj}: Cannot open `{scr}`: {}");
-        for (n, sl) in std::io::BufReader::new(f).lines().enumerate() {
-            if n != line - 1 {
-                continue;
+        let sl = std::io::BufReader::new(f).lines().nth(line - 1);
+        let sl = die!(sl, "{proj}: Non-existence exception at {scr}:{line}:{col}");
+        // replace tabs to avoid wrong position when print
+        let sl = die!(sl, "{proj}: Cannot read line: {}").replace('\t', " ");
+        let m = WORD_REGEX.find_at(sl.as_str(), col - 1).map_or(1, |x| {
+            let r = x.range();
+            if r.start == col - 1 {
+                r.len()
+            } else {
+                1
             }
-            // replace tabs to avoid wrong position when print
-            let sl = die!(sl, "{proj}: Cannot read line: {}").replace('\t', " ");
-            let m = WORD_REGEX.find_at(sl.as_str(), col - 1).map_or(1, |x| {
-                let r = x.range();
-                if r.start == col - 1 {
-                    r.len()
-                } else {
-                    1
-                }
-            });
-            let ln = line.to_string().len();
-            let lns = " ".repeat(ln);
-            let l = "─".repeat(ln);
-            let r = "─".repeat(sl.len() + 2);
-            let mut code = format!(
-                "─{l}─┬{r}\n {lns} │ {scr}:{line}:{col}\n─{l}─┼{r}\n {line} │ {sl}\n {lns} │ {}{}",
-                " ".repeat(col - 1),
-                "🭶".repeat(m)
-            );
-            if !rhai_fn.is_empty() {
-                code += &format!("\n {lns} └─═ When invoking: {rhai_fn}()");
-            }
-            if !fn_src.is_empty() {
-                code += &format!("\n {lns} └─═ Function source: {fn_src}");
-            }
-            code += &format!("\n {lns} └─═ {nanitozo}");
-            code += &hint(&sl, &lns, &nanitozo, rhai_fn).unwrap_or_default();
-            let c = code.matches('└').count();
-            if c > 0 {
-                code = code.replacen('└', "├", c - 1);
-            }
-            return error!("Script Exception —— {proj}\n{code}");
+        });
+        let ln = line.to_string().len();
+        let lns = " ".repeat(ln);
+        let l = "─".repeat(ln);
+        let r = "─".repeat(sl.len() + 2);
+        let mut code = format!(
+            "─{l}─┬{r}\n {lns} │ {scr}:{line}:{col}\n─{l}─┼{r}\n {line} │ {sl}\n {lns} │ {}{}",
+            " ".repeat(col - 1),
+            "🭶".repeat(m)
+        );
+        if !rhai_fn.is_empty() {
+            code += &format!("\n {lns} └─═ When invoking: {rhai_fn}()");
         }
-        error!("{proj}: Non-existence exception at {scr}:{line}:{col}");
+        if !fn_src.is_empty() {
+            code += &format!("\n {lns} └─═ Function source: {fn_src}");
+        }
+        code += &format!("\n {lns} └─═ {nanitozo}");
+        code += &hint(&sl, &lns, &nanitozo, rhai_fn).unwrap_or_default();
+        // slow but works!
+        let c = code.matches('└').count();
+        if c > 0 {
+            code = code.replacen('└', "├", c - 1);
+        }
+        return error!("Script Exception —— {proj}\n{code}");
     }
     error!("{proj}: {scr:?} (no position data)\n{nanitozo}");
 }

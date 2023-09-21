@@ -136,3 +136,32 @@ pub mod ar {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    fn shells() -> Result<(), Box<EvalAltResult>> {
+        let (en, sc) = crate::run::gen_en();
+        en.run(r#"
+            let a = sh("echo hai > test");
+            let b = sh(["echo", "hai"]);
+            let c = sh(["rm", "-rf", "test"]);
+            let d = sh("ls -al", "/");
+            let pwd = sh("pwd").sh_stdout();
+            let e = sh(["grep", "hai", "test"], pwd);
+            if a.sh_stderr() != "" {
+                throw "error!?";
+            }
+            if b.sh_stdout() != "hai\n" {
+                throw "bad echo?";
+            }
+            if c.sh_rc() != 0 {
+                throw "cannot rm?";
+            }
+            if d.sh_stdout().is_empty() {
+                throw "why is out empty?";
+            }
+        "#)?;
+        Ok(())
+    }
+}
