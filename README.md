@@ -6,6 +6,21 @@ Andaman is a package build toolchain written in Rust. It is designed to simplify
 
 It is inspired by `umpkg` and aims to be a more modern and flexible alternative. It is also designed for monorepos in mind, so you can define multiple projects with multiple package formats in a single repository.
 
+You can look into [the Fyra Wiki page](https://wiki.fyralabs.com/Andaman) and [the Terra Devdocs](https://developer.fyralabs.com/terra/autoupdate) for more technical details.
+
+# Installation
+On systems with [Terra](https://terra.fyralabs.com), you can install it with `sudo dnf5 in anda` (or dnf).
+
+On systems with Cargo, you can install it with `cargo install anda`.
+
+Alternatively you can also manually download the sources from GitHub:
+```sh
+git clone https://github.com/FyraLabs/anda
+cd anda
+git checkout 0.1.18
+cargo install --path .
+```
+
 ## How it works
 Andaman is simply a meta-build system that calls upon other build systems to build and distribute packages. It works by reading a project manifest in `anda.hcl` and then calling the appropriate build system to build the package.
 
