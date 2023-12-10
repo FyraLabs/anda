@@ -21,7 +21,7 @@ num-traits = "0.2.15"
 regex = "~1"
 walkdir = "2.3.2"
 ignore = "0.4"
-once_cell = { version = "1.16", default-features = false, features = ["critical-section"] }
+once_cell = { version = "1.16", default-features = false, features = ["std"] }
 parking_lot = "0.12.1"
 
 [dev-dependencies]

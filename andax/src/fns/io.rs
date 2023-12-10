@@ -140,9 +140,11 @@ pub mod ar {
 #[cfg(test)]
 mod test {
     use super::*;
+    #[test]
     fn shells() -> Result<(), Box<EvalAltResult>> {
-        let (en, sc) = crate::run::gen_en();
-        en.run(r#"
+        let (en, _) = crate::run::gen_en();
+        en.run(
+            r#"
             let a = sh("echo hai > test");
             let b = sh(["echo", "hai"]);
             let c = sh(["rm", "-rf", "test"]);
@@ -161,7 +163,8 @@ mod test {
             if d.sh_stdout().is_empty() {
                 throw "why is out empty?";
             }
-        "#)?;
+        "#,
+        )?;
         Ok(())
     }
 }

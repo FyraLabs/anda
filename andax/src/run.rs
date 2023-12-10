@@ -80,7 +80,7 @@ fn module_resolver() -> ModuleResolversCollection {
 
     resolv
 }
-pub(crate) fn gen_en() -> (Engine, Scope<'static>) {
+pub fn gen_en() -> (Engine, Scope<'static>) {
     let mut sc = Scope::new();
     sc.push("USER_AGENT", f::tsunagu::USER_AGENT);
     sc.push("IS_WIN32", cfg!(windows));
@@ -111,59 +111,62 @@ lazy_static! {
     static ref WORD_REGEX: Regex = Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").unwrap();
 }
 
-#[instrument(name = "traceback")]
-pub fn _tb(proj: &str, scr: &Path, nanitozo: TbErr, pos: Position, rhai_fn: &str, fn_src: &str) {
-    if let Some((line, col)) = _gpos(pos) {
-        // Print code
-        let f = std::fs::File::open(scr);
-        let scr = scr.display();
-        macro_rules! die {
-            ($var:expr, $msg:expr) => {{
-                if let Err(e) = $var {
-                    error!($msg, e);
-                    return error!("{proj}: {scr} (no position data)\n{nanitozo}");
-                }
-                $var.unwrap()
-            }};
-        }
-        let f = die!(f, "{proj}: Cannot open `{scr}`: {}");
-        let sl = std::io::BufReader::new(f).lines().nth(line - 1);
-        let sl = die!(sl, "{proj}: Non-existence exception at {scr}:{line}:{col}");
-        // replace tabs to avoid wrong position when print
-        let sl = die!(sl, "{proj}: Cannot read line: {}").replace('\t', " ");
-        let m = WORD_REGEX.find_at(sl.as_str(), col - 1).map_or(1, |x| {
-            let r = x.range();
-            if r.start == col - 1 {
-                r.len()
-            } else {
-                1
+// proj: project name, scr: script path, nntz (nanitozo): just give me the error
+// pos: error position, rhai_fn: function that caused the issue, fn_src: idk…
+#[instrument]
+pub fn traceback(proj: &str, scr: &Path, nntz: TbErr, pos: Position, rhai_fn: &str, fn_src: &str) {
+    let Some((line, col)) = _gpos(pos) else {
+        return error!("{proj}: {scr:?} (no position data)\n{nntz}");
+    };
+    let f = std::fs::File::open(scr);
+    let scr = scr.display();
+    macro_rules! die {
+        ($var:expr, $msg:expr) => {{
+            if let Err(e) = $var {
+                error!($msg, e);
+                return error!("{proj}: {scr} (no position data)\n{nntz}");
             }
-        });
-        let ln = line.to_string().len();
-        let lns = " ".repeat(ln);
-        let l = "─".repeat(ln);
-        let r = "─".repeat(sl.len() + 2);
-        let mut code = format!(
-            "─{l}─┬{r}\n {lns} │ {scr}:{line}:{col}\n─{l}─┼{r}\n {line} │ {sl}\n {lns} │ {}{}",
-            " ".repeat(col - 1),
-            "🭶".repeat(m)
-        );
-        if !rhai_fn.is_empty() {
-            code += &format!("\n {lns} └─═ When invoking: {rhai_fn}()");
-        }
-        if !fn_src.is_empty() {
-            code += &format!("\n {lns} └─═ Function source: {fn_src}");
-        }
-        code += &format!("\n {lns} └─═ {nanitozo}");
-        code += &hint(&sl, &lns, &nanitozo, rhai_fn).unwrap_or_default();
-        // slow but works!
-        let c = code.matches('└').count();
-        if c > 0 {
-            code = code.replacen('└', "├", c - 1);
-        }
-        return error!("Script Exception —— {proj}\n{code}");
+            $var.unwrap()
+        }};
     }
-    error!("{proj}: {scr:?} (no position data)\n{nanitozo}");
+    let f = die!(f, "{proj}: Cannot open `{scr}`: {}");
+    let Some(sl) = std::io::BufReader::new(f).lines().nth(line - 1) else {
+        error!("{proj}: Non-existence exception at {scr}:{line}:{col}");
+        return error!("{proj}: {scr} (no position data)\n{nntz}");
+    };
+    // replace tabs to avoid wrong position when print
+    let sl = die!(sl, "{proj}: Cannot read line: {}").replace('\t', " ");
+    let m = WORD_REGEX.find_at(sl.as_str(), col - 1).map_or(1, |x| {
+        let r = x.range();
+        if r.start == col - 1 {
+            r.len()
+        } else {
+            1
+        }
+    }); // number of underline chars
+    let ln = line.to_string().len(); // length of the string of the line number
+    let lns = " ".repeat(ln); // spaces for padding the left hand side line number place
+    let l = "─".repeat(ln); // padding for the top of line number display
+    let r = "─".repeat(sl.len() + 2); // right hand side padding
+    let mut code = format!(
+        "─{l}─┬{r}\n {lns} │ {scr}:{line}:{col}\n─{l}─┼{r}\n {line} │ {sl}\n {lns} │ {}{}",
+        " ".repeat(col - 1), // padding at left of underline
+        "🭶".repeat(m)        // underline the word
+    );
+    if !rhai_fn.is_empty() {
+        code += &format!("\n {lns} └─═ When invoking: {rhai_fn}()");
+    }
+    if !fn_src.is_empty() {
+        code += &format!("\n {lns} └─═ Function source: {fn_src}");
+    }
+    code += &format!("\n {lns} └─═ {nntz}");
+    code += &hint(&sl, &lns, &nntz, rhai_fn).unwrap_or_default();
+    // slow but works!
+    let c = code.matches('└').count();
+    if c > 0 {
+        code = code.replacen('└', "├", c - 1);
+    }
+    return error!("Script Exception —— {proj}\n{code}");
 }
 
 /// Handles an exception thrown while executing an AndaX script.
@@ -172,10 +175,17 @@ pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
     if let EvalAltResult::ErrorRuntime(ref run_err, pos) = err {
         match run_err.clone().try_cast::<AErr>() {
             Some(AErr::RustReport(rhai_fn, fn_src, others)) => {
-                return _tb(name, scr, Report(others), pos, rhai_fn.as_str(), fn_src.as_str());
+                return traceback(
+                    name,
+                    scr,
+                    Report(others),
+                    pos,
+                    rhai_fn.as_str(),
+                    fn_src.as_str(),
+                );
             }
             Some(AErr::RustError(rhai_fn, fn_src, others)) => {
-                return _tb(name, scr, Arb(others), pos, rhai_fn.as_str(), fn_src.as_str());
+                return traceback(name, scr, Arb(others), pos, rhai_fn.as_str(), fn_src.as_str());
             }
             Some(AErr::Exit(b)) => {
                 if b {
@@ -190,7 +200,7 @@ pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
     }
     trace!("Rhai moment: {err:#?}");
     let pos = err.position();
-    _tb(name, scr, Rhai(err), pos, "", "");
+    traceback(name, scr, Rhai(err), pos, "", "");
 }
 
 /// Executes an AndaX script.
