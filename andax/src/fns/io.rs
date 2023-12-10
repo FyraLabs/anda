@@ -9,14 +9,18 @@ use rhai::{
 use std::io::Write;
 use std::process::Command;
 use tracing::{debug, instrument};
+
 macro_rules! _sh_out {
     ($ctx:expr, $o:expr) => {
         Ok((
-            $o.status.code().ok_or::<Box<EvalAltResult>>("No exit code".into())?,
+            _sh_out!($o)?,
             String::from_utf8($o.stdout).ehdl($ctx)?,
             String::from_utf8($o.stderr).ehdl($ctx)?,
         ))
     };
+    ($o:expr) => {{
+        $o.status.code().ok_or::<Box<EvalAltResult>>("No exit code".into())
+    }};
 }
 macro_rules! _cmd {
     ($cmd:expr) => {{
@@ -32,7 +36,14 @@ macro_rules! _cmd {
     }};
 }
 
+macro_rules! _stream_cmd {
+    ($cmd:expr) => {{
+        _cmd!($cmd).stdout(Stdio::inherit()).stderr(Stdio::inherit())
+    }};
+}
+
 type T = Result<(i32, String, String), Box<EvalAltResult>>;
+type U = Result<i32, Box<EvalAltResult>>;
 
 /// for andax, shell():
 /// ```
@@ -51,7 +62,7 @@ pub mod ar {
     pub fn sh_rc(o: (i32, String, String)) -> i32 {
         o.0
     }
-    /// get stdout from the return value of `sh()` 
+    /// get stdout from the return value of `sh()`
     #[rhai_fn(global)]
     pub fn sh_stdout(o: (i32, String, String)) -> String {
         o.1
@@ -60,6 +71,35 @@ pub mod ar {
     #[rhai_fn(global)]
     pub fn sh_stderr(o: (i32, String, String)) -> String {
         o.2
+    }
+
+    /// run a command using `cmd` on Windows and `sh` on other systems
+    #[instrument(skip(ctx))]
+    #[rhai_fn(return_raw, name = "sh_stream", global)]
+    pub fn shell_stream(ctx: NativeCallContext, cmd: &str) -> U {
+        debug!("Running in shell");
+        _sh_out!(_cmd!(cmd).output().ehdl(&ctx)?)
+    }
+    /// run a command using `cmd` on Windows and `sh` on other systems in working dir
+    #[instrument(skip(ctx))]
+    #[rhai_fn(return_raw, name = "sh_stream", global)]
+    pub fn shell_cwd_stream(ctx: NativeCallContext, cmd: &str, cwd: &str) -> U {
+        debug!("Running in shell");
+        _sh_out!(_cmd!(cmd).current_dir(cwd).output().ehdl(&ctx)?)
+    }
+    /// run an executable
+    #[instrument(skip(ctx))]
+    #[rhai_fn(return_raw, name = "sh_stream", global)]
+    pub fn sh_stream(ctx: NativeCallContext, cmd: Vec<&str>) -> U {
+        debug!("Running executable");
+        _sh_out!(Command::new(cmd[0]).args(&cmd[1..]).output().ehdl(&ctx)?)
+    }
+    /// run an executable in working directory
+    #[instrument(skip(ctx))]
+    #[rhai_fn(return_raw, name = "sh_stream", global)]
+    pub fn sh_cwd_stream(ctx: NativeCallContext, cmd: Vec<&str>, cwd: &str) -> U {
+        debug!("Running executable");
+        _sh_out!(Command::new(cmd[0]).args(&cmd[1..]).current_dir(cwd).output().ehdl(&ctx)?)
     }
 
     /// run a command using `cmd` on Windows and `sh` on other systems

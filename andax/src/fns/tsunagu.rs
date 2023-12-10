@@ -119,6 +119,12 @@ pub mod ar {
             Err(VarError::NotUnicode(o)) => Err(format!("env(`{key}`): invalid UTF: {o:?}").into()),
         }
     }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn rust2rpm(name: &str) -> Res<()> {
+        let cmd = std::process::Command::new("rust2rpm").arg(name).output();
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
