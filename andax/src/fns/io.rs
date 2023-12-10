@@ -51,7 +51,7 @@ pub mod ar {
     pub fn sh_rc(o: (i32, String, String)) -> i32 {
         o.0
     }
-    /// get stdout from the return value of `sh()` 
+    /// get stdout from the return value of `sh()`
     #[rhai_fn(global)]
     pub fn sh_stdout(o: (i32, String, String)) -> String {
         o.1

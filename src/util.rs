@@ -1,13 +1,14 @@
 //! Utility functions and types
 use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
+use clap_verbosity_flag::LevelFilter;
 use color_eyre::{eyre::eyre, Result};
 use console::style;
-use cmd_lib::log::{debug, info, LevelFilter};
 use nix::{sys::signal, unistd::Pid};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::Path};
 use tokio::{io::AsyncBufReadExt, process::Command};
+use tracing::{debug, info};
 
 lazy_static::lazy_static! {
     static ref BUILDARCH_REGEX: Regex = Regex::new("BuildArch:\\s*(.+)").unwrap();
@@ -44,7 +45,7 @@ pub fn fetch_build_entries(config: Manifest) -> Vec<BuildEntry> {
 
         if let Some(rpm) = project.rpm {
             if rpm.enable_scm.unwrap_or(false) {
-                for arch in DEFAULT_ARCHES.iter() {
+                for arch in &*DEFAULT_ARCHES {
                     entries.push(BuildEntry { pkg: std::mem::take(&mut name), arch: arch.clone() });
                 }
                 continue;

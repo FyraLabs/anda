@@ -3,7 +3,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-use tracing::{info, error};
+use tracing::{error, info};
 
 lazy_static::lazy_static! {
     static ref RE_RELEASE: regex::Regex = regex::Regex::new(r"Release:(\s+)(.+?)\n").unwrap();
@@ -30,6 +30,9 @@ pub struct RPMSpec {
 
 impl RPMSpec {
     /// Creates a new RPMSpec file representation
+    ///
+    /// # Panics
+    /// - spec file does not exist / cannot read spec to string
     pub fn new<T, U>(name: String, chkupdate: T, spec: U) -> Self
     where
         T: Into<PathBuf> + AsRef<Path>,
@@ -57,7 +60,9 @@ impl RPMSpec {
     }
     /// Sets the version in the spec file
     pub fn version(&mut self, ver: &str) {
-        let Some(m) = RE_VERSION.captures(self.f.as_str()) else { return error!("No `Version:` preamble for {}", self.name) };
+        let Some(m) = RE_VERSION.captures(self.f.as_str()) else {
+            return error!("No `Version:` preamble for {}", self.name);
+        };
         let ver = ver.strip_prefix('v').unwrap_or(ver).replace('-', ".");
         if ver != m[2] {
             info!("{}: {} —→ {ver}", self.name, &m[2]);
@@ -67,20 +72,26 @@ impl RPMSpec {
     }
     /// Change the value of a `%define` macro by the name
     pub fn define(&mut self, name: &str, val: &str) {
-        let Some(cap) = RE_DEFINE.captures_iter(self.f.as_str()).find(|cap| &cap[2] == name) else { return error!("No `Version:` preamble for {}", self.name) };
+        let Some(cap) = RE_DEFINE.captures_iter(self.f.as_str()).find(|cap| &cap[2] == name) else {
+            return error!("No `Version:` preamble for {}", self.name);
+        };
         self.f = self.f.replace(&cap[0], &format!("%define{}{name}{}{val}", &cap[1], &cap[3]));
         self.changed = true;
     }
     /// Change the value of a `%global` macro by the name
     pub fn global(&mut self, name: &str, val: &str) {
-        let Some(cap) = RE_GLOBAL.captures_iter(self.f.as_str()).find(|cap| &cap[2] == name)  else { return error!("No `Version:` preamble for {}", self.name) };
+        let Some(cap) = RE_GLOBAL.captures_iter(self.f.as_str()).find(|cap| &cap[2] == name) else {
+            return error!("No `Version:` preamble for {}", self.name);
+        };
         self.f = self.f.replace(&cap[0], &format!("%global{}{name}{}{val}", &cap[1], &cap[3]));
         self.changed = true;
     }
     /// Change the `SourceN:` preamble value by `N`
     pub fn source(&mut self, i: i64, p: &str) {
         let si = i.to_string();
-        let Some(cap) = RE_SOURCE.captures_iter(self.f.as_str()).find(|cap| cap[1] == si) else { return error!("No `Source{i}:` preamble for {}", self.name)};
+        let Some(cap) = RE_SOURCE.captures_iter(self.f.as_str()).find(|cap| cap[1] == si) else {
+            return error!("No `Source{i}:` preamble for {}", self.name);
+        };
         info!("{}: Source{i}: {p}", self.name);
         self.f = self.f.replace(&cap[0], &format!("Source{i}:{}{p}\n", &cap[2]));
         self.changed = true;
