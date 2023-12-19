@@ -287,10 +287,10 @@ fn hint_ear(sl: &str, lns: &str, ear: &EvalAltResult, rhai_fn: &str) -> Option<S
                 let s = d.clone().into_string().expect("sting.");
                 if s == "env(`GITHUB_TOKEN`) not present" {
                     h!(
-                        r#"gh() requires the environment variable `GITHUB_TOKEN` to be set as a Github token so as to avoid rate-limits:
+                        r"gh() requires the environment variable `GITHUB_TOKEN` to be set as a Github token so as to avoid rate-limits:
                         https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting
                         To create a Github token, see:
-                        https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"#
+                        https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
                     );
                 }
             }

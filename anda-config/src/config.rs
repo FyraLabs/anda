@@ -38,7 +38,7 @@ impl Manifest {
         self.project.get(key).map_or_else(
             || {
                 self.project.iter().find_map(|(_k, v)| {
-                    let Some(alias) = &v.alias else { return None };
+                    let alias = &v.alias.as_ref()?;
                     if alias.contains(&key.to_string()) {
                         Some(v)
                     } else {
@@ -272,7 +272,7 @@ pub fn load_from_string(config: &str) -> Result<Manifest, ProjectError> {
 }
 
 /// Lints and checks the config for errors.
-/// 
+///
 /// # Errors
 /// - nothing. This function literally does nothing. For now.
 pub const fn check_config(config: Manifest) -> Result<Manifest, ProjectError> {
