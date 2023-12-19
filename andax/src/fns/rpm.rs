@@ -29,10 +29,10 @@ pub struct RPMSpec {
 }
 
 impl RPMSpec {
-    /// Creates a new RPMSpec file representation.
+    /// Creates a new RPMSpec file representation
     ///
     /// # Panics
-    /// - cannot read spec to file
+    /// - spec file does not exist / cannot read spec to string
     pub fn new<T, U>(name: String, chkupdate: T, spec: U) -> Self
     where
         T: Into<PathBuf> + AsRef<Path>,

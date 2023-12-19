@@ -4,7 +4,7 @@ use hcl::template::Template;
 use std::str::FromStr;
 
 /// Parse an HCL template.
-/// 
+///
 /// # Errors
 /// - cannot parse template
 /// - cannot evaluate template

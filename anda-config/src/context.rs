@@ -11,7 +11,7 @@ use parking_lot::Mutex;
 static GLOBAL_CONTEXT: OnceCell<Mutex<Context>> = OnceCell::new();
 
 /// Generate Context for HCL evaluation
-/// 
+///
 /// # Panics
 /// - cannot lock mutex (poison?)
 /// - cannot convert FuncArgs to str
@@ -32,7 +32,7 @@ pub fn hcl_context() -> Context<'static> {
         let env = std::env::vars().collect::<BTreeMap<String, String>>();
         let mut map = hcl::Map::new();
 
-        map.extend(env.into_iter().map(|(k,v)| (k, Value::String(v))));
+        map.extend(env.into_iter().map(|(k, v)| (k, Value::String(v))));
 
         ctx.declare_var("env", Value::Object(map));
 

@@ -38,7 +38,7 @@ impl Manifest {
         self.project.get(key).map_or_else(
             || {
                 self.project.iter().find_map(|(_k, v)| {
-                    let alias = &v.alias.as_ref()?;
+                    let alias = v.alias.as_ref()?;
                     if alias.contains(&key.to_string()) {
                         Some(v)
                     } else {

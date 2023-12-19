@@ -1,5 +1,5 @@
 //! AndaX, an embedded scripting system powered by Rhai.
-//! 
+//!
 //! To start running a script, use `run()`.
 #![warn(clippy::pedantic)]
 #![warn(clippy::nursery)]
