@@ -42,4 +42,8 @@ pub mod ar {
     pub fn sub(ctx: NativeCallContext, r: &str, rep: &str, text: &str) -> Res<String> {
         Ok(Regex::new(r).ehdl(&ctx)?.replace_all(text, rep).into())
     }
+    #[rhai_fn(global)]
+    pub fn date() -> String {
+        chrono::offset::Utc::now().format("%Y%m%d").to_string()
+    }
 }

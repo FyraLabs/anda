@@ -270,6 +270,16 @@ mod test {
             if d.sh_stdout().is_empty() {
                 throw "why is out empty?";
             }
+            let f = sh("pwd", #{"stdout": "piped", "cwd": "/"});
+            if f.outcome != "succes" {
+                throw "not success??";
+            }
+            if f.ctx.rc != 0 {
+                throw `pwd returned ${f.ctx.rc}`;
+            }
+            if f.ctx.stdout != "/" {
+                throw "cwd doesn't work?";
+            }
         "#,
         )?;
         Ok(())
