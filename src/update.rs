@@ -10,7 +10,7 @@ use tracing::{debug, error, instrument, trace};
 #[instrument(skip(cfg))]
 pub fn update(
     cfg: Manifest,
-    lbls: BTreeMap<String, String>,
+    global_lbls: BTreeMap<String, String>,
     fls: BTreeMap<String, String>,
 ) -> Result<()> {
     let mut handlers = vec![];
@@ -18,7 +18,7 @@ pub fn update(
         if let Some(scr) = &proj.update {
             trace!(name, scr = scr.to_str(), "Th start");
             let mut lbls = std::mem::take(&mut proj.labels);
-            lbls.extend(lbls.clone());
+            lbls.extend(global_lbls.clone());
             for (k, v) in &fls {
                 if let Some(val) = lbls.get(k) {
                     if val == v {
@@ -45,10 +45,8 @@ pub fn update(
                 });
                 if let Some(sc) = sc {
                     let rpm: RPMSpec = sc.get_value("rpm").expect("No rpm object in rhai scope");
-                    if rpm.changed {
-                        if let Err(e) = rpm.write() {
-                            error!("{name}: Failed to write RPM: {e}");
-                        }
+                    if let Err(e) = rpm.write() {
+                        error!("{name}: Failed to write RPM: {e}");
                     }
                 }
             })?);

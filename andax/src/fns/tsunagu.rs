@@ -58,6 +58,80 @@ pub mod ar {
             .map(|a| a.first().ok_or_else(|| E::from("gh_tag no tags")))??;
         Ok(v["name"].as_str().unwrap_or("").to_string())
     }
+    #[rhai_fn(return_raw, global)]
+    pub fn gh_commit(ctx: NativeCallContext, repo: &str) -> Res<String> {
+        let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/commits/HEAD"))
+            .set("Authorization", &format!("Bearer {}", env("GITHUB_TOKEN")?))
+            .set("User-Agent", USER_AGENT)
+            .call()
+            .ehdl(&ctx)?
+            .into_json()
+            .ehdl(&ctx)?;
+        trace!("Got json from {repo}:\n{v}");
+        Ok(v["sha"].as_str().unwrap_or("").to_string())
+    }
+    #[rhai_fn(return_raw, global)]
+    pub fn gh_rawfile(ctx: NativeCallContext, repo: &str, branch: &str, file: &str) -> Res<String> {
+        ureq::get(&format!("https://raw.githubusercontent.com/{repo}/{branch}/{file}"))
+            .set("User-Agent", USER_AGENT)
+            .call()
+            .ehdl(&ctx)?
+            .into_string()
+            .ehdl(&ctx)
+    }
+
+    #[rhai_fn(return_raw, name = "gitlab", global)]
+    pub fn gitlab_domain(ctx: NativeCallContext, domain: &str, id: &str) -> Res<String> {
+        let v: Value = ureq::get(&format!("https://{domain}/api/v4/projects/{id}/releases/"))
+            .set("User-Agent", USER_AGENT)
+            .call()
+            .ehdl(&ctx)?
+            .into_json()
+            .ehdl(&ctx)?;
+        trace!("Got json from {id}:\n{v}");
+        Ok(v[0]["tag_name"].as_str().unwrap_or("").to_string())
+    }
+    #[rhai_fn(return_raw, global)]
+    pub fn gitlab(ctx: NativeCallContext, id: &str) -> Res<String> {
+        gitlab_domain(ctx, "gitlab.com", id)
+    }
+    #[rhai_fn(return_raw, name = "gitlab_tag", global)]
+    pub fn gitlab_tag_domain(ctx: NativeCallContext, domain: &str, id: &str) -> Res<String> {
+        let v: Value = ureq::get(&format!("https://{domain}/api/v4/projects/{id}/repository/tags"))
+            .set("User-Agent", USER_AGENT)
+            .call()
+            .ehdl(&ctx)?
+            .into_json()
+            .ehdl(&ctx)?;
+        trace!("Got json from {id}:\n{v}");
+        Ok(v[0]["name"].as_str().unwrap_or("").to_string())
+    }
+    #[rhai_fn(return_raw, global)]
+    pub fn gitlab_tag(ctx: NativeCallContext, id: &str) -> Res<String> {
+        gitlab_tag_domain(ctx, "gitlab.com", id)
+    }
+    #[rhai_fn(return_raw, name = "gitlab_tag", global)]
+    pub fn gitlab_commit_domain(
+        ctx: NativeCallContext,
+        domain: &str,
+        id: &str,
+        branch: &str,
+    ) -> Res<String> {
+        let v: Value = ureq::get(&format!(
+            "https://{domain}/api/v4/projects/{id}/repository/branches/{branch}"
+        ))
+        .set("User-Agent", USER_AGENT)
+        .call()
+        .ehdl(&ctx)?
+        .into_json()
+        .ehdl(&ctx)?;
+        trace!("Got json from {id}:\n{v}");
+        Ok(v["commit"]["id"].as_str().unwrap_or("").to_string())
+    }
+    #[rhai_fn(return_raw, global)]
+    pub fn gitlab_commit(ctx: NativeCallContext, id: &str, branch: &str) -> Res<String> {
+        gitlab_commit_domain(ctx, "gitlab.com", id, branch)
+    }
 
     #[rhai_fn(return_raw, global)]
     pub fn pypi(ctx: NativeCallContext, name: &str) -> Res<String> {

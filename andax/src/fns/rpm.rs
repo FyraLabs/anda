@@ -16,6 +16,8 @@ lazy_static::lazy_static! {
 /// Update RPM spec files
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RPMSpec {
+    /// Original spec file content
+    original: String,
     /// Name of project
     pub name: String,
     /// AndaX chkupdate script of project
@@ -24,8 +26,6 @@ pub struct RPMSpec {
     pub spec: PathBuf,
     /// RPM spec file content
     pub f: String,
-    /// Denotes if the spec file has been changed
-    pub changed: bool,
 }
 
 impl RPMSpec {
@@ -38,13 +38,8 @@ impl RPMSpec {
         T: Into<PathBuf> + AsRef<Path>,
         U: Into<PathBuf> + AsRef<Path>,
     {
-        Self {
-            name,
-            chkupdate: chkupdate.into(),
-            changed: false,
-            f: fs::read_to_string(&spec).expect("Cannot read spec to string"),
-            spec: spec.into(),
-        }
+        let f = fs::read_to_string(&spec).expect("Cannot read spec to string");
+        Self { name, chkupdate: chkupdate.into(), original: f.clone(), f, spec: spec.into() }
     }
     /// Resets the release number to 1
     pub fn reset_release(&mut self) {
@@ -54,9 +49,7 @@ impl RPMSpec {
     pub fn release(&mut self, rel: &str) {
         let m = RE_RELEASE.captures(self.f.as_str());
         let Some(m) = m else { return error!("No `Release:` preamble for {}", self.name) };
-        self.f =
-            RE_RELEASE.replace(&self.f, format!("Release:{}{rel}%{{?dist}}\n", &m[1])).to_string();
-        self.changed = true;
+        self.f = RE_RELEASE.replace(&self.f, format!("Release:{}{rel}%?dist\n", &m[1])).to_string();
     }
     /// Sets the version in the spec file
     pub fn version(&mut self, ver: &str) {
@@ -76,7 +69,6 @@ impl RPMSpec {
             return error!("No `Version:` preamble for {}", self.name);
         };
         self.f = self.f.replace(&cap[0], &format!("%define{}{name}{}{val}", &cap[1], &cap[3]));
-        self.changed = true;
     }
     /// Change the value of a `%global` macro by the name
     pub fn global(&mut self, name: &str, val: &str) {
@@ -84,7 +76,6 @@ impl RPMSpec {
             return error!("No `Version:` preamble for {}", self.name);
         };
         self.f = self.f.replace(&cap[0], &format!("%global{}{name}{}{val}", &cap[1], &cap[3]));
-        self.changed = true;
     }
     /// Change the `SourceN:` preamble value by `N`
     pub fn source(&mut self, i: i64, p: &str) {
@@ -94,14 +85,13 @@ impl RPMSpec {
         };
         info!("{}: Source{i}: {p}", self.name);
         self.f = self.f.replace(&cap[0], &format!("Source{i}:{}{p}\n", &cap[2]));
-        self.changed = true;
     }
     /// Write the updated spec file content
     ///
     /// # Errors
     /// - happens only if the writing part failed :3
     pub fn write(self) -> std::io::Result<()> {
-        if self.changed {
+        if self.changed() {
             fs::write(self.spec, self.f)?;
         }
         Ok(())
@@ -112,8 +102,12 @@ impl RPMSpec {
     }
     /// Override the spec file content manually
     pub fn set(&mut self, ff: String) {
-        self.changed = true;
         self.f = ff;
+    }
+    /// Check if file has been changed
+    #[must_use]
+    pub fn changed(&self) -> bool {
+        self.f == self.original
     }
 }
 
@@ -127,6 +121,7 @@ impl CustomType for RPMSpec {
             .with_fn("global", Self::global)
             .with_fn("release", Self::reset_release)
             .with_fn("release", Self::release)
+            .with_fn("changed", Self::changed)
             .with_get_set("f", Self::get, Self::set);
     }
 }

@@ -42,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "anda"
-version = "0.1.21"
+version = "0.1.23"
 dependencies = [
  "anda-config",
  "andax",
@@ -97,7 +97,7 @@ dependencies = [
 
 [[package]]
 name = "andax"
-version = "0.1.6"
+version = "0.1.8"
 dependencies = [
  "anda-config",
  "chrono",
