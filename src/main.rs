@@ -13,6 +13,7 @@ mod flatpak;
 mod oci;
 mod rpm_spec;
 mod update;
+mod rpm_oci;
 mod util;
 use anda_config::parse_map;
 use clap::{CommandFactory, Parser};

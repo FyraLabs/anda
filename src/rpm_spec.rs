@@ -101,6 +101,7 @@ impl RPMExtraOptions for RPMOptions {
 pub enum RPMBuilder {
     Mock,
     Rpmbuild,
+    Podman,
 }
 
 impl FromStr for RPMBuilder {
