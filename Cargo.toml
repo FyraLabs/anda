@@ -1,7 +1,7 @@
 # Cargo workspace
 [package]
 name = "anda"
-version = "0.1.24"
+version = "0.1.25"
 edition = "2021"
 description = "Andaman Build toolchain"
 license = "MIT"
@@ -24,7 +24,7 @@ color-eyre = "0.6.2"
 walkdir = "2.3.2"
 tempfile = "3.4.0"
 anda-config = { path = "./anda-config", version = "0.1.6" }
-andax = { path = "./andax", version = "0.1" }
+andax = { path = "./andax", version = "0.1.10" }
 flatpak = "0.18.1"
 clap_mangen = "0.2.9"
 clap-verbosity-flag = "2.0.0"

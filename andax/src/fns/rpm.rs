@@ -107,7 +107,7 @@ impl RPMSpec {
     /// Check if file has been changed
     #[must_use]
     pub fn changed(&self) -> bool {
-        self.f == self.original
+        self.f != self.original
     }
 }
 
