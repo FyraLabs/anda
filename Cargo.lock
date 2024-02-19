@@ -42,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "anda"
-version = "0.1.24"
+version = "0.1.25"
 dependencies = [
  "anda-config",
  "andax",
@@ -97,7 +97,7 @@ dependencies = [
 
 [[package]]
 name = "andax"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "anda-config",
  "chrono",
@@ -1183,13 +1183,13 @@ dependencies = [
 
 [[package]]
 name = "num-derive"
-version = "0.3.3"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "876a53fff98e03a936a674b29568b0e605f06b29372c2489ff4de23f1949743d"
+checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.48",
 ]
 
 [[package]]
