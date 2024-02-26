@@ -90,7 +90,7 @@ impl RPMSpec {
     ///
     /// # Errors
     /// - happens only if the writing part failed :3
-    pub fn write(self) -> std::io::Result<()> {
+    pub fn write(mut self) -> std::io::Result<()> {
         if self.changed() {
             fs::write(self.spec, self.f)?;
         }
@@ -106,7 +106,7 @@ impl RPMSpec {
     }
     /// Check if file has been changed
     #[must_use]
-    pub fn changed(&self) -> bool {
+    pub fn changed(&mut self) -> bool {
         self.f != self.original
     }
 }
