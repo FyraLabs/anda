@@ -4,10 +4,10 @@ use crate::error::AndaxRes;
 
 use rhai::{
     plugin::{
-        export_module, mem, FnAccess, FnNamespace, ImmutableString, Module, NativeCallContext,
-        PluginFunction, RhaiResult, TypeId,
+        export_module, mem, FnNamespace, ImmutableString, Module, NativeCallContext, PluginFunc,
+        RhaiResult, TypeId,
     },
-    Dynamic, EvalAltResult as RhaiE,
+    Dynamic, EvalAltResult as RhaiE, FuncRegistration,
 };
 type Res<T = ()> = Result<T, Box<RhaiE>>;
 

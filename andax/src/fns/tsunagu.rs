@@ -1,10 +1,10 @@
 use crate::{error::AndaxRes, run::rf};
 use rhai::{
     plugin::{
-        export_module, mem, Dynamic, EvalAltResult, FnAccess, FnNamespace, ImmutableString, Module,
-        NativeCallContext, PluginFunction, RhaiResult, TypeId,
+        export_module, mem, Dynamic, EvalAltResult, FnNamespace, ImmutableString, Module,
+        NativeCallContext, PluginFunc, RhaiResult, TypeId,
     },
-    CustomType,
+    CustomType, FuncRegistration,
 };
 use serde_json::Value;
 use std::env::VarError;

@@ -1,10 +1,10 @@
 use crate::error::AndaxRes;
 use rhai::{
     plugin::{
-        export_module, mem, Dynamic, FnAccess, FnNamespace, ImmutableString, Module,
-        NativeCallContext, PluginFunction, RhaiResult, TypeId,
+        export_module, mem, Dynamic, FnNamespace, ImmutableString, Module, NativeCallContext,
+        PluginFunc, RhaiResult, TypeId,
     },
-    EvalAltResult,
+    EvalAltResult, FuncRegistration,
 };
 use std::io::Write;
 use std::process::Command;

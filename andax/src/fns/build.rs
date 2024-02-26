@@ -2,8 +2,8 @@
 //! which implements procedures from building RPMs
 //! see `anda::rpm_spec.rs`
 use rhai::plugin::{
-    export_module, mem, Dynamic, FnAccess, FnNamespace, ImmutableString, Module, NativeCallContext,
-    PluginFunction, RhaiResult, TypeId,
+    export_module, mem, Dynamic, FuncRegistration, ImmutableString, Module, NativeCallContext,
+    PluginFunc, RhaiResult, TypeId,
 };
 
 // 正にこうです。 :3

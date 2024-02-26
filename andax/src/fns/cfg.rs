@@ -2,10 +2,10 @@ use crate::error::AndaxRes;
 use anda_config::load_from_file;
 use rhai::{
     plugin::{
-        export_module, mem, Dynamic, FnAccess, FnNamespace, ImmutableString, Module,
-        NativeCallContext, PluginFunction, RhaiResult, TypeId,
+        export_module, mem, Dynamic, ImmutableString, Module, NativeCallContext, PluginFunc,
+        RhaiResult, TypeId,
     },
-    EvalAltResult,
+    EvalAltResult, FuncRegistration,
 };
 use std::path::PathBuf;
 
