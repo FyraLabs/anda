@@ -4,7 +4,7 @@
 
 %global crate anda
 
-%global _version 0.1.25
+%global _version 0.1.26
 
 Name:           rust-anda
 Version:        %{_version}.%{autogitversion}
