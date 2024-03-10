@@ -110,7 +110,7 @@ pub mod ar {
     pub fn gitlab_tag(ctx: NativeCallContext, id: &str) -> Res<String> {
         gitlab_tag_domain(ctx, "gitlab.com", id)
     }
-    #[rhai_fn(return_raw, name = "gitlab_tag", global)]
+    #[rhai_fn(return_raw, name = "gitlab_commit", global)]
     pub fn gitlab_commit_domain(
         ctx: NativeCallContext,
         domain: &str,
