@@ -26,7 +26,6 @@ tempfile = "3.10.1"
 anda-config = { path = "./anda-config", version = "0.1.8" }
 andax = { path = "./andax", version = "0.1.12" }
 flatpak = "0.18.1"
-clap_mangen = "0.2.9"
 clap-verbosity-flag = "2.2.0"
 clap_complete = "4.1.5"
 cmd_lib = "1.3.0"
