@@ -37,7 +37,7 @@ version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e60d3430d3a69478ad0993f19238d2df97c507009a52b3c10addcd7f6bcb916"
 dependencies = [
- "memchr",
+ "memchr 2.7.2",
 ]
 
 [[package]]
@@ -84,6 +84,13 @@ dependencies = [
  "parking_lot",
  "serde",
  "tracing",
+]
+
+[[package]]
+name = "anda-uris"
+version = "0.1.0"
+dependencies = [
+ "uri_parser",
 ]
 
 [[package]]
@@ -242,7 +249,7 @@ version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05efc5cfd9110c8416e471df0e96702d58690178e206e61b7173706673c93706"
 dependencies = [
- "memchr",
+ "memchr 2.7.2",
  "serde",
 ]
 
@@ -889,7 +896,7 @@ dependencies = [
  "crossbeam-deque",
  "globset",
  "log",
- "memchr",
+ "memchr 2.7.2",
  "regex-automata",
  "same-file",
  "walkdir",
@@ -1068,6 +1075,15 @@ checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 
 [[package]]
 name = "memchr"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "148fab2e51b4f1cfc66da2a7c32981d1d3c083a803978268bb11fe4b86925e7a"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "memchr"
 version = "2.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c8640c5d730cb13ebd907d8d04b52f55ac9a2eec55b440c8892f40d56c76c1d"
@@ -1136,6 +1152,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nom"
+version = "3.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05aec50c70fd288702bcd93284a8444607f3292dbdf2a30de5ea5dcdbe72287b"
+dependencies = [
+ "memchr 1.0.2",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1170,7 +1195,7 @@ version = "0.32.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6a622008b6e321afc04970976f62ee297fdbaa6f95318ca343e3eebb9648441"
 dependencies = [
- "memchr",
+ "memchr 2.7.2",
 ]
 
 [[package]]
@@ -1260,7 +1285,7 @@ version = "2.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "560131c633294438da9f7c4b08189194b20946c8274c6b9e38881a7874dc8ee8"
 dependencies = [
- "memchr",
+ "memchr 2.7.2",
  "thiserror",
  "ucd-trie",
 ]
@@ -1399,7 +1424,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c117dbdfde9c8308975b6a18d71f3f385c89461f7b3fb054288ecf2a2058ba4c"
 dependencies = [
  "aho-corasick",
- "memchr",
+ "memchr 2.7.2",
  "regex-automata",
  "regex-syntax",
 ]
@@ -1411,7 +1436,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86b83b8b9847f9bf95ef68afb0b8e6cdb80f498442f5179a29fad448fcc1eaea"
 dependencies = [
  "aho-corasick",
- "memchr",
+ "memchr 2.7.2",
  "regex-syntax",
 ]
 
@@ -1557,7 +1582,7 @@ dependencies = [
  "fd-lock",
  "libc",
  "log",
- "memchr",
+ "memchr 2.7.2",
  "nix 0.23.2",
  "radix_trie",
  "scopeguard",
@@ -2000,6 +2025,15 @@ dependencies = [
  "serde_json",
  "url",
  "webpki-roots",
+]
+
+[[package]]
+name = "uri_parser"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba0090ecd7c64b69e546cda222b4b331877a0e1624a2a39a19e6ea4df29a33f9"
+dependencies = [
+ "nom",
 ]
 
 [[package]]

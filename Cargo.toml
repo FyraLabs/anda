@@ -55,4 +55,5 @@ members = [
     "anda-config",
     "xtask",
     "andax",
+    "anda-uris",
 ]
