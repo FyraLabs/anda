@@ -1,4 +1,24 @@
+//! # Andaman URIs
+//!
+//! This crate provides a set of URI types that can be used to represent various types of URIs, such as file paths, Git URIs, and forge-specific URIs.
+//!
+//! The main goal of this crate is to provide URI schemes that provide an interface to refer to various types of resources, such as files, Git repositories
+//! and even Git repositories hosted on various forges such as GitHub, GitLab, and Pagure.
+//!
+//! The URI types provided by this crate implement the [`UriSchemeTrait`] trait, which provides a uniform interface to convert URIs to and from strings.
+//!
+//! This crate is meant to be used as a way to represent sources of data as a URI string, and then get some kind of usable data from it.
+//!
+//!
+//! ## Examples
+//!
+//! - `github:user/repo` - GitHub repository, where this converts into `git+https://github.com/user/repo.git`
+//! - `file:///path/to/repo` - Local file path, where this converts into `file:///path/to/repo`
+//!
+
+// todo: This is kind of a mess, clean this up
 use forge::GitForgeUri;
+use std::convert::TryFrom;
 use std::{
     fmt::{Display, Formatter},
     path::{Path, PathBuf},
@@ -24,28 +44,62 @@ pub trait UriSchemeTrait {
         Self: Sized;
 }
 
+/// Simple HTTP URL type
+pub struct HttpUrl {
+    pub url: Url,
+}
+
+impl TryFrom<&Url> for HttpUrl {
+    type Error = String;
+
+    fn try_from(url: &Url) -> Result<Self, Self::Error> {
+        if url.scheme() != "http" && url.scheme() != "https" {
+            return Err("Invalid HTTP URL".to_string());
+        }
+        Ok(HttpUrl { url: url.clone() })
+    }
+}
+
+impl TryFrom<&str> for HttpUrl {
+    type Error = String;
+
+    fn try_from(url: &str) -> Result<Self, Self::Error> {
+        // just use TryFrom<&Url> for this
+        HttpUrl::try_from(&Url::parse(url).map_err(|e| e.to_string())?)
+    }
+}
+
+impl UriSchemeTrait for HttpUrl {
+    fn to_string_uri(&self) -> String {
+        self.url.to_string()
+    }
+
+    fn from_string(uri: &str) -> Result<Self, String> {
+        let url = Url::parse(uri).map_err(|e| e.to_string())?;
+        if url.scheme() != "http" && url.scheme() != "https" {
+            return Err("Invalid HTTP URI".to_string());
+        }
+        Ok(HttpUrl { url })
+    }
+}
+
 pub struct PathUri {
     pub path: PathBuf,
 }
 
-impl PathUri {
-    pub fn from_path(path: &Path) -> PathUri {
-        PathUri { path: path.to_path_buf() }
-    }
-
-    pub fn from_string(path: &str) -> Result<PathUri, String> {
+impl TryFrom<&str> for PathUri {
+    type Error = String;
+    fn try_from(path: &str) -> Result<Self, Self::Error> {
         // if the URI is already in the file:///path/to/path format, return it as is
         if path.starts_with("file:///") {
             return Ok(PathUri { path: PathBuf::from(&path[7..]) });
         }
 
         // if can't parse uri then assume it's a path
-        // let uri = parse_uri(path).map_err(|_| "Invalid URI".to_string());
         let uri = Url::parse(path).map_err(|_| "Invalid URI".to_string());
 
         match uri {
             Ok(uri) => {
-                println!("{:?}", uri);
                 if uri.scheme() != "file" {
                     return Err("Invalid URI".to_string());
                 }
@@ -62,7 +116,7 @@ impl UriSchemeTrait for PathUri {
     }
 
     fn from_string(uri: &str) -> Result<Self, String> {
-        PathUri::from_string(uri)
+        PathUri::try_from(uri)
     }
 }
 
@@ -96,15 +150,14 @@ impl UriSchemeTrait for GitUri {
     }
 
     fn from_string(uri: &str) -> Result<Self, String> {
-        GitUri::from_string(uri)
+        GitUri::try_from(uri)
     }
 }
 
-impl GitUri {
-    /// Parse a string into a GitUri
-    pub fn from_string(uri: &str) -> Result<GitUri, String> {
-        // let uri = parse_uri(uri).map_err(|e| e.to_string())?;
+impl TryFrom<&str> for GitUri {
+    type Error = String;
 
+    fn try_from(uri: &str) -> Result<Self, Self::Error> {
         let uri = Url::parse(uri).map_err(|e| e.to_string())?;
         // Let's check if:
         // the scheme is git+* or git://
@@ -138,12 +191,13 @@ impl GitUri {
             return Err("Invalid git URI".to_string());
         }
     }
+}
 
+impl GitUri {
     pub fn from_forge_uri<F: GitForgeUri>(uri: &F) -> GitUri {
         uri.to_git_uri()
     }
 }
-
 impl Display for GitUri {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.url)
