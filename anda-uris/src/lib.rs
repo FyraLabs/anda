@@ -107,6 +107,17 @@ pub trait GitForgeUri {
         Self: Sized;
 }
 
+
+// Blanket implementation for all types that implement GitForgeUri
+impl<T: GitForgeUri> UriSchemeTrait for T {
+    fn to_string_uri(&self) -> String {
+        self.to_git_uri().to_string_uri()
+    }
+    fn from_string(uri: &str) -> Result<Self, String> {
+        T::from_string(uri)
+    }
+}
+
 pub enum GitUriType {
     Git,  // native Git protocol
     Http, // http(s) protocol
@@ -219,16 +230,6 @@ impl GitForgeUri for GitHubUri {
     }
 
     fn from_string(uri: &str) -> Result<GitHubUri, String> {
-        GitHubUri::from_string(uri)
-    }
-}
-
-impl UriSchemeTrait for GitHubUri {
-    fn to_string_uri(&self) -> String {
-        self.path.clone()
-    }
-
-    fn from_string(uri: &str) -> Result<Self, String> {
         GitHubUri::from_string(uri)
     }
 }
