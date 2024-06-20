@@ -7,4 +7,4 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-uri_parser = "0.2.0"
+uri_parser = "~0.2"
