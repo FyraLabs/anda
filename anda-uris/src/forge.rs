@@ -8,10 +8,11 @@
 
 // todo: refactor this further into submodules for each forge when more forges are added or forge APIs are implemented
 
+use url::Url;
+
 use super::GitUri;
 use super::UriSchemeTrait;
 use crate::GitUriType;
-use uri_parser::parse_uri;
 
 /// A Git forge URI that can be converted to a Git URI
 ///
@@ -43,16 +44,19 @@ pub struct GitHubUri {
 
 impl GitHubUri {
     pub fn from_string(uri: &str) -> Result<GitHubUri, String> {
-        let uri = parse_uri(uri).map_err(|e| e.to_string())?;
-        if uri.scheme != "github" {
+        // let uri = parse_uri(uri).map_err(|e| e.to_string())?;
+        let uri = Url::parse(uri).map_err(|e| e.to_string())?;
+        if uri.scheme() != "github" {
             return Err("Invalid GitHub URI".to_string());
         }
-        // unwrap or error out
-        match uri.path {
-            Some(path) => {
-                Ok(GitHubUri { path: path.to_str().expect("Proper parsable path?").to_string() })
-            }
-            None => Err("Invalid GitHub URI".to_string()),
+
+        // Keep ALL path segments, so it returns user/repo
+
+        if !uri.path().is_empty() {
+            let path = uri.path().trim_start_matches('/');
+            Ok(GitHubUri { path: path.to_string() })
+        } else {
+            Err("Invalid GitHub URI".to_string())
         }
     }
 }
@@ -76,16 +80,24 @@ pub struct PagureUri {
 
 impl PagureUri {
     pub fn from_string(uri: &str) -> Result<PagureUri, String> {
-        let uri = parse_uri(uri).map_err(|e| e.to_string())?;
-        if uri.scheme != "pagure" {
+        // let uri = parse_uri(uri).map_err(|e| e.to_string())?;
+        let uri = Url::parse(uri).map_err(|e| e.to_string())?;
+        if uri.scheme() != "pagure" {
             return Err("Invalid Pagure URI".to_string());
         }
         // unwrap or error out
-        match uri.path {
-            Some(path) => {
-                Ok(PagureUri { path: path.to_str().expect("Proper parsable path?").to_string() })
-            }
-            None => Err("Invalid Pagure URI".to_string()),
+        // match uri.path() {
+        //     Some(path) => {
+        //         Ok(PagureUri { path: path.to_str().expect("Proper parsable path?").to_string() })
+        //     }
+        //     None => Err("Invalid Pagure URI".to_string()),
+        // }
+
+        if !uri.path().is_empty() {
+            let path = uri.path().trim_start_matches('/');
+            Ok(PagureUri { path: path.to_string() })
+        } else {
+            Err("Invalid Pagure URI".to_string())
         }
     }
 }
@@ -109,16 +121,23 @@ pub struct GitLabUri {
 
 impl GitLabUri {
     pub fn from_string(uri: &str) -> Result<GitLabUri, String> {
-        let uri = parse_uri(uri).map_err(|e| e.to_string())?;
-        if uri.scheme != "gitlab" {
+        // let uri = parse_uri(uri).map_err(|e| e.to_string())?;
+        let uri = Url::parse(uri).map_err(|e| e.to_string())?;
+        if uri.scheme() != "gitlab" {
             return Err("Invalid GitLab URI".to_string());
         }
         // unwrap or error out
-        match uri.path {
-            Some(path) => {
-                Ok(GitLabUri { path: path.to_str().expect("Proper parsable path?").to_string() })
-            }
-            None => Err("Invalid GitLab URI".to_string()),
+        // match uri.path {
+        //     Some(path) => {
+        //         Ok(GitLabUri { path: path.to_str().expect("Proper parsable path?").to_string() })
+        //     }
+        //     None => Err("Invalid GitLab URI".to_string()),
+        // }
+        if !uri.path().is_empty() {
+            let path = uri.path().trim_start_matches('/');
+            Ok(GitLabUri { path: path.to_string() })
+        } else {
+            Err("Invalid GitLab URI".to_string())
         }
     }
 }
