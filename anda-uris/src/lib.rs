@@ -29,6 +29,17 @@ fn uri_trait_test() {
 
     let uri = anda_uri::<GitHubUri>("github:rust-lang/cargo").unwrap();
     println!("{}", uri.to_string_uri());
+    assert_eq!(uri.to_string_uri(), "git+https://github.com/rust-lang/cargo");
+
+    let uri = anda_uri::<PagureUri>("pagure:fedora/rust").unwrap();
+    println!("{}", uri.to_string_uri());
+    assert_eq!(uri.to_string_uri(), "git+https://pagure.io/fedora/rust");
+
+    let uri = anda_uri::<GitLabUri>("gitlab:fedora/rust").unwrap();
+    println!("{}", uri.to_string_uri());
+    assert_eq!(uri.to_string_uri(), "git+https://gitlab.com/fedora/rust");
+
+    
 }
 pub trait UriSchemeTrait {
     fn to_string_uri(&self) -> String;
