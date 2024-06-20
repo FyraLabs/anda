@@ -27,9 +27,6 @@ fn uri_trait_test() {
 
     assert_eq!(uri.to_string_uri(), "file:///home/user/file.txt");
 
-
-    // todo: blanket UriSchemeTrait implementation for all types that already implement GitForgeUri so it converts into GitUri?
-
     let uri = anda_uri::<GitHubUri>("github:rust-lang/cargo").unwrap();
     println!("{}", uri.to_string_uri());
 }
