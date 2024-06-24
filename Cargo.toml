@@ -23,8 +23,8 @@ tracing-log = "0.2.0"
 color-eyre = "0.6.2"
 walkdir = "2.3.2"
 tempfile = "3.10.1"
-anda-config = { path = "./anda-config", version = "0.1.8" }
-andax = { path = "./andax", version = "0.1.13" }
+anda-config = { path = "./anda-config", version = "0.2.0" }
+andax = { path = "./andax", version = "0.2.0" }
 flatpak = "0.18.1"
 clap-verbosity-flag = "2.2.0"
 clap_complete = "4.5.5"
