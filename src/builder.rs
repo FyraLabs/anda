@@ -97,15 +97,15 @@ pub async fn build_flatpak(
 
     let mut builder = FlatpakBuilder::new(flat_out, flat_repo, flat_bundles);
 
-    for extra_source in &mut flatpak_opts.flatpak_extra_sources {
+    for extra_source in &mut flatpak_opts.extra_sources {
         builder.add_extra_source(PathBuf::from(std::mem::take(extra_source)));
     }
 
-    for extra_source_url in &mut flatpak_opts.flatpak_extra_sources_url {
+    for extra_source_url in &mut flatpak_opts.extra_sources_url {
         builder.add_extra_source_url(std::mem::take(extra_source_url));
     }
 
-    if !flatpak_opts.flatpak_dont_delete_build_dir {
+    if !flatpak_opts.dont_delete_build_dir {
         builder.add_extra_args("--delete-build-dirs".to_string());
     }
 
@@ -270,7 +270,7 @@ pub async fn build_project(
 
     if let Some(rpmbuild) = &proj.rpm {
         if let Some(srcdir) = &rpmbuild.sources {
-            rpm_opts.sources = srcdir.clone();
+            rpm_opts.sources.clone_from(srcdir);
         }
         rpm_opts.no_mirror = rbopts.no_mirrors;
         rpm_opts.def_macro("_disable_source_fetch", "0");

@@ -70,16 +70,16 @@ pub struct FlatpakOpts {
     /// Flatpak: Extra source directory
     /// can be defined multiple times
     #[clap(long, group = "extra-source")]
-    pub flatpak_extra_sources: Vec<String>,
+    pub extra_sources: Vec<String>,
 
     /// Flatpak: Extra source URL
     /// can be defined multiple times
     #[clap(long)]
-    pub flatpak_extra_sources_url: Vec<String>,
+    pub extra_sources_url: Vec<String>,
 
     /// Flatpak: Do not delete the build directory
     #[clap(long, action)]
-    pub flatpak_dont_delete_build_dir: bool,
+    pub dont_delete_build_dir: bool,
 }
 
 #[derive(Args, Debug, Clone, Default)]
