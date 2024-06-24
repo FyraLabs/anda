@@ -250,9 +250,8 @@ fn test_head() {
 }
 
 /// Formats the current time in the format of YYYYMMDD
-use chrono::prelude::*;
 pub fn get_date() -> String {
-    let now: DateTime<Utc> = Utc::now();
+    let now: chrono::DateTime<chrono::Utc> = chrono::Utc::now();
     now.format("%Y%m%d").to_string()
 }
 
