@@ -26,6 +26,7 @@ enum ConsoleOut {
 pub struct BuildEntry {
     pub pkg: String,
     pub arch: String,
+    pub labels: BTreeMap<String, String>,
 }
 
 pub fn fetch_build_entries(config: Manifest) -> Vec<BuildEntry> {
@@ -46,13 +47,21 @@ pub fn fetch_build_entries(config: Manifest) -> Vec<BuildEntry> {
         if let Some(rpm) = project.rpm {
             if rpm.enable_scm.unwrap_or(false) {
                 for arch in &*DEFAULT_ARCHES {
-                    entries.push(BuildEntry { pkg: std::mem::take(&mut name), arch: arch.clone() });
+                    entries.push(BuildEntry {
+                        pkg: std::mem::take(&mut name),
+                        arch: arch.clone(),
+                        labels: project.labels.clone(),
+                    });
                 }
                 continue;
             }
         }
         for arch in project.arches.unwrap_or_else(|| DEFAULT_ARCHES.to_vec()) {
-            entries.push(BuildEntry { pkg: name.clone(), arch: arch.clone() });
+            entries.push(BuildEntry {
+                pkg: name.clone(),
+                arch: arch.clone(),
+                labels: project.labels.clone(),
+            });
         }
     }
 
