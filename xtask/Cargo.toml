@@ -10,4 +10,4 @@ clap_mangen = "0.2.21"
 anda = { path = ".." }
 clap = { version = "4.5.7", features = ["derive", "env"] }
 anyhow = "1.0.81"
-clap_complete = "4.5.5"
+clap_complete = "4.5.6"
