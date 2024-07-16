@@ -26,6 +26,7 @@ pub fn update(
                     if val == v {
                         continue;
                     }
+                    continue 'p; // filtered because label value doesn't match
                 }
                 continue 'p; // for any filters !match labels in proj (strict)
             }
@@ -73,6 +74,10 @@ pub fn update(
     }
 
     tasks.sort_unstable_by(|(_, duration0), (_, duration1)| duration1.cmp(duration0));
+    let pname_len = tasks
+        .iter()
+        .max_by(|(name0, _), (name1, _)| name0.len().cmp(&name1.len()))
+        .map_or(13, |(name, _)| name.len());
     let mut stdout = std::io::stdout();
 
     writeln!(
@@ -83,11 +88,12 @@ pub fn update(
     )
     .unwrap();
     writeln!(stdout, "Here is a list of unfiltered tasks:\n").unwrap();
-    writeln!(stdout, "      Time (ms)   Project").unwrap();
-    writeln!(stdout, "No.   ══════════╤═════════").unwrap();
+    writeln!(stdout, "No.    Time/ms Project/alias").unwrap();
+    writeln!(stdout, "═════╤════════╤═{}", "═".repeat(pname_len.max(13))).unwrap();
 
     for (n, (name, duration)) in tasks.into_iter().enumerate() {
-        writeln!(stdout, "{:<5} {:>9} │ {name}", n + 1, duration.as_millis()).unwrap();
+        let sep = if n % 2 == 0 { '┃' } else { '│' };
+        writeln!(stdout, "{:<5}{sep}{:>7} {sep} {name}", n + 1, duration.as_millis()).unwrap();
     }
 
     Ok(())
