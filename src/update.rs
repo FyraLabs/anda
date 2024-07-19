@@ -21,14 +21,8 @@ pub fn update(
             trace!(name, scr = scr.to_str(), "Th start");
             let mut lbls = std::mem::take(&mut proj.labels);
             lbls.extend(global_lbls.clone());
-            for (k, v) in &fls {
-                if let Some(val) = lbls.get(k) {
-                    if val == v {
-                        continue;
-                    }
-                    continue 'p; // filtered because label value doesn't match
-                }
-                continue 'p; // for any filters !match labels in proj (strict)
+            if fls.iter().any(|(k, v)| lbls.get(k).is_some_and(|val| val != v)) {
+                continue 'p;
             }
             let fls = fls.clone();
             let alias = proj.alias.into_iter().flatten().next().clone().unwrap_or(name);
