@@ -8,18 +8,18 @@ description = "Andaman scripting runtime"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde_json = "~1"
-regex = "~1"
-lazy_static = "~1"
+serde_json = { workspace = true }
+regex = { workspace = true }
+lazy_static = { workspace = true }
 rhai = { version = "1.19.0", features = ["serde", "internals"] }
 ureq = { version = "~2", features = ["json"] }
-tracing = "0.1.37"
-color-eyre = "0.6.2"
+tracing = { workspace = true }
+color-eyre = { workspace = true }
 smartstring = "1.0.1"
 tempfile = "3.10.1"
-anda-config = { version = "0.2.0", path = "../anda-config" }
+anda-config = { workspace = true }
 rhai-fs = "0.1.2"
 rhai-url = "0.0.5"
 hcl-rs = "0.15.0"
 directories = "5.0.1"
-chrono = { version = "0.4.31", default-features = false, features = ["now"] }
+chrono = { workspace = true }

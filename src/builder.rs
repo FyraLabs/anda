@@ -1,6 +1,7 @@
 use crate::{
     artifacts::Artifacts,
     cli::{Cli, FlatpakOpts, OciOpts, PackageType, RpmOpts},
+    cmd,
     flatpak::{FlatpakArtifact, FlatpakBuilder},
     oci::{build_oci, OCIBackend},
     rpm_spec::{RPMBuilder, RPMExtraOptions, RPMOptions},
@@ -77,7 +78,7 @@ pub async fn build_rpm(
 
     let builder = builder.build(spec, opts).await?;
 
-    cmd_lib::run_cmd!(createrepo_c --quiet --update ${repo_path})?;
+    cmd!(? "createrepo_c" "--quiet" "--update" {{repo_path.display()}})?;
 
     Ok(builder)
 }
@@ -160,7 +161,7 @@ pub async fn build_rpm_call(
                 rpm_builder
             );
         } else {
-            cmd_lib::run_cmd!(sh -c $pre_script)?;
+            cmd!(? "sh" "-c" {{ pre_script.display() }})?;
         }
     }
 
@@ -176,7 +177,7 @@ pub async fn build_rpm_call(
                 rpm_builder
             );
         } else {
-            cmd_lib::run_cmd!(sh -c $post_script)?;
+            cmd!(? "sh" "-c" {{ post_script.display() }})?;
         }
     }
 
@@ -264,7 +265,7 @@ pub async fn build_project(
         if pre_script.extension().unwrap_or_default() == "rhai" {
             script!("pre_script", pre_script,);
         } else {
-            cmd_lib::run_cmd!(sh -c $pre_script)?;
+            cmd!(? "sh" "-c" {{ pre_script.display() }})?;
         }
     }
 
@@ -319,7 +320,7 @@ pub async fn build_project(
         if post_script.extension().unwrap_or_default() == "rhai" {
             script!("post_script", post_script,);
         } else {
-            cmd_lib::run_cmd!(sh -c $post_script)?;
+            cmd!(? "sh" "-c" {{ post_script.display() }})?;
         }
     }
 

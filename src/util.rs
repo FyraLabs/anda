@@ -342,3 +342,60 @@ pub const fn convert_filter(filter: LevelFilter) -> tracing_subscriber::filter::
         LevelFilter::Trace => tracing_subscriber::filter::LevelFilter::TRACE,
     }
 }
+
+#[macro_export]
+macro_rules! cmd {
+    (@ $cmd:ident [[$expr:expr]]) => { $cmd.args($expr); };
+    (@ $cmd:ident $tt:tt) => { $cmd.arg(cmd!(# $tt)); };
+    (# [$expr:literal $($arg:expr),*]) => { format!($expr, $($arg),*) };
+    (# {{$expr:expr}}) => { format!("{}", $expr) };
+    (# $expr:expr) => { &$expr };
+    (# $expr:literal) => { $expr };
+
+    (stdout $cmd:literal $($t:tt)+) => {{
+        #[allow(unused_braces)]
+        let cmd = cmd!($cmd $($t)+).output()?;
+        String::from_utf8_lossy(&cmd.stdout).to_string()
+    }};
+    ($cmd:literal $($t:tt)*) => {{
+        #[allow(unused_braces)]
+        let mut cmd = std::process::Command::new($cmd);
+        $(
+            cmd!(@ cmd $t);
+        )*
+        cmd
+    }};
+    ($cmd:block $($t:tt)*) => {{
+        #[allow(unused_braces)]
+        let mut cmd = std::process::Command::new(cmd!(# $cmd));
+        $(
+            cmd!(@ cmd $t);
+        )*
+        cmd
+    }};
+    (?$cmd:tt $($t:tt)*) => {{
+        #[allow(unused_braces)]
+        $crate::util::cmd(cmd!($cmd $($t)*), &[Box::new($cmd), $(Box::new(cmd!(# $t))),*])
+    }};
+}
+
+#[inline]
+pub fn cmd<const N: usize>(
+    mut cmd: std::process::Command,
+    cmd_arr: &[Box<dyn std::fmt::Display>; N],
+) -> color_eyre::Result<()> {
+    use color_eyre::Help;
+    use itertools::Itertools;
+    let cmd_str = cmd_arr.iter().join(" ");
+    tracing::trace!("Running command: `{cmd_str}`");
+    let status = cmd.status()?;
+    Err(match (status, status.code()) {
+        _ if status.success() => return Ok(()),
+        (_, Some(rc)) => color_eyre::Report::msg("Command exited")
+            .warning(lazy_format::lazy_format!("Status code: {rc}"))
+            .with_note(|| format!("Command: `{cmd_str}`"))
+            .note("Status: {status}"),
+        _ => color_eyre::Report::msg("Script terminated unexpectedly")
+            .note(lazy_format::lazy_format!("Status: {status}")),
+    })
+}
