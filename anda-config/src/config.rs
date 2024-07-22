@@ -63,9 +63,115 @@ pub struct Project {
     pub alias: Option<Vec<String>>,
     pub scripts: Option<Vec<PathBuf>>,
     #[serde(default)]
+    #[serde(deserialize_with = "btree_wild_string")]
     pub labels: BTreeMap<String, String>,
     pub update: Option<PathBuf>,
     pub arches: Option<Vec<String>>,
+}
+
+fn btree_wild_string<'de, D>(deserializer: D) -> Result<BTreeMap<String, String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct WildString;
+
+    impl<'de> serde::de::Visitor<'de> for WildString {
+        type Value = String;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("string, integer, bool or unit")
+        }
+
+        fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(v)
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(v.to_owned())
+        }
+
+        fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(format!("{v}"))
+        }
+
+        fn visit_i128<E>(self, v: i128) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(format!("{v}"))
+        }
+
+        fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(format!("{v}"))
+        }
+
+        fn visit_u128<E>(self, v: u128) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(format!("{v}"))
+        }
+
+        fn visit_unit<E>(self) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(String::new())
+        }
+
+        fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(format!("{v}"))
+        }
+    }
+
+    struct RealWildString(String);
+
+    impl<'de> Deserialize<'de> for RealWildString {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            deserializer.deserialize_any(WildString).map(Self)
+        }
+    }
+
+    struct BTreeWildStringVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for BTreeWildStringVisitor {
+        type Value = BTreeMap<String, String>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("map (key: string, value: wild string)")
+        }
+
+        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::MapAccess<'de>,
+        {
+            let mut res = Self::Value::new();
+            while let Some((k, v)) = map.next_entry::<String, RealWildString>()? {
+                res.insert(k, v.0);
+            }
+            Ok(res)
+        }
+    }
+
+    deserializer.deserialize_map(BTreeWildStringVisitor)
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
@@ -297,6 +403,9 @@ mod test_parser {
                     "echo '${env.RUST_LOG}'",
                 ]
             }
+            labels {
+                nightly = 1
+            }
         }
         "#;
 
@@ -304,9 +413,14 @@ mod test_parser {
 
         print!("{body:#?}");
 
-        let config = load_from_string(config);
+        let config = load_from_string(config).unwrap();
 
         println!("{config:#?}");
+
+        assert_eq!(
+            config.project.get("anda").unwrap().labels.get("nightly"),
+            Some(&"1".to_owned())
+        );
     }
 
     #[test]
