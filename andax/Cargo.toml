@@ -4,6 +4,9 @@ version = "0.2.2"
 edition = "2021"
 license = "MIT"
 description = "Andaman scripting runtime"
+repository = "https://github.com/FyraLabs/anda"
+# TODO:
+# readme = "README.md"
 
 [lib]
 path = "./lib.rs"

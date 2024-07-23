@@ -29,7 +29,7 @@ macro_rules! rpmargs {
             "--verbose",
         ]
         .into_iter()
-        .map(|s| s.to_string())
+        .map(|s| s.to_owned())
         .collect()
     };
 }

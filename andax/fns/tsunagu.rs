@@ -40,7 +40,7 @@ pub mod ar {
             .into_json()
             .ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
-        Ok(v["tag_name"].as_str().unwrap_or("").to_string())
+        Ok(v["tag_name"].as_str().unwrap_or("").to_owned())
     }
     #[rhai_fn(return_raw, global)]
     pub fn gh_tag(ctx: NativeCallContext, repo: &str) -> Res<String> {
@@ -56,7 +56,7 @@ pub mod ar {
             .as_array()
             .ok_or_else(|| E::from("gh_tag received not array"))
             .map(|a| a.first().ok_or_else(|| E::from("gh_tag no tags")))??;
-        Ok(v["name"].as_str().unwrap_or("").to_string())
+        Ok(v["name"].as_str().unwrap_or("").to_owned())
     }
     #[rhai_fn(return_raw, global)]
     pub fn gh_commit(ctx: NativeCallContext, repo: &str) -> Res<String> {
@@ -68,7 +68,7 @@ pub mod ar {
             .into_json()
             .ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
-        Ok(v["sha"].as_str().unwrap_or("").to_string())
+        Ok(v["sha"].as_str().unwrap_or("").to_owned())
     }
     #[rhai_fn(return_raw, global)]
     pub fn gh_rawfile(ctx: NativeCallContext, repo: &str, branch: &str, file: &str) -> Res<String> {
@@ -89,7 +89,7 @@ pub mod ar {
             .into_json()
             .ehdl(&ctx)?;
         trace!("Got json from {id}:\n{v}");
-        Ok(v[0]["tag_name"].as_str().unwrap_or("").to_string())
+        Ok(v[0]["tag_name"].as_str().unwrap_or("").to_owned())
     }
     #[rhai_fn(return_raw, global)]
     pub fn gitlab(ctx: NativeCallContext, id: &str) -> Res<String> {
@@ -104,7 +104,7 @@ pub mod ar {
             .into_json()
             .ehdl(&ctx)?;
         trace!("Got json from {id}:\n{v}");
-        Ok(v[0]["name"].as_str().unwrap_or("").to_string())
+        Ok(v[0]["name"].as_str().unwrap_or("").to_owned())
     }
     #[rhai_fn(return_raw, global)]
     pub fn gitlab_tag(ctx: NativeCallContext, id: &str) -> Res<String> {
@@ -126,7 +126,7 @@ pub mod ar {
         .into_json()
         .ehdl(&ctx)?;
         trace!("Got json from {id}:\n{v}");
-        Ok(v["commit"]["id"].as_str().unwrap_or("").to_string())
+        Ok(v["commit"]["id"].as_str().unwrap_or("").to_owned())
     }
     #[rhai_fn(return_raw, global)]
     pub fn gitlab_commit(ctx: NativeCallContext, id: &str, branch: &str) -> Res<String> {

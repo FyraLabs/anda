@@ -72,7 +72,7 @@ pub async fn build_rpm(
         opts.def_macro("autogitcommit", &commit_id.unwrap_or_else(|| "unknown".into()));
 
         opts.def_macro("autogitdate", &date);
-    }
+    };
 
     trace!("Building RPMs with {opts:?}");
 

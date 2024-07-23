@@ -15,12 +15,16 @@ pub fn parse_template(template: &str) -> Result<String, String> {
     Ok(value)
 }
 
-#[test]
-fn test_templ() {
-    let template = "hello ${env.USER}";
-    let result = parse_template(template).unwrap();
-    println!("{result}");
-    // get current username
-    let username = std::env::var("USER").unwrap();
-    assert_eq!(result, format!("hello {username}"));
+#[allow(clippy::missing_panics_doc)]
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_templ() {
+        let template = "hello ${env.USER}";
+        let result = crate::template::parse_template(template).unwrap();
+        println!("{result}");
+        // get current username
+        let username = std::env::var("USER").unwrap();
+        assert_eq!(result, format!("hello {username}"));
+    }
 }

@@ -5,6 +5,9 @@ version = "0.2.2"
 edition = "2021"
 description = "Andaman Build toolchain"
 license = "MIT"
+repository = "https://github.com/FyraLabs/anda"
+readme = "README.md"
+keywords = ["build", "toolchain", "rpm", "flatpak", "oci"]
 exclude = [
     "anda-build",
     "anda-config",
@@ -98,7 +101,6 @@ needless_raw_strings = "warn"
 rc_buffer = "warn"
 rc_mutex = "deny"
 redundant_type_annotations = "warn"
-ref_patterns = "warn"
 renamed_function_params = "warn"
 rest_pat_in_fully_bound_structs = "warn"
 semicolon_outside_block = "warn"

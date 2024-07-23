@@ -20,7 +20,7 @@ pub fn hcl_context() -> Context<'static> {
     let env_func = |args: FuncArgs| {
         let env = std::env::vars().collect::<BTreeMap<String, String>>();
         let key = args[0].as_str().unwrap();
-        let value = env.get(key).unwrap();
+        let value = &env[key];
         Ok(Value::String(value.to_string()))
     };
     let c = GLOBAL_CONTEXT.get_or_init(|| {

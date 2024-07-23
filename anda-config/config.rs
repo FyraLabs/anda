@@ -30,7 +30,7 @@ pub struct Config {
 impl Manifest {
     #[must_use]
     pub fn find_key_for_value(&self, value: &Project) -> Option<&String> {
-        self.project.iter().find_map(|(key, val)| if val == value { Some(key) } else { None })
+        self.project.iter().find_map(|(key, val)| (val == value).then_some(key))
     }
 
     #[must_use]
@@ -39,11 +39,7 @@ impl Manifest {
             || {
                 self.project.iter().find_map(|(_k, v)| {
                     let alias = v.alias.as_ref()?;
-                    if alias.contains(&key.to_string()) {
-                        Some(v)
-                    } else {
-                        None
-                    }
+                    alias.contains(&key.to_owned()).then_some(v)
                 })
             },
             Some,
@@ -69,6 +65,11 @@ pub struct Project {
     pub arches: Option<Vec<String>>,
 }
 
+/// Deserialize the value of the BTreeMap into a String even if they are some other types.
+///
+/// # Errors
+/// This function itself does not raise any errors unless the given value has the wrong type.
+/// However, it inherits errors from `serde::Deserializer`.
 fn btree_wild_string<'de, D>(deserializer: D) -> Result<BTreeMap<String, String>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -204,7 +205,7 @@ pub fn parse_map(input: &str) -> Option<BTreeMap<String, String>> {
             continue;
         }
         let (k, v) = item.split_once('=')?;
-        map.insert(k.to_string(), v.to_string());
+        map.insert(k.to_owned(), v.to_owned());
     }
     Some(map)
 }
@@ -351,13 +352,14 @@ pub fn generate_alias(config: &mut Manifest) {
     }
 
     for (name, project) in &mut config.project {
+        #[allow(clippy::assigning_clones)]
         if config.config.strip_prefix.is_some() || config.config.strip_suffix.is_some() {
             let mut new_name = name.clone();
             if let Some(strip_prefix) = &config.config.strip_prefix {
-                new_name = new_name.strip_prefix(strip_prefix).unwrap_or(&new_name).to_string();
+                new_name = new_name.strip_prefix(strip_prefix).unwrap_or(&new_name).to_owned();
             }
             if let Some(strip_suffix) = &config.config.strip_suffix {
-                new_name = new_name.strip_suffix(strip_suffix).unwrap_or(&new_name).to_string();
+                new_name = new_name.strip_suffix(strip_suffix).unwrap_or(&new_name).to_owned();
             }
 
             if name != &new_name {
@@ -386,6 +388,7 @@ pub const fn check_config(config: Manifest) -> Result<Manifest, ProjectError> {
     Ok(config)
 }
 
+#[allow(clippy::indexing_slicing)]
 #[cfg(test)]
 mod test_parser {
     use super::*;
@@ -417,24 +420,21 @@ mod test_parser {
 
         println!("{config:#?}");
 
-        assert_eq!(
-            config.project.get("anda").unwrap().labels.get("nightly"),
-            Some(&"1".to_owned())
-        );
+        assert_eq!(config.project["anda"].labels.get("nightly"), Some(&"1".to_owned()));
     }
 
     #[test]
     fn test_map() {
-        let m: BTreeMap<String, String> = [("foo".to_string(), "bar".to_string())].into();
+        let m: BTreeMap<String, String> = [("foo".to_owned(), "bar".to_owned())].into();
 
         assert_eq!(parse_map("foo=bar"), Some(m));
 
-        let multieq: BTreeMap<String, String> = [("foo".to_string(), "bar=baz".to_string())].into();
+        let multieq: BTreeMap<String, String> = [("foo".to_owned(), "bar=baz".to_owned())].into();
 
         assert_eq!(parse_map("foo=bar=baz"), Some(multieq));
 
         let multi: BTreeMap<String, String> =
-            [("foo".to_string(), "bar".to_string()), ("baz".to_string(), "qux".to_string())].into();
+            [("foo".to_owned(), "bar".to_owned()), ("baz".to_owned(), "qux".to_owned())].into();
 
         assert_eq!(parse_map("foo=bar,baz=qux"), Some(multi));
     }

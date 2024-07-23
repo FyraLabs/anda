@@ -1,3 +1,5 @@
+#![allow(clippy::indexing_slicing)]
+#![allow(clippy::missing_errors_doc)]
 pub mod build;
 pub mod cfg;
 pub mod io;

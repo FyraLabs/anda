@@ -14,9 +14,12 @@ use rhai::{
     plugin::{exported_module, Dynamic, EvalAltResult, Position},
     Engine, EvalAltResult as RhaiE, NativeCallContext as Ctx, Scope,
 };
+use std::fmt::Write;
 use std::{collections::BTreeMap, io::BufRead, path::Path};
 use tracing::{debug, error, instrument, trace, warn};
 
+/// # Errors
+/// Turns a color_eyre Result into the Rhai Result
 pub fn rf<T>(ctx: &Ctx, res: color_eyre::Result<T>) -> Result<T, Box<RhaiE>>
 where
     T: rhai::Variant + Clone,
@@ -67,9 +70,8 @@ fn module_resolver() -> ModuleResolversCollection {
     if let Some(base_dirs) = BaseDirs::new() {
         let user_libs = base_dirs.home_dir().join(".local/lib/anda");
         if user_libs.is_dir() {
-            let mut local_resolv = rhai::module_resolvers::FileModuleResolver::new_with_path(
-                user_libs.to_str().unwrap(),
-            );
+            let mut local_resolv =
+                rhai::module_resolvers::FileModuleResolver::new_with_path(user_libs);
             local_resolv.enable_cache(true);
             resolv.push(local_resolv);
         }
@@ -108,11 +110,12 @@ fn _gpos(p: Position) -> Option<(usize, usize)> {
     p.line().map(|l| (l, p.position().unwrap_or(0)))
 }
 lazy_static! {
-    static ref WORD_REGEX: Regex = Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").unwrap();
+    static ref WORD_REGEX: Regex = Regex::new("[A-Za-z_][A-Za-z0-9_]*").unwrap();
 }
 
 // proj: project name, scr: script path, nntz (nanitozo): just give me the error
 // pos: error position, rhai_fn: function that caused the issue, fn_src: idk…
+#[allow(clippy::arithmetic_side_effects)]
 #[instrument]
 pub fn traceback(proj: &str, scr: &Path, nntz: TbErr, pos: Position, rhai_fn: &str, fn_src: &str) {
     let Some((line, col)) = _gpos(pos) else {
@@ -154,12 +157,12 @@ pub fn traceback(proj: &str, scr: &Path, nntz: TbErr, pos: Position, rhai_fn: &s
         "🭶".repeat(m)        // underline the word
     );
     if !rhai_fn.is_empty() {
-        code += &format!("\n {lns} └─═ When invoking: {rhai_fn}()");
+        _ = write!(code, "\n {lns} └─═ When invoking: {rhai_fn}()");
     }
     if !fn_src.is_empty() {
-        code += &format!("\n {lns} └─═ Function source: {fn_src}");
+        _ = write!(code, "\n {lns} └─═ Function source: {fn_src}");
     }
-    code += &format!("\n {lns} └─═ {nntz}");
+    _ = write!(code, "\n {lns} └─═ {nntz}");
     code += &hint(&sl, &lns, &nntz, rhai_fn).unwrap_or_default();
     // slow but works!
     let c = code.matches('└').count();
@@ -204,11 +207,11 @@ pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
 }
 
 /// Executes an AndaX script.
-pub fn run<'a>(
+pub fn run<'a, F: FnOnce(&mut Scope<'a>)>(
     name: &'a str,
     scr: &'a Path,
     labels: BTreeMap<String, String>,
-    f: impl FnOnce(&mut Scope<'a>),
+    f: F,
 ) -> Option<Scope<'a>> {
     let (en, mut sc) = gen_en();
     f(&mut sc);
@@ -237,6 +240,7 @@ macro_rules! gen_h {
     ($lns:ident) => {
         macro_rules! h {
             ($s:expr) => {
+                #[allow(clippy::arithmetic_side_effects)]
                 let left = " ".repeat(7 + $lns.len());
                 let mut s = String::new();
                 let mut first = true;
@@ -247,7 +251,7 @@ macro_rules! gen_h {
                         first = false;
                         continue;
                     }
-                    s += &format!("\n{left}...: {l}");
+                    _ = write!(s, "\n{left}...: {l}");
                 }
                 return Some(s);
             };
@@ -284,17 +288,20 @@ fn hint(sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> 
         Rhai(err) => hint_ear(sl, lns, err, rhai_fn),
     }
 }
+/// # Panics
+/// This function will never panic.
 fn hint_ear(sl: &str, lns: &str, ear: &EvalAltResult, rhai_fn: &str) -> Option<String> {
     use EvalAltResult::{ErrorMismatchOutputType, ErrorRuntime};
     trace!(?rhai_fn, "Hinting for EvalAltResult");
     gen_h!(lns);
     match ear {
         ErrorRuntime(d, _) => {
+            // TODO: add sugar to upstream rhai
             if d.is_string() {
-                let s = d.clone().into_string().expect("sting.");
+                let Ok(s) = d.clone().into_immutable_string() else { unreachable!() };
                 if s == "env(`GITHUB_TOKEN`) not present" {
                     h!(
-                        r"gh() requires the environment variable `GITHUB_TOKEN` to be set as a Github token so as to avoid rate-limits:
+                        "gh() requires the environment variable `GITHUB_TOKEN` to be set as a Github token so as to avoid rate-limits:
                         https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting
                         To create a Github token, see:
                         https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"

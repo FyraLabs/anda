@@ -4,6 +4,9 @@ description = "Configuration module for Andaman"
 version = "0.2.2"
 edition = "2021"
 license = "MIT"
+repository = "https://github.com/FyraLabs/anda"
+# TODO:
+# readme = "README.md"
 
 [lib]
 path = "./lib.rs"

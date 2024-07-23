@@ -33,6 +33,10 @@ impl Display for TbErr {
 }
 
 pub trait AndaxRes<T> {
+    /// Error handling function for Rhai functions written in Rust.
+    ///
+    /// # Errors
+    /// This turns any `Result` type into the Rhai result type.
     fn ehdl(self, ctx: &rhai::NativeCallContext) -> Result<T, Box<EvalAltResult>>;
 }
 
