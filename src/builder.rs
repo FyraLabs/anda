@@ -241,7 +241,7 @@ pub fn build_oci_call(
         );
 
         for artifact in art {
-            artifact_store.add(artifact.to_string(), art_type);
+            artifact_store.add(artifact.clone(), art_type);
         }
     }
 }
@@ -279,7 +279,7 @@ pub async fn build_project(
         }
         rpm_opts.no_mirror = rbopts.no_mirrors;
         rpm_opts.def_macro("_disable_source_fetch", "0");
-        rpm_opts.config_opts.push("external_buildrequires=True".to_string());
+        rpm_opts.config_opts.push("external_buildrequires=True".to_owned());
 
         if let Some(bool) = rpmbuild.enable_scm {
             rpm_opts.scm_enable = bool;
@@ -299,7 +299,7 @@ pub async fn build_project(
 
         if rbopts.mock_config.is_none() {
             if let Some(mockcfg) = &rbopts.mock_config {
-                rpm_opts.mock_config = Some(mockcfg.to_string());
+                rpm_opts.mock_config = Some(mockcfg.to_owned());
             }
             // TODO: Implement global settings
         }
@@ -346,7 +346,7 @@ async fn _build_pkg(
             if let Some(rpmbuild) = &proj.rpm {
                 build_rpm_call(cli, rpm_opts, rpmbuild, rbopts.rpm_builder.into(), arts, rbopts)
                     .await
-                    .with_context(|| "Failed to build RPMs".to_string())?;
+                    .with_context(|| "Failed to build RPMs".to_owned())?;
             } else {
                 println!("No RPM build defined for project");
             }
@@ -367,7 +367,7 @@ async fn _build_pkg(
             if let Some(flatpak) = &proj.flatpak {
                 build_flatpak_call(cli, flatpak, arts, fpopts.clone())
                     .await
-                    .with_context(|| "Failed to build Flatpaks".to_string())?;
+                    .with_context(|| "Failed to build Flatpaks".to_owned())?;
             } else {
                 println!("No Flatpak build defined for project");
             }
@@ -388,12 +388,12 @@ async fn build_all(
     if let Some(rpmbuild) = &project.rpm {
         build_rpm_call(cli, rpm_opts, rpmbuild, rbopts.rpm_builder.into(), artifacts, rbopts)
             .await
-            .with_context(|| "Failed to build RPMs".to_string())?;
+            .with_context(|| "Failed to build RPMs".to_owned())?;
     }
     if let Some(flatpak) = &project.flatpak {
         build_flatpak_call(cli, flatpak, artifacts, flatpak_opts.clone())
             .await
-            .with_context(|| "Failed to build Flatpaks".to_string())?;
+            .with_context(|| "Failed to build Flatpaks".to_owned())?;
     }
     if let Some(podman) = project.podman.as_mut() {
         build_oci_call(OCIBackend::Podman, cli, podman, artifacts);
