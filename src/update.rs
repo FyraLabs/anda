@@ -8,6 +8,8 @@ use std::{
 };
 use tracing::{debug, error, instrument, trace};
 
+// TODO: update script count?
+#[allow(clippy::arithmetic_side_effects)]
 #[instrument(skip(cfg))]
 pub fn update(
     cfg: Manifest,
@@ -39,7 +41,7 @@ pub fn update(
                     }
                     sc.push("filters", filters);
                     if let Some(rpm) = &proj.rpm {
-                        sc.push("rpm", RPMSpec::new(name.to_string(), &scr, &rpm.spec));
+                        sc.push("rpm", RPMSpec::new(name.to_owned(), &scr, &rpm.spec));
                     }
                 });
                 let duration = std::time::SystemTime::now().duration_since(start).unwrap();
@@ -60,7 +62,7 @@ pub fn update(
 
     for hdl in handlers {
         let th = hdl.thread();
-        let name = th.name().expect("No name for andax thread??").to_string();
+        let name = th.name().expect("No name for andax thread??").to_owned();
         match hdl.join() {
             Ok(duration) => tasks.push((name, duration)),
             Err(e) => error!("Panic @ `{name}` : {e:#?}"),
@@ -99,7 +101,7 @@ pub fn run_scripts(scripts: &[String], labels: BTreeMap<String, String>) -> Resu
     for scr in scripts {
         trace!(scr, "Th start");
         let labels = labels.clone();
-        handlers.push(Builder::new().name(scr.to_string()).spawn(move || {
+        handlers.push(Builder::new().name(scr.to_owned()).spawn(move || {
             let th = thread::current();
             let name = th.name().expect("No name for andax thread??");
             run(name, &std::path::PathBuf::from(name), labels, |_| {});
@@ -110,7 +112,7 @@ pub fn run_scripts(scripts: &[String], labels: BTreeMap<String, String>) -> Resu
 
     for hdl in handlers {
         let th = hdl.thread();
-        let name = th.name().expect("No name for andax thread??").to_string();
+        let name = th.name().expect("No name for andax thread??").to_owned();
         if let Err(e) = hdl.join() {
             error!("Panic @ `{name}` : {e:#?}");
         }

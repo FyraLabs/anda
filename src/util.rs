@@ -13,7 +13,7 @@ use tracing::{debug, info};
 lazy_static::lazy_static! {
     static ref BUILDARCH_REGEX: Regex = Regex::new("BuildArch:\\s*(.+)").unwrap();
     static ref EXCLUSIVEARCH_REGEX: Regex = Regex::new("ExclusiveArch:\\s*(.+)").unwrap();
-    static ref DEFAULT_ARCHES: [String; 2] = ["x86_64".to_string(), "aarch64".to_string()];
+    static ref DEFAULT_ARCHES: [String; 2] = ["x86_64".to_owned(), "aarch64".to_owned()];
 }
 
 #[derive(Copy, Clone)]
@@ -232,7 +232,7 @@ pub fn get_changed_files(path: &Path) -> Option<Vec<String>> {
     let mut changed_files = vec![];
     diff.foreach(
         &mut |delta, _| {
-            changed_files.push(delta.new_file().path().unwrap().to_str().unwrap().to_string());
+            changed_files.push(delta.new_file().path().unwrap().to_str().unwrap().to_owned());
             true
         },
         None,
@@ -262,7 +262,7 @@ use tracing::trace;
 pub fn init(path: &Path, yes: bool) -> Result<()> {
     // create the directory if not exists
     if !path.exists() {
-        std::fs::create_dir(path)?;
+        std::fs::create_dir_all(path)?;
     }
 
     let mut config = Manifest { project: BTreeMap::new(), config: anda_config::Config::default() };
@@ -291,7 +291,7 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
                             rpm: Some(RpmBuild { spec: path.to_path_buf(), ..Default::default() }),
                             ..Default::default()
                         };
-                        config.project.insert(project_name.to_string(), project);
+                        config.project.insert(project_name.to_owned(), project);
                     }
                 }
             }
@@ -322,7 +322,7 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
                     let project = Project { docker: Some(docker), ..Default::default() };
 
                     // increment counter
-                    config.project.insert("docker".to_string(), project);
+                    config.project.insert("docker".to_owned(), project);
                 }
             }
         }
@@ -355,7 +355,7 @@ macro_rules! cmd {
     (stdout $cmd:literal $($t:tt)+) => {{
         #[allow(unused_braces)]
         let cmd = cmd!($cmd $($t)+).output()?;
-        String::from_utf8_lossy(&cmd.stdout).to_string()
+        String::from_utf8_lossy(&cmd.stdout)
     }};
     ($cmd:literal $($t:tt)*) => {{
         #[allow(unused_braces)]
@@ -379,6 +379,10 @@ macro_rules! cmd {
     }};
 }
 
+/// Run a command and perform logging.
+///
+/// # Errors
+/// This function transform command failures into better error messages.
 #[inline]
 pub fn cmd<const N: usize>(
     mut cmd: std::process::Command,

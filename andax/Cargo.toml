@@ -26,3 +26,6 @@ rhai-url = "0.0.5"
 hcl-rs = "0.15.0"
 directories = "5.0.1"
 chrono = { workspace = true }
+
+[lints]
+workspace = true

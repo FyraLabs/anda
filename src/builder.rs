@@ -83,6 +83,10 @@ pub async fn build_rpm(
     Ok(builder)
 }
 
+/// Build a flatpak package.
+///
+/// # Errors
+/// - cannot create bundle
 pub async fn build_flatpak(
     output_dir: &Path,
     manifest: &Path,
@@ -107,7 +111,7 @@ pub async fn build_flatpak(
     }
 
     if !flatpak_opts.dont_delete_build_dir {
-        builder.add_extra_args("--delete-build-dirs".to_string());
+        builder.add_extra_args("--delete-build-dirs".to_owned());
     }
 
     let flatpak = builder.build(manifest).await?;

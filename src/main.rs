@@ -1,8 +1,4 @@
 //! Andaman, a package build toolchain for RPM, OCI and Flatpak.
-#![warn(clippy::pedantic)]
-#![warn(clippy::nursery)]
-#![warn(clippy::disallowed_types)]
-#![warn(missing_docs)]
 #![allow(clippy::module_name_repetitions)]
 #![deny(rust_2018_idioms)]
 
@@ -22,6 +18,9 @@ use color_eyre::{eyre::eyre, Result};
 use std::{collections::BTreeMap, io, mem::take};
 use tracing::{debug, trace};
 
+#[allow(clippy::unwrap_in_result)]
+#[allow(clippy::missing_errors_doc)]
+#[allow(clippy::missing_panics_doc)]
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;

@@ -18,8 +18,8 @@ pub enum FlatpakArtifact {
 impl Display for FlatpakArtifact {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Ref(ref r) => write!(f, "ref {r}"),
-            Self::Bundle(ref b) => write!(f, "bundle {}", b.display()),
+            Self::Ref(r) => write!(f, "ref {r}"),
+            Self::Bundle(b) => write!(f, "bundle {}", b.display()),
         }
     }
 }

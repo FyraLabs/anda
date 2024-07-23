@@ -1,12 +1,9 @@
 //! AndaX, an embedded scripting system powered by Rhai.
 //!
 //! To start running a script, use `run()`.
-#![warn(clippy::pedantic)]
-#![warn(clippy::nursery)]
-#![warn(clippy::disallowed_types)]
-#![warn(missing_docs)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::module_name_repetitions)]
+// Since Rhai relies on implicit lifetimes a lot, we are not going to deny rust_2018_idioms.
 mod error;
 mod fns;
 mod run;

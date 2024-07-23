@@ -67,7 +67,7 @@ pub fn build_oci(
     version: &str,
     context: &str,
 ) -> Vec<String> {
-    let mut builder = OCIBuilder::new(context.to_string(), tag.to_string(), version.to_string());
+    let mut builder = OCIBuilder::new(context.to_owned(), tag.to_owned(), version.to_owned());
     builder.add_label(format!("com.fyralabs.anda.version={}", env!("CARGO_PKG_VERSION")));
 
     builder.build(dockerfile, backend, latest);

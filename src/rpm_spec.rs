@@ -124,8 +124,12 @@ impl From<crate::cli::RPMBuilder> for RPMBuilder {
 }
 
 impl RPMBuilder {
-    /// WARN: this will consume `options`!
+    /// Build the RPMs.
+    ///
+    /// # Errors
+    /// This inherits errors from `RPMSpecBackend::build()`.
     pub async fn build(&self, spec: &Path, options: &mut RPMOptions) -> Result<Vec<PathBuf>> {
+        // TODO: take ownership of `options`
         if matches!(self, Self::Mock) {
             let mut mock = MockBackend::new(
                 take(&mut options.mock_config),
@@ -201,7 +205,7 @@ pub trait RPMExtraOptions {
 
     /// Defines a macro
     fn def_macro(&mut self, name: &str, value: &str) {
-        self.macros_mut().insert(name.to_string(), value.to_string());
+        self.macros_mut().insert(name.to_owned(), value.to_owned());
     }
     /// Undefines a macro
     fn undef_macro(&mut self, name: &str) {

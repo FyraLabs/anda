@@ -1,1 +1,6 @@
 disallowed-types = ["std::sync::Mutex"]
+disallowed-names = ["binding", ".."]
+disallowed-macros = ["cmd_lib::run_cmd", "cmd_lib::run_fun"]
+check-private-items = true
+enforce-iter-loop-reborrow = true
+excessive-nesting-threshold = 5
