@@ -68,13 +68,6 @@ pub fn fetch_build_entries(config: Manifest) -> Vec<BuildEntry> {
     entries
 }
 
-// #[test]
-// fn test_entries() {
-//     let config = anda_config::load_from_file(&PathBuf::from("anda.hcl"));
-
-//     fetch_build_entries(config.unwrap());
-// }
-
 /// Command Logging
 ///
 /// This trait implements custom logging for commands in a format of `{command} | {line}`
@@ -244,11 +237,6 @@ pub fn get_changed_files(path: &Path) -> Option<Vec<String>> {
     Some(changed_files)
 }
 
-#[test]
-fn test_head() {
-    println!("{:?}", get_changed_files(Path::new(".")));
-}
-
 /// Formats the current time in the format of YYYYMMDD
 pub fn get_date() -> String {
     let now: chrono::DateTime<chrono::Utc> = chrono::Utc::now();
@@ -274,61 +262,61 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
         let entry = entry?;
         let path = entry.path().strip_prefix("./").unwrap();
 
-        if path.is_file() {
-            if path.extension().unwrap_or_default().eq("spec") {
-                {
-                    debug!("Found spec file: {}", path.display());
-                    // ask if we want to add spec to project
-                    let add_spec = yes
-                        || prompt_default(
-                            format!("Add spec file `{}` to manifest?", path.display()),
-                            true,
-                        )?;
+        if !path.is_file() {
+            continue;
+        }
 
-                    if add_spec {
-                        let project_name = path.file_stem().unwrap().to_str().unwrap();
-                        let project = Project {
-                            rpm: Some(RpmBuild { spec: path.to_path_buf(), ..Default::default() }),
-                            ..Default::default()
-                        };
-                        config.project.insert(project_name.to_owned(), project);
-                    }
-                }
-            }
-
-            let mut counter = 0;
-            if path.extension().unwrap_or_default().eq("dockerfile")
-                || path.file_name().unwrap_or_default().to_str().unwrap().eq("Dockerfile")
-            {
-                let add_oci = yes
+        match path.extension().unwrap_or_default().as_encoded_bytes() {
+            b"spec" => {
+                debug!("Found spec file: {}", path.display());
+                if yes
                     || prompt_default(
-                        format!("Add Dockerfile `{}` to manifest?", path.display()),
+                        format!("Add spec file `{}` to manifest?", path.display()),
                         true,
-                    )?;
-
-                if add_oci {
-                    // create a new project called docker
-
-                    let mut docker = Docker::default();
-
-                    let image = DockerImage {
-                        dockerfile: Some(path.display().to_string()),
+                    )?
+                {
+                    let project_name = path.file_stem().unwrap().to_str().unwrap();
+                    let project = Project {
+                        rpm: Some(RpmBuild { spec: path.to_path_buf(), ..Default::default() }),
                         ..Default::default()
                     };
-                    counter += 1;
-                    let image_name = format!("docker-{counter}");
-                    docker.image.insert(image_name, image);
-
-                    let project = Project { docker: Some(docker), ..Default::default() };
-
-                    // increment counter
-                    config.project.insert("docker".to_owned(), project);
+                    config.project.insert(project_name.to_owned(), project);
                 }
             }
+            b"dockerfile" => add_dockerfile_to_manifest(yes, path, &mut config)?,
+            _ if path.file_name().is_some_and(|f| f.eq("Dockerfile")) => {
+                add_dockerfile_to_manifest(yes, path, &mut config)?;
+            }
+            _ => {}
         }
     }
     println!("{}", anda_config::config::to_string(&config)?);
 
+    Ok(())
+}
+
+fn add_dockerfile_to_manifest(
+    yes: bool,
+    path: &Path,
+    config: &mut Manifest,
+) -> Result<(), color_eyre::eyre::Error> {
+    let add_oci =
+        yes || prompt_default(format!("Add Dockerfile `{}` to manifest?", path.display()), true)?;
+    if add_oci {
+        // create a new project called docker
+
+        let mut docker = Docker::default();
+
+        let image =
+            DockerImage { dockerfile: Some(path.display().to_string()), ..Default::default() };
+        let image_name = "docker-1".to_owned();
+        docker.image.insert(image_name, image);
+
+        let project = Project { docker: Some(docker), ..Default::default() };
+
+        // increment counter
+        config.project.insert("docker".to_owned(), project);
+    };
     Ok(())
 }
 
@@ -402,4 +390,21 @@ pub fn cmd<const N: usize>(
         _ => color_eyre::Report::msg("Script terminated unexpectedly")
             .note(lazy_format::lazy_format!("Status: {status}")),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_head() {
+        println!("{:?}", get_changed_files(Path::new(".")));
+    }
+    #[test]
+    fn test_entries() {
+        let config = anda_config::load_from_file(&PathBuf::from("anda.hcl"));
+
+        fetch_build_entries(config.unwrap());
+    }
 }
