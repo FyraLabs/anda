@@ -1,6 +1,6 @@
 use anda_config::Manifest;
 use andax::{run, RPMSpec};
-use color_eyre::Result;
+use color_eyre::{Result, Section};
 use itertools::Itertools;
 use std::io::Write;
 use std::{
@@ -20,7 +20,7 @@ pub fn update(
     let proj_len = cfg.project.len();
     let mut scr_len = 0;
     'p: for (name, mut proj) in cfg.project {
-        let Some(scr) = &proj.update else { continue };
+        let Some(scr) = proj.update else { continue };
         scr_len += 1;
         trace!(name, scr = scr.to_str(), "Th start");
         let mut lbls = std::mem::take(&mut proj.labels);
@@ -33,14 +33,11 @@ pub fn update(
         handlers.push(Builder::new().name(alias).spawn(move || {
             let th = thread::current();
             let name = th.name().expect("No name for andax thread??");
-            let scr = proj.update.expect("No update script? How did I get here??");
             let start = std::time::Instant::now();
             let sc = run(name, &scr, lbls, |sc| {
                 // we have to do it here as `Dynamic` in andax::Map nu Sync impl
-                let mut filters = andax::Map::new();
-                for (k, v) in fls {
-                    filters.insert(k.into(), v.into());
-                }
+                let filters =
+                    fls.into_iter().map(|(k, v)| (k.into(), v.into())).collect::<andax::Map>();
                 sc.push("filters", filters);
                 if let Some(rpm) = &proj.rpm {
                     sc.push("rpm", RPMSpec::new(name.to_owned(), &scr, &rpm.spec));
@@ -63,6 +60,7 @@ pub fn update(
         return Ok(());
     }
     debug!("Joining {hdl_len} threads");
+    let mut panicked = Vec::with_capacity(0);
 
     let tasks = handlers
         .into_iter()
@@ -71,6 +69,7 @@ pub fn update(
             let name = th.name().expect("No name for andax thread??").to_owned();
             hdl.join()
                 .inspect_err(|_| error!("Thread `{name}` panicked. This is most likely a bug."))
+                .inspect_err(|_| panicked.push(name.clone()))
                 .ok()
                 .map(|duration| (name, duration))
         })
@@ -95,6 +94,14 @@ pub fn update(
     for (n, (name, duration)) in tasks.enumerate() {
         let sep = if n % 2 == 0 { '┃' } else { '│' };
         writeln!(stdout, "{:<5}{sep}{:>7} {sep} {name}", n + 1, duration).unwrap();
+    }
+
+    if !panicked.is_empty() {
+        return Err(panicked.into_iter().fold(
+            color_eyre::Report::msg("One of the threads panicked while running the update script")
+                .suggestion("Bug report: https://github.com/FyraLabs/anda/issues"),
+            |err, name| err.warning(format!("Project/alias: {name}")),
+        ));
     }
 
     Ok(())
