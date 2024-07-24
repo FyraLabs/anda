@@ -34,7 +34,7 @@ pub fn update(
             let th = thread::current();
             let name = th.name().expect("No name for andax thread??");
             let scr = proj.update.expect("No update script? How did I get here??");
-            let start = std::time::SystemTime::now();
+            let start = std::time::Instant::now();
             let sc = run(name, &scr, lbls, |sc| {
                 // we have to do it here as `Dynamic` in andax::Map nu Sync impl
                 let mut filters = andax::Map::new();
@@ -46,7 +46,7 @@ pub fn update(
                     sc.push("rpm", RPMSpec::new(name.to_owned(), &scr, &rpm.spec));
                 }
             });
-            let duration = std::time::SystemTime::now().duration_since(start).unwrap();
+            let duration = start.elapsed().as_millis();
             if let Some(sc) = sc {
                 let rpm: RPMSpec = sc.get_value("rpm").expect("No rpm object in rhai scope");
                 if let Err(e) = rpm.write() {
@@ -94,7 +94,7 @@ pub fn update(
 
     for (n, (name, duration)) in tasks.enumerate() {
         let sep = if n % 2 == 0 { '┃' } else { '│' };
-        writeln!(stdout, "{:<5}{sep}{:>7} {sep} {name}", n + 1, duration.as_millis()).unwrap();
+        writeln!(stdout, "{:<5}{sep}{:>7} {sep} {name}", n + 1, duration).unwrap();
     }
 
     Ok(())
