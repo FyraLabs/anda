@@ -64,7 +64,7 @@ pub fn update(
     }
     debug!("Joining {hdl_len} threads");
 
-    let mut tasks = handlers
+    let tasks = handlers
         .into_iter()
         .filter_map(|hdl| {
             let th = hdl.thread();
