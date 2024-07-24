@@ -9,6 +9,11 @@ use std::{
 };
 use tracing::{debug, error, instrument, trace};
 
+/// Return true only if the project `lbls` does not have the key or the value does not match.
+fn filter_project(lbls: &BTreeMap<String, String>) -> impl FnMut((&String, &String)) -> bool + '_ {
+    |(k, v)| lbls.get(k).map_or(true, |val| val != v)
+}
+
 #[allow(clippy::arithmetic_side_effects)]
 #[instrument(skip(cfg))]
 pub fn update(
@@ -19,15 +24,15 @@ pub fn update(
     let mut handlers = vec![];
     let proj_len = cfg.project.len();
     let mut scr_len = 0;
-    'p: for (name, mut proj) in cfg.project {
+    for (name, mut proj) in cfg.project {
         let Some(scr) = proj.update else { continue };
         scr_len += 1;
-        trace!(name, scr = scr.to_str(), "Th start");
         let mut lbls = std::mem::take(&mut proj.labels);
         lbls.extend(global_lbls.clone());
-        if fls.iter().any(|(k, v)| lbls.get(k).map_or(true, |val| val != v)) {
-            continue 'p;
+        if fls.iter().any(filter_project(&lbls)) {
+            continue;
         }
+        trace!(name, scr = scr.to_str(), "Th start");
         let fls = fls.clone();
         let alias = proj.alias.into_iter().flatten().next().clone().unwrap_or(name);
         handlers.push(Builder::new().name(alias).spawn(move || {
@@ -131,4 +136,26 @@ pub fn run_scripts(scripts: &[String], labels: BTreeMap<String, String>) -> Resu
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_filter() {
+        let transform = |arr: &[(&str, &str)]| {
+            arr.iter()
+                .map(|(l, r)| ((*l).to_owned(), (*r).to_owned()))
+                .collect::<BTreeMap<String, String>>()
+        };
+        // update only nightly packages
+        let lbls = std::iter::once(("nightly", "1")).map(|(l, r)| (l.into(), r.into())).collect();
+        let mut test1 = filter_project(&lbls);
+        for (k, v) in transform(&[("nightly", "0"), ("hai", "bai"), ("large", "1")]) {
+            assert!(test1((&k, &v)));
+        }
+        for (k, v) in transform(&[("nightly", "1")]) {
+            assert!(!test1((&k, &v)));
+        }
+    }
 }
