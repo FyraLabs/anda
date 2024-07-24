@@ -25,7 +25,7 @@ pub fn update(
         trace!(name, scr = scr.to_str(), "Th start");
         let mut lbls = std::mem::take(&mut proj.labels);
         lbls.extend(global_lbls.clone());
-        if fls.iter().any(|(k, v)| lbls.get(k).is_some_and(|val| val != v)) {
+        if fls.iter().any(|(k, v)| lbls.get(k).map_or(true, |val| val != v)) {
             continue 'p;
         }
         let fls = fls.clone();
