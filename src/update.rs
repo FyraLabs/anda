@@ -75,9 +75,9 @@ pub fn update(
                 .map(|duration| (name, duration))
         })
         .sorted_unstable_by(|(_, duration0), (_, duration1)| duration1.cmp(duration0));
-    let task_len = tasks.by_ref().count();
+    let task_len = tasks.len();
     let pname_len = tasks
-        .by_ref()
+        .clone()
         .max_by(|(name0, _), (name1, _)| name0.len().cmp(&name1.len()))
         .map_or(13, |(name, _)| name.len());
     let mut stdout = std::io::stdout();
