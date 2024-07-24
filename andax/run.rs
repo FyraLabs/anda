@@ -239,13 +239,12 @@ macro_rules! gen_h {
     // nyeshu
     ($lns:ident) => {
         macro_rules! h {
-            ($s:expr) => {
+            ($s:expr) => {{
                 #[allow(clippy::arithmetic_side_effects)]
                 let left = " ".repeat(7 + $lns.len());
                 let mut s = String::new();
                 let mut first = true;
                 for l in $s.lines() {
-                    let l = l.trim();
                     if first {
                         s = format!("\n {} └─═ Hint: {l}", $lns);
                         first = false;
@@ -254,7 +253,7 @@ macro_rules! gen_h {
                     _ = write!(s, "\n{left}...: {l}");
                 }
                 return Some(s);
-            };
+            }};
         }
     };
 }
@@ -275,6 +274,9 @@ fn hint(sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> 
             {
                 h!("Check if the repo is valid. Only releases are supported; use gh_tag() for tags.");
             }
+            if rhai_fn.starts_with("gh") && s.ends_with(": status code 403") {
+                h!("Maybe you have reached the ratelimit: https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api");
+            }
             None
         }
         Report(report) => {
@@ -291,21 +293,15 @@ fn hint(sl: &str, lns: &str, nanitozo: &TbErr, rhai_fn: &str) -> Option<String> 
 /// # Panics
 /// This function will never panic.
 fn hint_ear(sl: &str, lns: &str, ear: &EvalAltResult, rhai_fn: &str) -> Option<String> {
-    use EvalAltResult::{ErrorMismatchOutputType, ErrorRuntime};
+    use rhai::ParseErrorType::MissingToken;
+    use EvalAltResult::{ErrorMismatchOutputType, ErrorParsing, ErrorRuntime};
     trace!(?rhai_fn, "Hinting for EvalAltResult");
     gen_h!(lns);
     match ear {
         ErrorRuntime(d, _) => {
-            // TODO: add sugar to upstream rhai
-            if d.is_string() {
-                let Ok(s) = d.clone().into_immutable_string() else { unreachable!() };
-                if s == "env(`GITHUB_TOKEN`) not present" {
-                    h!(
-                        "gh() requires the environment variable `GITHUB_TOKEN` to be set as a Github token so as to avoid rate-limits:
-                        https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting
-                        To create a Github token, see:
-                        https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
-                    );
+            if let Some(s) = d.read_lock::<String>() {
+                if s.as_str() == "env(`GITHUB_TOKEN`) not present" {
+                    h!(include_str!("hints/gh_token_not_present.txt"))
                 }
             }
         }
@@ -313,6 +309,9 @@ fn hint_ear(sl: &str, lns: &str, ear: &EvalAltResult, rhai_fn: &str) -> Option<S
             if sl.contains("json(") && req == "map" && actual == "array" {
                 h!("If the json root is an array `[]`, use json_arr() instead.");
             }
+        }
+        ErrorParsing(MissingToken(token, _), _) if token == ";" => {
+            h!("You most likely forgot to add a semicolon to the end of the last line.");
         }
         _ => {}
     }

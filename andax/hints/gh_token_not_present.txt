@@ -1,0 +1,4 @@
+gh() requires the environment variable `GITHUB_TOKEN` to be set as a Github token so as to avoid rate-limits:
+https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+To create a Github token, see:
+https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token
