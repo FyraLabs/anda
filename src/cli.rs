@@ -191,10 +191,10 @@ pub enum Command {
     Update {
         /// Labels to pass to the scripts
         #[clap(short, long)]
-        labels: Option<String>,
+        labels: Vec<String>,
         /// Only run update scripts in project with the specified labels
         #[clap(short, long)]
-        filters: Option<String>,
+        filters: Vec<String>,
     },
 
     /// Run .rhai scripts
