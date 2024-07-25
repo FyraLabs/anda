@@ -10,8 +10,13 @@ use std::{
 use tracing::{debug, error, instrument, trace};
 
 /// Return true only if the project `lbls` does not have the key or the value does not match.
-fn filter_project(lbls: &BTreeMap<String, String>) -> impl FnMut(&(String, String)) -> bool + '_ {
+fn filter_project(lbls: &BTreeMap<String, String>) -> impl Fn(&(String, String)) -> bool + '_ {
     |(k, v)| lbls.get(k).map_or(true, |val| val != v)
+}
+
+/// Return true only if `lbls` have the key and the value matches.
+fn exclude_project(lbls: &BTreeMap<String, String>) -> impl Fn(&(String, String)) -> bool + '_ {
+    |(k, v)| lbls.get(k).is_some_and(|val| val == v)
 }
 
 #[allow(clippy::arithmetic_side_effects)]
@@ -20,6 +25,7 @@ pub fn update(
     cfg: Manifest,
     global_lbls: Vec<(String, String)>,
     fls: Vec<Vec<(String, String)>>,
+    excls: Vec<Vec<(String, String)>>,
 ) -> Result<()> {
     let mut handlers = vec![];
     let proj_len = cfg.project.len();
@@ -30,6 +36,9 @@ pub fn update(
         let mut lbls = std::mem::take(&mut proj.labels);
         lbls.extend(global_lbls.clone());
         if fls.iter().all(|fls| fls.iter().any(filter_project(&lbls))) {
+            continue;
+        }
+        if excls.iter().any(|excls| excls.iter().all(exclude_project(&lbls))) {
             continue;
         }
         trace!(name, scr = scr.to_str(), "Th start");

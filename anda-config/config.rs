@@ -203,8 +203,11 @@ pub fn parse_kv(input: &str) -> impl Iterator<Item = Option<(String, String)>> +
         .map(|item| item.split_once('=').map(|(l, r)| (l.to_owned(), r.to_owned())))
 }
 
+pub fn parse_filters(filters: &[String]) -> Option<Vec<Vec<(String, String)>>> {
+    filters.iter().map(std::ops::Deref::deref).map(crate::parse_kv).map(Iterator::collect).collect()
+}
+
 /// Turn a string into a BTreeMap<String, String>
-#[must_use]
 pub fn parse_labels<'a, I: Iterator<Item = &'a str>>(labels: I) -> Option<Vec<(String, String)>> {
     labels.flat_map(parse_kv).collect()
 }
