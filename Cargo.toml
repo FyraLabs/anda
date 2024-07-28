@@ -1,7 +1,7 @@
 # Cargo workspace
 [package]
 name = "anda"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 description = "Andaman Build toolchain"
 license = "MIT"
@@ -26,8 +26,8 @@ tracing-log = "0.2.0"
 color-eyre = { workspace = true }
 walkdir = "2.5.0"
 tempfile = "3.10.1"
-anda-config = { path = "./anda-config", version = "0.2.0" }
-andax = { path = "./andax", version = "0.2.0" }
+anda-config = { workspace = true }
+andax = { path = "./andax", version = "0.3.1" }
 flatpak = "0.18.1"
 clap-verbosity-flag = "2.2.0"
 clap_complete = "4.5.8"
@@ -61,7 +61,7 @@ workspace = true
 members = ["anda-config", "xtask", "andax"]
 
 [workspace.dependencies]
-anda-config = { path = "./anda-config", version = "0.2.2" }
+anda-config = { path = "./anda-config", version = "0.3.1" }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 lazy_static = "1.5"
 regex = "1.10.5"
