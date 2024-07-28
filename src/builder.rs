@@ -126,7 +126,7 @@ macro_rules! script {
         let sc = andax::run(
             $name,
             &$scr,
-            std::collections::BTreeMap::new(),
+            std::iter::empty::<(String, String)>(),
             |_sc| {
                 $( _sc.push(stringify!($var), $var); )*
             },
@@ -409,7 +409,7 @@ async fn build_all(
                 .map(|p| p.to_string_lossy().to_string())
                 .collect::<Vec<String>>()
                 .as_slice(),
-            std::mem::take(&mut project.labels),
+            project.labels.iter().map(|(a, b)| (a.clone(), b.clone())).collect(),
         )?;
     };
     Ok(())

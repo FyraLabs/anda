@@ -15,7 +15,7 @@ use rhai::{
     Engine, EvalAltResult as RhaiE, NativeCallContext as Ctx, Scope,
 };
 use std::fmt::Write;
-use std::{collections::BTreeMap, io::BufRead, path::Path};
+use std::{io::BufRead, path::Path};
 use tracing::{debug, error, instrument, trace, warn};
 
 /// # Errors
@@ -207,18 +207,21 @@ pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
 }
 
 /// Executes an AndaX script.
-pub fn run<'a, F: FnOnce(&mut Scope<'a>)>(
+pub fn run<
+    'a,
+    F: FnOnce(&mut Scope<'a>),
+    K: Into<rhai::Identifier>,
+    V: Into<rhai::Dynamic>,
+    L: Iterator<Item = (K, V)>,
+>(
     name: &'a str,
     scr: &'a Path,
-    labels: BTreeMap<String, String>,
+    labels: L,
     f: F,
 ) -> Option<Scope<'a>> {
     let (en, mut sc) = gen_en();
     f(&mut sc);
-    let mut lbls = rhai::Map::new();
-    for (k, v) in labels {
-        lbls.insert(k.into(), v.into());
-    }
+    let lbls: rhai::Map = labels.map(|(k, v)| (k.into(), v.into())).collect();
     sc.push("labels", lbls);
     exec(name, scr, sc, en)
 }

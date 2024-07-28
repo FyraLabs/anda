@@ -10,16 +10,22 @@ use std::{
 use tracing::{debug, error, instrument, trace};
 
 /// Return true only if the project `lbls` does not have the key or the value does not match.
-fn filter_project(lbls: &BTreeMap<String, String>) -> impl FnMut((&String, &String)) -> bool + '_ {
+fn filter_project(lbls: &BTreeMap<String, String>) -> impl Fn(&(String, String)) -> bool + '_ {
     |(k, v)| lbls.get(k).map_or(true, |val| val != v)
+}
+
+/// Return true only if `lbls` have the key and the value matches.
+fn exclude_project(lbls: &BTreeMap<String, String>) -> impl Fn(&(String, String)) -> bool + '_ {
+    |(k, v)| lbls.get(k).is_some_and(|val| val == v)
 }
 
 #[allow(clippy::arithmetic_side_effects)]
 #[instrument(skip(cfg))]
 pub fn update(
     cfg: Manifest,
-    global_lbls: BTreeMap<String, String>,
-    fls: BTreeMap<String, String>,
+    global_lbls: Vec<(String, String)>,
+    fls: Vec<Vec<(String, String)>>,
+    excls: Vec<Vec<(String, String)>>,
 ) -> Result<()> {
     let mut handlers = vec![];
     let proj_len = cfg.project.len();
@@ -29,7 +35,10 @@ pub fn update(
         scr_len += 1;
         let mut lbls = std::mem::take(&mut proj.labels);
         lbls.extend(global_lbls.clone());
-        if fls.iter().any(filter_project(&lbls)) {
+        if fls.iter().all(|fls| fls.iter().any(filter_project(&lbls))) {
+            continue;
+        }
+        if excls.iter().any(|excls| excls.iter().all(exclude_project(&lbls))) {
             continue;
         }
         trace!(name, scr = scr.to_str(), "Th start");
@@ -39,10 +48,12 @@ pub fn update(
             let th = thread::current();
             let name = th.name().expect("No name for andax thread??");
             let start = std::time::Instant::now();
-            let sc = run(name, &scr, lbls, |sc| {
+            let sc = run(name, &scr, lbls.iter(), |sc| {
                 // we have to do it here as `Dynamic` in andax::Map nu Sync impl
-                let filters =
-                    fls.into_iter().map(|(k, v)| (k.into(), v.into())).collect::<andax::Map>();
+                let filters = fls
+                    .into_iter()
+                    .flat_map(|fls| fls.into_iter().map(|(k, v)| (k.into(), v.into())))
+                    .collect::<andax::Map>();
                 sc.push("filters", filters);
                 if let Some(rpm) = &proj.rpm {
                     sc.push("rpm", RPMSpec::new(name.to_owned(), &scr, &rpm.spec));
@@ -113,7 +124,7 @@ pub fn update(
 }
 
 #[instrument]
-pub fn run_scripts(scripts: &[String], labels: BTreeMap<String, String>) -> Result<()> {
+pub fn run_scripts(scripts: &[String], labels: Vec<(String, String)>) -> Result<()> {
     let mut handlers = vec![];
     for scr in scripts {
         trace!(scr, "Th start");
@@ -121,7 +132,7 @@ pub fn run_scripts(scripts: &[String], labels: BTreeMap<String, String>) -> Resu
         handlers.push(Builder::new().name(scr.to_owned()).spawn(move || {
             let th = thread::current();
             let name = th.name().expect("No name for andax thread??");
-            run(name, &std::path::PathBuf::from(name), labels, |_| {});
+            run(name, &std::path::PathBuf::from(name), labels.into_iter(), |_| {});
         })?);
     }
 
@@ -152,10 +163,10 @@ mod tests {
         let lbls = std::iter::once(("nightly", "1")).map(|(l, r)| (l.into(), r.into())).collect();
         let mut test1 = filter_project(&lbls);
         for (k, v) in transform(&[("nightly", "0"), ("hai", "bai"), ("large", "1")]) {
-            assert!(test1((&k, &v)));
+            assert!(test1(&(k, v)));
         }
         for (k, v) in transform(&[("nightly", "1")]) {
-            assert!(!test1((&k, &v)));
+            assert!(!test1(&(k, v)));
         }
     }
 }

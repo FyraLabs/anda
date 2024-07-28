@@ -196,18 +196,20 @@ pub struct Docker {
     pub image: BTreeMap<String, DockerImage>, // tag, file
 }
 
+pub fn parse_kv(input: &str) -> impl Iterator<Item = Option<(String, String)>> + '_ {
+    input
+        .split(',')
+        .filter(|item| !item.trim().is_empty())
+        .map(|item| item.split_once('=').map(|(l, r)| (l.to_owned(), r.to_owned())))
+}
+
+pub fn parse_filters(filters: &[String]) -> Option<Vec<Vec<(String, String)>>> {
+    filters.iter().map(std::ops::Deref::deref).map(crate::parse_kv).map(Iterator::collect).collect()
+}
+
 /// Turn a string into a BTreeMap<String, String>
-#[must_use]
-pub fn parse_map(input: &str) -> Option<BTreeMap<String, String>> {
-    let mut map = BTreeMap::new();
-    for item in input.split(',') {
-        if item.trim().is_empty() {
-            continue;
-        }
-        let (k, v) = item.split_once('=')?;
-        map.insert(k.to_owned(), v.to_owned());
-    }
-    Some(map)
+pub fn parse_labels<'a, I: Iterator<Item = &'a str>>(labels: I) -> Option<Vec<(String, String)>> {
+    labels.flat_map(parse_kv).collect()
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
@@ -425,17 +427,17 @@ mod test_parser {
 
     #[test]
     fn test_map() {
-        let m: BTreeMap<String, String> = [("foo".to_owned(), "bar".to_owned())].into();
+        let m = [("foo".to_owned(), "bar".to_owned())].into();
 
-        assert_eq!(parse_map("foo=bar"), Some(m));
+        assert_eq!(parse_labels(std::iter::once("foo=bar".into())), Some(m));
 
-        let multieq: BTreeMap<String, String> = [("foo".to_owned(), "bar=baz".to_owned())].into();
+        let multieq = [("foo".to_owned(), "bar=baz".to_owned())].into();
 
-        assert_eq!(parse_map("foo=bar=baz"), Some(multieq));
+        assert_eq!(parse_labels(std::iter::once("foo=bar=baz".into())), Some(multieq));
 
-        let multi: BTreeMap<String, String> =
+        let multi =
             [("foo".to_owned(), "bar".to_owned()), ("baz".to_owned(), "qux".to_owned())].into();
 
-        assert_eq!(parse_map("foo=bar,baz=qux"), Some(multi));
+        assert_eq!(parse_labels(std::iter::once("foo=bar,baz=qux".into())), Some(multi));
     }
 }

@@ -10,12 +10,12 @@ mod oci;
 mod rpm_spec;
 mod update;
 mod util;
-use anda_config::parse_map;
+use anda_config::parse_labels;
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{Cli, Command};
 use color_eyre::{eyre::eyre, Result};
-use std::{collections::BTreeMap, io, mem::take};
+use std::{io, mem::take};
 use tracing::{debug, trace};
 
 #[allow(clippy::unwrap_in_result)]
@@ -102,24 +102,21 @@ async fn main() -> Result<()> {
 
             println!("build_matrix={}", serde_json::to_string(&entries)?);
         }
-        Command::Update { labels, filters } => {
-            let labels = parse_map(&labels.unwrap_or_default());
-            let filters = parse_map(&filters.unwrap_or_default());
-            update::update(
-                anda_config::load_from_file(&cli.config)?,
-                labels.ok_or_else(|| eyre!("Cannot parse --labels"))?,
-                filters.ok_or_else(|| eyre!("Cannot parse --labels"))?,
-            )?;
+        Command::Update { labels, filters, excludes } => {
+            let labels = parse_labels(labels.iter().map(std::ops::Deref::deref))
+                .ok_or_else(|| eyre!("Cannot parse --labels"))?;
+            let filters = anda_config::parse_filters(&filters)
+                .ok_or_else(|| eyre!("Cannot parse --filters"))?;
+            let excludes = anda_config::parse_filters(&excludes)
+                .ok_or_else(|| eyre!("Cannot parse --excludes"))?;
+            update::update(anda_config::load_from_file(&cli.config)?, labels, filters, excludes)?;
         }
         Command::Run { scripts, labels } => {
             if scripts.is_empty() {
                 return Err(eyre!("No scripts to run"));
             }
-            let labels = if let Some(lbls) = labels {
-                parse_map(&lbls).ok_or_else(|| eyre!("Cannot parse --labels"))?
-            } else {
-                BTreeMap::new()
-            };
+            let labels = parse_labels(labels.iter().map(std::ops::Deref::deref))
+                .ok_or_else(|| eyre!("Cannot parse --labels"))?;
             update::run_scripts(&scripts, labels)?;
         }
     }
