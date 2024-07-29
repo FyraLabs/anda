@@ -19,7 +19,7 @@ exclude = [
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.5.9", features = ["derive", "env"] }
+clap = { version = "4.5.11", features = ["derive", "env"] }
 tracing = { workspace = true }
 tracing-subscriber = "0.3"
 tracing-log = "0.2.0"

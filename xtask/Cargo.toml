@@ -9,6 +9,6 @@ publish = false
 [dependencies]
 clap_mangen = "0.2.22"
 anda = { path = ".." }
-clap = { version = "4.5.9", features = ["derive", "env"] }
+clap = { version = "4.5.11", features = ["derive", "env"] }
 anyhow = "1.0.81"
 clap_complete = "4.5.8"
