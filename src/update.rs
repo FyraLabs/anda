@@ -83,11 +83,13 @@ pub fn update(
         .filter_map(|hdl| {
             let th = hdl.thread();
             let name = th.name().expect("No name for andax thread??").to_owned();
-            hdl.join()
-                .inspect_err(|_| error!("Thread `{name}` panicked. This is most likely a bug."))
-                .inspect_err(|_| panicked.push(name.clone()))
-                .ok()
-                .map(|duration| (name, duration))
+            if let Ok(duration) = hdl.join() {
+                Some((name, duration))
+            } else {
+                error!("Thread `{name}` panicked. This is most likely a bug.");
+                panicked.push(name);
+                None
+            }
         })
         .sorted_unstable_by(|(_, duration0), (_, duration1)| duration1.cmp(duration0));
     let task_len = tasks.len();
