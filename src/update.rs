@@ -35,7 +35,7 @@ pub fn update(
         scr_len += 1;
         let mut lbls = std::mem::take(&mut proj.labels);
         lbls.extend(global_lbls.clone());
-        if fls.iter().all(|fls| fls.iter().any(filter_project(&lbls))) {
+        if !fls.is_empty() && fls.iter().all(|fls| fls.iter().any(filter_project(&lbls))) {
             continue;
         }
         if excls.iter().any(|excls| excls.iter().all(exclude_project(&lbls))) {
