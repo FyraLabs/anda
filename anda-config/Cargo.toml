@@ -19,7 +19,7 @@ dotenv = "0.15.0"
 serde = { workspace = true }
 tracing = "0.1"
 ignore = { workspace = true }
-once_cell = { version = "1.19", default-features = false, features = ["std"] }
+once_cell = { version = "1.20", default-features = false, features = ["std"] }
 parking_lot = "0.12.3"
 
 [dev-dependencies]
