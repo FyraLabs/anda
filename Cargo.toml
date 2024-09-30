@@ -64,7 +64,7 @@ members = ["anda-config", "xtask", "andax"]
 anda-config = { path = "./anda-config", version = "0.3.1" }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 lazy_static = "1.5"
-regex = "1.10.6"
+regex = "1.11.0"
 serde_json = "1.0"
 color-eyre = "0.6.3"
 tracing = "0.1"
