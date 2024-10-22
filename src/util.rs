@@ -1,7 +1,7 @@
 //! Utility functions and types
 use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
 use clap_verbosity_flag::LevelFilter;
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{eyre::eyre, Result, Section};
 use console::style;
 use nix::{sys::signal, unistd::Pid};
 use regex::Regex;
@@ -94,11 +94,9 @@ impl CommandLog for Command {
                 }
             };
 
-            let formatter = format!("{process}\t| {output}");
-            println!("{formatter}");
+            println!("{process} | {output}");
         }
 
-        // let cmd_name = self;
         // make process name a constant string that we can reuse every time we call print_log
         let process = self.as_std().get_program().to_owned().into_string().unwrap();
         let args =
@@ -106,89 +104,71 @@ impl CommandLog for Command {
         debug!("Running command: {process} {args}",);
         let c = self.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
 
-        // copy self
-
-        let mut output = c.spawn().unwrap();
-
-        // handles so we can run both at the same time
-        let mut tasks = vec![];
-        // stream stdout
-
-        let stdout = output.stdout.take().unwrap();
-        let stdout_reader = tokio::io::BufReader::new(stdout);
-        let mut stdout_lines = stdout_reader.lines();
+        let mut output = c.spawn().map_err(|e| {
+            eyre!("Cannot run command")
+                .wrap_err(e)
+                .note(format!("Process: {process}"))
+                .note("Args: {args}")
+                .suggestion(format!("You might need to install `{process}` via a package manager."))
+        })?;
 
         // HACK: Rust ownership is very fun.
         let t = process.clone();
-        let stdout_handle = tokio::spawn(async move {
-            while let Some(line) = stdout_lines.next_line().await.unwrap() {
-                print_log(&t, &line, ConsoleOut::Stdout);
-            }
-            Ok(())
-        });
 
-        tasks.push(stdout_handle);
+        let stdout = output.stdout.take().unwrap();
+        let mut stdout_lines = tokio::io::BufReader::new(stdout).lines();
 
-        // stream stderr
-
-        debug!("Streaming stderr");
         let stderr = output.stderr.take().unwrap();
-        let stderr_reader = tokio::io::BufReader::new(stderr).lines();
-        let mut stderr_lines = stderr_reader;
+        let mut stderr_lines = tokio::io::BufReader::new(stderr).lines();
 
-        debug!("stderr: {stderr_lines:?}");
-
-        let stderr_handle = tokio::spawn(async move {
-            while let Some(line) = stderr_lines.next_line().await.unwrap() {
-                print_log(&process, &line, ConsoleOut::Stderr);
-            }
-            Ok(())
-        });
-
-        // send sigint to child process when we ctrl-c
-        tasks.push(stderr_handle);
-
-        // sigint handle
-
-        let sigint_handle = tokio::spawn(async move {
-            // wait for ctrl-c or child process to finish
-
-            tokio::select! {
-                _ = tokio::signal::ctrl_c() => {
-                    info!("Received ctrl-c, sending sigint to child process");
-                    #[allow(clippy::cast_possible_wrap)]
-                    signal::kill(Pid::from_raw(output.id().unwrap() as i32), signal::Signal::SIGINT).unwrap();
-
-                    // exit program
-                    eprintln!("Received ctrl-c, exiting");
-                    // std::process::exit(127);
-                    Err(eyre!("Received ctrl-c, exiting"))
+        // handles so we can run both at the same time
+        for task in [
+            tokio::spawn(async move {
+                while let Some(line) = stdout_lines.next_line().await.unwrap() {
+                    print_log(&t, &line, ConsoleOut::Stdout);
                 }
-                w = output.wait() => {
+                Ok(())
+            }),
+            tokio::spawn(async move {
+                while let Some(line) = stderr_lines.next_line().await.unwrap() {
+                    print_log(&process, &line, ConsoleOut::Stderr);
+                }
+                Ok(())
+            }),
+            tokio::spawn(async move {
+                // wait for ctrl-c or child process to finish
 
-                    // check exit status
-                    let status = w.unwrap();
-                    if status.success() {
-                        info!("Command exited successfully");
-                        Ok(())
-                    } else {
-                        info!("Command exited with status: {status}");
-                        Err(eyre!("Command exited with status: {status}"))
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {
+                        info!("Received ctrl-c, sending sigint to child process");
+                        #[allow(clippy::cast_possible_wrap)]
+                        signal::kill(Pid::from_raw(output.id().unwrap() as i32), signal::Signal::SIGINT).unwrap();
+
+                        // exit program
+                        eprintln!("Received ctrl-c, exiting");
+                        // std::process::exit(127);
+                        Err(eyre!("Received ctrl-c, exiting"))
                     }
-                    // info!("Child process finished");
+                    w = output.wait() => {
+
+                        // check exit status
+                        let status = w.unwrap();
+                        if status.success() {
+                            info!("Command exited successfully");
+                            Ok(())
+                        } else {
+                            info!("Command exited with status: {status}");
+                            Err(eyre!("Command exited with status: {status}"))
+                        }
+                        // info!("Child process finished");
+                    }
                 }
-            }
-        });
-
-        tasks.push(sigint_handle);
-
-        for task in tasks {
+            }),
+        ] {
             task.await??;
         }
 
         Ok(())
-
-        // output.wait().await.unwrap();
     }
 }
 
