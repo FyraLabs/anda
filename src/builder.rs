@@ -371,8 +371,7 @@ async fn _build_pkg(
             } else {
                 println!("No Flatpak build defined for project");
             }
-        }
-        // PackageType::RpmOstree => todo!(),
+        } // PackageType::RpmOstree => todo!(),
     };
     Ok(())
 }
