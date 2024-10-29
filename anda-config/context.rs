@@ -19,8 +19,8 @@ static GLOBAL_CONTEXT: OnceCell<Mutex<Context>> = OnceCell::new();
 pub fn hcl_context() -> Context<'static> {
     let env_func = |args: FuncArgs| {
         let env = std::env::vars().collect::<BTreeMap<String, String>>();
-        let key = args[0].as_str().unwrap();
-        let value = &env[key];
+        let key = args.first().and_then(|v| v.as_str()).ok_or("Invalid argument")?;
+        let value = env.get(key).ok_or("Key not found in environment variables")?;
         Ok(Value::String(value.to_string()))
     };
     let c = GLOBAL_CONTEXT.get_or_init(|| {

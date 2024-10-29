@@ -429,15 +429,15 @@ mod test_parser {
     fn test_map() {
         let m = [("foo".to_owned(), "bar".to_owned())].into();
 
-        assert_eq!(parse_labels(std::iter::once("foo=bar".into())), Some(m));
+        assert_eq!(parse_labels(std::iter::once("foo=bar")), Some(m));
 
         let multieq = [("foo".to_owned(), "bar=baz".to_owned())].into();
 
-        assert_eq!(parse_labels(std::iter::once("foo=bar=baz".into())), Some(multieq));
+        assert_eq!(parse_labels(std::iter::once("foo=bar=baz")), Some(multieq));
 
         let multi =
             [("foo".to_owned(), "bar".to_owned()), ("baz".to_owned(), "qux".to_owned())].into();
 
-        assert_eq!(parse_labels(std::iter::once("foo=bar,baz=qux".into())), Some(multi));
+        assert_eq!(parse_labels(std::iter::once("foo=bar,baz=qux")), Some(multi));
     }
 }
