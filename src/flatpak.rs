@@ -95,7 +95,7 @@ impl FlatpakBuilder {
             .arg(manifest)
             .arg("--force-clean")
             .arg("--repo")
-            .arg(&self.output_repo.canonicalize().unwrap());
+            .arg(self.output_repo.canonicalize().unwrap());
 
         // add extra sources
 
@@ -122,7 +122,7 @@ impl FlatpakBuilder {
 
         flatpak
             .arg("build-bundle")
-            .arg(&self.output_repo.canonicalize().unwrap())
+            .arg(self.output_repo.canonicalize().unwrap())
             .arg(&bundle_path)
             .arg(app_id);
 

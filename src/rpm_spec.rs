@@ -136,21 +136,17 @@ impl RPMBuilder {
                 take(&mut options.sources),
                 take(&mut options.resultdir),
             );
-            for extra_repo in options.extra_repos.iter_mut().flatten() {
-                mock.add_extra_repo(take(extra_repo));
+            if let Some(extra_repos) = options.extra_repos.take() {
+                for extra_repo in extra_repos {
+                    mock.add_extra_repo(extra_repo);
+                }
             }
-            for (k, v) in &options.macros {
+            options.macros.iter().for_each(|(k, v)| {
                 mock.def_macro(k, v);
-            }
-            for with_flags in &mut options.with {
-                mock.with_flags_mut().push(take(with_flags));
-            }
-            for without_flags in &mut options.without {
-                mock.without_flags_mut().push(take(without_flags));
-            }
-            for config_opt in &mut options.config_opts {
-                mock.add_config_opt(take(config_opt));
-            }
+            });
+            mock.with_flags_mut().extend(take(&mut options.with));
+            mock.without_flags_mut().extend(take(&mut options.without));
+            mock.extend_config_opts(take(&mut options.config_opts));
             mock.no_mirror(options.no_mirror);
             mock.enable_scm(options.scm_enable);
             mock.extend_scm_opts(take(&mut options.scm_opts));
@@ -161,17 +157,12 @@ impl RPMBuilder {
             let mut rpmbuild =
                 RPMBuildBackend::new(take(&mut options.sources), take(&mut options.resultdir));
 
-            for (k, v) in &options.macros {
+            options.macros.iter().for_each(|(k, v)| {
                 rpmbuild.def_macro(k, v);
-            }
+            });
 
-            for with_flags in &mut options.with {
-                rpmbuild.with_flags_mut().push(take(with_flags));
-            }
-
-            for without_flags in &mut options.without {
-                rpmbuild.without_flags_mut().push(take(without_flags));
-            }
+            rpmbuild.with_flags_mut().extend(take(&mut options.with));
+            rpmbuild.without_flags_mut().extend(take(&mut options.without));
 
             rpmbuild.build(spec).await
         }
@@ -333,43 +324,44 @@ impl MockBackend {
     pub fn mock(&self) -> Command {
         let mut cmd = Command::new("mock");
 
-        if let Some(config) = self.mock_config.as_ref() {
+        if let Some(config) = &self.mock_config {
             cmd.arg("-r").arg(config);
         }
 
         cmd.arg("--verbose");
 
-        for repo in &self.extra_repos {
+        self.extra_repos.iter().for_each(|repo| {
             cmd.arg("-a").arg(repo);
-        }
+        });
 
-        for with in &self.with {
+        self.with.iter().for_each(|with| {
             cmd.arg("--with").arg(with);
-        }
+        });
 
-        for without in &self.without {
+        self.without.iter().for_each(|without| {
             cmd.arg("--without").arg(without);
-        }
+        });
 
-        for (name, value) in &self.macros {
+        self.macros.iter().for_each(|(name, value)| {
             cmd.arg("-D").arg(format!("{name} {value}"));
-        }
+        });
 
         if self.no_mirror {
             cmd.arg("--config-opts").arg("mirrored=False");
         }
 
-        for opt in &self.config_opts {
+        self.config_opts.iter().for_each(|opt| {
             cmd.arg("--config-opts").arg(opt);
-        }
+        });
 
         if self.scm_enable {
             cmd.arg("--scm-enable");
         }
 
-        for scm in &self.scm_opts {
+        self.scm_opts.iter().for_each(|scm| {
             cmd.arg("--scm-option").arg(scm);
-        }
+        });
+
         cmd
     }
 }
@@ -379,6 +371,9 @@ impl RPMSpecBackend for MockBackend {
     async fn build_srpm(&self, spec: &Path) -> Result<PathBuf> {
         let mut cmd = self.mock();
         let tmp = tempfile::Builder::new().prefix("anda-srpm").tempdir()?;
+
+        // todo: Probably copy the spec file and the sources to rpmbuild/SOURCES or some kind of temp dir instead
+        // of building everything in the specfile's directory.
 
         cmd.arg("--buildsrpm")
             .arg("--spec")
@@ -585,7 +580,7 @@ impl RPMSpecBackend for RPMBuildBackend {
 
     async fn build(&self, spec: &Path) -> Result<Vec<PathBuf>> {
         let mut cmd = self.rpmbuild();
-        let tmp = TempDir::new()?;
+        let tmp = TempDir::with_prefix("anda-rpmbuild")?;
         cmd.arg("-ba")
             .arg(spec)
             .arg("--define")
@@ -602,26 +597,23 @@ impl RPMSpecBackend for RPMBuildBackend {
 
         for entry in walkdir::WalkDir::new(tmp.path()) {
             let entry = entry?;
-            //eprintln!("entry: {:?}", entry.file_name());
+            let entry_filename = entry.file_name().to_string_lossy();
 
-            if entry.file_name().to_string_lossy().ends_with(".src.rpm") {
-                //rpms.push(entry.path().to_path_buf());
-                debug!("found srpm: {rpms:?}");
+            let (subdir, is_rpm) = if entry_filename.ends_with(".src.rpm") {
+                ("rpm/srpm", false)
+            } else if entry_filename.ends_with(".rpm") {
+                ("rpm/rpms", true)
+            } else {
+                continue;
+            };
 
-                let srpm_dir = self.resultdir.join("rpm/srpm");
-                std::fs::create_dir_all(&srpm_dir)?;
-                let dest = srpm_dir.join(entry.file_name());
-                std::fs::copy(entry.path(), dest)?;
-                //rpms.push(srpm_dir.join(entry.file_name()));
-            } else if entry.file_name().to_string_lossy().ends_with(".rpm") {
-                //rpms.push(entry.path().to_path_buf());
-                // eprintln!("found rpm: {:?}", rpms);
+            let target_dir = self.resultdir.join(subdir);
+            std::fs::create_dir_all(&target_dir)?;
+            let dest = target_dir.join(entry.file_name());
+            std::fs::copy(entry.path(), &dest)?;
 
-                let rpms_dir = self.resultdir.join("rpm/rpms");
-                std::fs::create_dir_all(&rpms_dir)?;
-                let dest = rpms_dir.join(entry.file_name());
-                std::fs::copy(entry.path(), dest)?;
-                rpms.push(rpms_dir.join(entry.file_name()));
+            if is_rpm {
+                rpms.push(dest);
             }
         }
 

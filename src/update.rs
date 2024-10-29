@@ -163,7 +163,7 @@ mod tests {
         };
         // update only nightly packages
         let lbls = std::iter::once(("nightly", "1")).map(|(l, r)| (l.into(), r.into())).collect();
-        let mut test1 = filter_project(&lbls);
+        let test1 = filter_project(&lbls);
         for (k, v) in transform(&[("nightly", "0"), ("hai", "bai"), ("large", "1")]) {
             assert!(test1(&(k, v)));
         }

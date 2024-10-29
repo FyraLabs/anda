@@ -50,7 +50,7 @@ impl OCIBuilder {
             .arg(real_tag);
 
         if latest {
-            cmd.arg("-t").arg(&format!("{}:latest", &self.tag));
+            cmd.arg("-t").arg(format!("{}:latest", &self.tag));
         }
 
         for label in &self.label {
