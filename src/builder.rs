@@ -314,7 +314,7 @@ pub async fn build_project(
             PackageType::Docker => "Docker image",
             PackageType::Podman => "Podman image",
             PackageType::Flatpak => "flatpak",
-            PackageType::RpmOstree => "rpm-ostree compose",
+            // PackageType::RpmOstree => "rpm-ostree compose",
             PackageType::All => unreachable!(),
         };
         println!("Built {type_string}: {path}");
@@ -372,7 +372,7 @@ async fn _build_pkg(
                 println!("No Flatpak build defined for project");
             }
         }
-        PackageType::RpmOstree => todo!(),
+        // PackageType::RpmOstree => todo!(),
     };
     Ok(())
 }
