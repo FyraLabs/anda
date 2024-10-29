@@ -79,30 +79,45 @@ pub trait CommandLog {
 #[async_trait::async_trait]
 impl CommandLog for Command {
     async fn log(&mut self) -> Result<()> {
-        fn print_log(process: &str, output: &str, out: ConsoleOut) {
-            // check if no_color is set
-            let no_color = std::env::var("NO_COLOR").is_ok();
+        // fn print_log(process: &str, output: &str, out: ConsoleOut) {
+        //     // check if no_color is set
+        //     let no_color = std::env::var("NO_COLOR").is_ok();
 
-            let process = {
-                if no_color {
-                    style(process)
-                } else {
-                    match out {
-                        ConsoleOut::Stdout => style(process).cyan(),
-                        ConsoleOut::Stderr => style(process).yellow(),
-                    }
-                }
-            };
+        //     let process = {
+        //         if no_color {
+        //             style(process)
+        //         } else {
+        //             match out {
+        //                 ConsoleOut::Stdout => style(process).cyan(),
+        //                 ConsoleOut::Stderr => style(process).yellow(),
+        //             }
+        //         }
+        //     };
 
-            println!("{process} | {output}");
-        }
+        //     println!("{process} | {output}\n");
+        // }
 
         // make process name a constant string that we can reuse every time we call print_log
         let process = self.as_std().get_program().to_owned().into_string().unwrap();
         let args =
             self.as_std().get_args().map(|a| a.to_str().unwrap()).collect::<Vec<&str>>().join(" ");
         debug!("Running command: {process} {args}",);
-        let c = self.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+
+        // Wrap the command in `script` to force it to give it a TTY
+        let mut c = Self::new("script");
+        
+        c
+            .arg("-e")
+            .arg("-f")
+            .arg("/dev/null")
+            .arg("-q")
+            .arg("-c")
+            .arg(format!("{process} {args}"))
+            .stdin(std::process::Stdio::null());
+
+        // c.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+
+        trace!(?c, "Running command");
 
         let mut output = c.spawn().map_err(|e| {
             eyre!("Cannot run command")
@@ -112,29 +127,22 @@ impl CommandLog for Command {
                 .suggestion(format!("You might need to install `{process}` via a package manager."))
         })?;
 
-        // HACK: Rust ownership is very fun.
-        let t = process.clone();
+        // // HACK: Rust ownership is very fun.
+        // let t = process.clone();
 
-        let stdout = output.stdout.take().unwrap();
-        let mut stdout_lines = tokio::io::BufReader::new(stdout).lines();
+        // let stdout = output.stdout.take().unwrap();
+        // let mut stdout_lines = tokio::io::BufReader::new(stdout).lines();
 
-        let stderr = output.stderr.take().unwrap();
-        let mut stderr_lines = tokio::io::BufReader::new(stderr).lines();
+        // let stderr = output.stderr.take().unwrap();
+        // let mut stderr_lines = tokio::io::BufReader::new(stderr).lines();
 
         // handles so we can run both at the same time
         for task in [
-            tokio::spawn(async move {
-                while let Some(line) = stdout_lines.next_line().await.unwrap() {
-                    print_log(&t, &line, ConsoleOut::Stdout);
-                }
-                Ok(())
-            }),
-            tokio::spawn(async move {
-                while let Some(line) = stderr_lines.next_line().await.unwrap() {
-                    print_log(&process, &line, ConsoleOut::Stderr);
-                }
-                Ok(())
-            }),
+            // handle ctrl-c and log
+
+            
+
+
             tokio::spawn(async move {
                 // wait for ctrl-c or child process to finish
 
