@@ -105,9 +105,8 @@ impl CommandLog for Command {
 
         // Wrap the command in `script` to force it to give it a TTY
         let mut c = Self::new("script");
-        
-        c
-            .arg("-e")
+
+        c.arg("-e")
             .arg("-f")
             .arg("/dev/null")
             .arg("-q")
@@ -139,10 +138,6 @@ impl CommandLog for Command {
         // handles so we can run both at the same time
         for task in [
             // handle ctrl-c and log
-
-            
-
-
             tokio::spawn(async move {
                 // wait for ctrl-c or child process to finish
 
