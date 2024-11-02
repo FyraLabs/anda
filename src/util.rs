@@ -6,7 +6,7 @@ use console::style;
 use nix::{sys::signal, unistd::Pid};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::Path};
+use std::{collections::BTreeMap, io::Write, path::Path};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use tracing::{debug, info};
 
@@ -79,23 +79,25 @@ pub trait CommandLog {
 #[async_trait::async_trait]
 impl CommandLog for Command {
     async fn log(&mut self) -> Result<()> {
-        // fn print_log(process: &str, output: &str, out: ConsoleOut) {
-        //     // check if no_color is set
-        //     let no_color = std::env::var("NO_COLOR").is_ok();
+        fn print_log(process: &str, output: &str, out: ConsoleOut) {
+            // check if no_color is set
+            let no_color = std::env::var("NO_COLOR").is_ok();
 
-        //     let process = {
-        //         if no_color {
-        //             style(process)
-        //         } else {
-        //             match out {
-        //                 ConsoleOut::Stdout => style(process).cyan(),
-        //                 ConsoleOut::Stderr => style(process).yellow(),
-        //             }
-        //         }
-        //     };
+            let process = {
+                if no_color {
+                    style(process)
+                } else {
+                    match out {
+                        ConsoleOut::Stdout => style(process).cyan(),
+                        ConsoleOut::Stderr => style(process).yellow(),
+                    }
+                }
+            };
 
-        //     println!("{process} | {output}\n");
-        // }
+            let output = output.replace('\r', &format!("\r{process} │ "));
+
+            println!("{process} │ {output}");
+        }
 
         // make process name a constant string that we can reuse every time we call print_log
         let process = self.as_std().get_program().to_owned().into_string().unwrap();
@@ -112,7 +114,9 @@ impl CommandLog for Command {
             .arg("-q")
             .arg("-c")
             .arg(format!("{process} {args}"))
-            .stdin(std::process::Stdio::null());
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
 
         // c.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
 
@@ -126,21 +130,30 @@ impl CommandLog for Command {
                 .suggestion(format!("You might need to install `{process}` via a package manager."))
         })?;
 
-        // // HACK: Rust ownership is very fun.
-        // let t = process.clone();
+        // HACK: Rust ownership is very fun.
+        let t = process.clone();
 
-        // let stdout = output.stdout.take().unwrap();
-        // let mut stdout_lines = tokio::io::BufReader::new(stdout).lines();
+        let stdout = output.stdout.take().unwrap();
+        let mut stdout_lines = tokio::io::BufReader::new(stdout).lines();
 
-        // let stderr = output.stderr.take().unwrap();
-        // let mut stderr_lines = tokio::io::BufReader::new(stderr).lines();
+        let stderr = output.stderr.take().unwrap();
+        let mut stderr_lines = tokio::io::BufReader::new(stderr).lines();
 
         // handles so we can run both at the same time
         for task in [
-            // handle ctrl-c and log
             tokio::spawn(async move {
-                // wait for ctrl-c or child process to finish
-
+                while let Some(line) = stdout_lines.next_line().await.unwrap() {
+                    print_log(&t, &line, ConsoleOut::Stdout);
+                }
+                Ok(())
+            }),
+            tokio::spawn(async move {
+                while let Some(line) = stderr_lines.next_line().await.unwrap() {
+                    print_log(&process, &line, ConsoleOut::Stderr);
+                }
+                Ok(())
+            }),
+            tokio::spawn(async move {
                 tokio::select! {
                     _ = tokio::signal::ctrl_c() => {
                         info!("Received ctrl-c, sending sigint to child process");
