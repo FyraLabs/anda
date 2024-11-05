@@ -79,24 +79,24 @@ pub trait CommandLog {
 #[async_trait::async_trait]
 impl CommandLog for Command {
     async fn log(&mut self) -> Result<()> {
-        fn print_log(output: &str, out: ConsoleOut) {
+        fn print_log(process: &str, output: &str, out: ConsoleOut) {
             // check if no_color is set
             let no_color = std::env::var("NO_COLOR").is_ok();
 
             let process = {
                 if no_color {
-                    style("| ")
+                    style(process)
                 } else {
                     match out {
-                        ConsoleOut::Stdout => style("│ ").cyan(),
-                        ConsoleOut::Stderr => style("│ ").yellow(),
+                        ConsoleOut::Stdout => style(process).cyan(),
+                        ConsoleOut::Stderr => style(process).yellow(),
                     }
                 }
             };
 
-            let output = output.replace('\r', &format!("\r{process}"));
+            let output = output.replace('\r', &format!("\r{process} │ "));
 
-            println!("{process}{output}");
+            println!("{process} │ {output}");
         }
 
         // make process name a constant string that we can reuse every time we call print_log
@@ -131,6 +131,7 @@ impl CommandLog for Command {
         })?;
 
         // HACK: Rust ownership is very fun.
+        let t = process.clone();
 
         let stdout = output.stdout.take().unwrap();
         let mut stdout_lines = tokio::io::BufReader::new(stdout).lines();
@@ -142,13 +143,13 @@ impl CommandLog for Command {
         for task in [
             tokio::spawn(async move {
                 while let Some(line) = stdout_lines.next_line().await.unwrap() {
-                    print_log(&line, ConsoleOut::Stdout);
+                    print_log(&t, &line, ConsoleOut::Stdout);
                 }
                 Ok(())
             }),
             tokio::spawn(async move {
                 while let Some(line) = stderr_lines.next_line().await.unwrap() {
-                    print_log(&line, ConsoleOut::Stderr);
+                    print_log(&process, &line, ConsoleOut::Stderr);
                 }
                 Ok(())
             }),
