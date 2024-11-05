@@ -3,6 +3,7 @@
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
+use clap_verbosity_flag::InfoLevel;
 use std::{path::PathBuf, str::FromStr};
 
 #[derive(ValueEnum, Debug, Clone, Copy, Default)]
@@ -58,7 +59,8 @@ pub struct Cli {
     pub config: PathBuf,
 
     #[clap(flatten)]
-    pub verbose: clap_verbosity_flag::Verbosity,
+    // #[clap(default_value = "info")]
+    pub verbose: clap_verbosity_flag::Verbosity<InfoLevel>,
 
     /// Output directory for built packages
     #[clap(short, long, env = "TARGET_DIR", default_value = "anda-build")]

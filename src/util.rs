@@ -94,7 +94,9 @@ impl CommandLog for Command {
                 }
             };
 
-            println!("{process} | {output}");
+            let output = output.replace('\r', &format!("\r{process} │ "));
+
+            println!("{process} │ {output}");
         }
 
         // make process name a constant string that we can reuse every time we call print_log
@@ -102,7 +104,23 @@ impl CommandLog for Command {
         let args =
             self.as_std().get_args().map(|a| a.to_str().unwrap()).collect::<Vec<&str>>().join(" ");
         debug!("Running command: {process} {args}",);
-        let c = self.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+
+        // Wrap the command in `script` to force it to give it a TTY
+        let mut c = Self::new("script");
+
+        c.arg("-e")
+            .arg("-f")
+            .arg("/dev/null")
+            .arg("-q")
+            .arg("-c")
+            .arg(format!("{process} {args}"))
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        // c.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+
+        trace!(?c, "Running command");
 
         let mut output = c.spawn().map_err(|e| {
             eyre!("Cannot run command")
@@ -136,8 +154,6 @@ impl CommandLog for Command {
                 Ok(())
             }),
             tokio::spawn(async move {
-                // wait for ctrl-c or child process to finish
-
                 tokio::select! {
                     _ = tokio::signal::ctrl_c() => {
                         info!("Received ctrl-c, sending sigint to child process");

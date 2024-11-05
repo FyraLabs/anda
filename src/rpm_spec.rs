@@ -328,7 +328,7 @@ impl MockBackend {
             cmd.arg("-r").arg(config);
         }
 
-        cmd.arg("--verbose");
+        // cmd.arg("--verbose");
 
         self.extra_repos.iter().for_each(|repo| {
             cmd.arg("-a").arg(repo);
@@ -343,7 +343,7 @@ impl MockBackend {
         });
 
         self.macros.iter().for_each(|(name, value)| {
-            cmd.arg("-D").arg(format!("{name} {value}"));
+            cmd.arg("-D").arg(format!("'{name} {value}'"));
         });
 
         if self.no_mirror {
@@ -498,7 +498,7 @@ impl RPMBuildBackend {
         }
 
         for (name, value) in &self.macros {
-            cmd.arg("-D").arg(format!("{name} {value}"));
+            cmd.arg("-D").arg(format!("'{name} {value}'"));
         }
 
         cmd
