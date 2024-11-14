@@ -122,6 +122,10 @@ pub struct RpmOpts {
     #[clap(short = 'D', long)]
     pub rpm_macro: Vec<String>,
 
+    /// RPM: A target to pass to rpmbuild/mock, useful for cross compilation
+    #[clap(long)]
+    pub rpm_target: Option<String>,
+
     /// RPM: Mock configuration
     #[clap(long, short = 'c')]
     pub mock_config: Option<String>,

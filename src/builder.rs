@@ -36,6 +36,8 @@ pub async fn build_rpm(
         debug!("No repodata found, skipping");
     }
 
+    opts.set_target(rpmb_opts.rpm_target.clone());
+
     for repo in &rpmb_opts.extra_repos {
         if opts.extra_repos.is_none() {
             opts.extra_repos = Some(vec![repo.clone()]);

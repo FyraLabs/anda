@@ -24,6 +24,8 @@ pub struct RPMOptions {
     pub with: Vec<String>,
     /// Without flags
     pub without: Vec<String>,
+    /// Build target, used for cross-compile
+    pub target: Option<String>,
     /// Path to sources
     pub sources: PathBuf,
     /// Output directory
@@ -52,6 +54,7 @@ impl RPMOptions {
             mock_config,
             with: Vec::new(),
             without: Vec::new(),
+            target: None,
             sources,
             resultdir,
             extra_repos: None,
@@ -94,6 +97,9 @@ impl RPMExtraOptions for RPMOptions {
     }
     fn macros_mut(&mut self) -> &mut BTreeMap<String, String> {
         &mut self.macros
+    }
+    fn set_target(&mut self, target: Option<String>) {
+        self.target = target;
     }
 }
 
@@ -144,6 +150,7 @@ impl RPMBuilder {
             options.macros.iter().for_each(|(k, v)| {
                 mock.def_macro(k, v);
             });
+            mock.target(take(&mut options.target));
             mock.with_flags_mut().extend(take(&mut options.with));
             mock.without_flags_mut().extend(take(&mut options.without));
             mock.extend_config_opts(take(&mut options.config_opts));
@@ -161,6 +168,7 @@ impl RPMBuilder {
                 rpmbuild.def_macro(k, v);
             });
 
+            rpmbuild.set_target(take(&mut options.target));
             rpmbuild.with_flags_mut().extend(take(&mut options.with));
             rpmbuild.without_flags_mut().extend(take(&mut options.without));
 
@@ -185,6 +193,9 @@ pub trait RPMExtraOptions {
     /// Returns macros as a mutable reference
     /// This is useful for advanced macro manipulation
     fn macros_mut(&mut self) -> &mut BTreeMap<String, String>;
+
+    /// Set target, used for cross-compile
+    fn set_target(&mut self, target: Option<String>);
 
     /// Adds a list of macros from an iterator
     fn macros_iter<I>(&mut self, iter: I)
@@ -249,6 +260,7 @@ pub struct MockBackend {
     scm_enable: bool,
     scm_opts: Vec<String>,
     plugin_opts: Vec<String>,
+    target: Option<String>,
 }
 
 impl RPMExtraOptions for MockBackend {
@@ -270,6 +282,9 @@ impl RPMExtraOptions for MockBackend {
     fn macros_mut(&mut self) -> &mut BTreeMap<String, String> {
         &mut self.macros
     }
+    fn set_target(&mut self, target: Option<String>) {
+        self.target = target;
+    }
 }
 
 impl MockBackend {
@@ -287,6 +302,7 @@ impl MockBackend {
             scm_enable: false,
             scm_opts: Vec::new(),
             plugin_opts: Vec::new(),
+            target: None,
         }
     }
 
@@ -321,6 +337,10 @@ impl MockBackend {
         self.plugin_opts.extend(opts);
     }
 
+    pub fn target(&mut self, target: Option<String>) {
+        self.target = target;
+    }
+
     pub fn mock(&self) -> Command {
         let mut cmd = Command::new("mock");
 
@@ -329,6 +349,10 @@ impl MockBackend {
         }
 
         // cmd.arg("--verbose");
+
+        if let Some(target) = &self.target {
+            cmd.arg("--target").arg(target);
+        }
 
         self.extra_repos.iter().for_each(|repo| {
             cmd.arg("-a").arg(repo);
@@ -457,6 +481,7 @@ pub struct RPMBuildBackend {
     resultdir: PathBuf,
     with: Vec<String>,
     without: Vec<String>,
+    target: Option<String>,
     macros: BTreeMap<String, String>,
 }
 
@@ -479,11 +504,21 @@ impl RPMExtraOptions for RPMBuildBackend {
     fn macros_mut(&mut self) -> &mut BTreeMap<String, String> {
         &mut self.macros
     }
+    fn set_target(&mut self, target: Option<String>) {
+        self.target = target;
+    }
 }
 
 impl RPMBuildBackend {
     pub const fn new(sources: PathBuf, resultdir: PathBuf) -> Self {
-        Self { sources, resultdir, with: Vec::new(), without: Vec::new(), macros: BTreeMap::new() }
+        Self {
+            sources,
+            resultdir,
+            with: Vec::new(),
+            without: Vec::new(),
+            macros: BTreeMap::new(),
+            target: None,
+        }
     }
 
     pub fn rpmbuild(&self) -> Command {
