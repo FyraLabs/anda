@@ -28,9 +28,6 @@ pub mod ar {
             p.insert(name.into(), {
                 let mut p = rhai::Map::new();
                 p.insert("rpm".into(), _rpm(proj.rpm));
-                p.insert("podman".into(), _docker(proj.podman));
-                p.insert("docker".into(), _docker(proj.docker));
-                p.insert("flatpak".into(), _flatpak(proj.flatpak));
                 p.insert("pre_script".into(), _pb(proj.pre_script));
                 p.insert("post_script".into(), _pb(proj.post_script));
                 p.insert("env".into(), proj.env.unwrap_or_default().into());
@@ -64,36 +61,6 @@ fn _rpm(o: Option<anda_config::RpmBuild>) -> Dynamic {
         m.insert("plugin_opts".into(), r.plugin_opts.unwrap_or_default().into());
         m.insert("macros".into(), r.macros.unwrap_or_default().into());
         m.insert("opts".into(), r.opts.unwrap_or_default().into());
-        m.into()
-    })
-}
-fn _docker(o: Option<anda_config::Docker>) -> Dynamic {
-    o.map_or(().into(), |d| {
-        let mut m = rhai::Map::new();
-        m.insert(
-            "image".into(),
-            d.image
-                .into_iter()
-                .map(|(n, i)| {
-                    let mut a = rhai::Map::new();
-                    a.insert("dockerfile".into(), i.dockerfile.unwrap_or_default().into());
-                    a.insert("import".into(), _pb(i.import));
-                    a.insert("tag_latest".into(), i.tag_latest.unwrap_or(false).into());
-                    a.insert("context".into(), i.context.into());
-                    a.insert("version".into(), i.version.unwrap_or_default().into());
-                    (n, a)
-                })
-                .collect(),
-        );
-        m.into()
-    })
-}
-fn _flatpak(o: Option<anda_config::Flatpak>) -> Dynamic {
-    o.map_or(().into(), |f| {
-        let mut m = rhai::Map::new();
-        m.insert("manifest".into(), _pb(Some(f.manifest)));
-        m.insert("pre_script".into(), _pb(f.pre_script));
-        m.insert("post_script".into(), _pb(f.post_script));
         m.into()
     })
 }
