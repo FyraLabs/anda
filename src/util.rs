@@ -1,5 +1,5 @@
 //! Utility functions and types
-use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
+use anda_config::{Manifest, Project, RpmBuild};
 use clap_verbosity_flag::LevelFilter;
 use color_eyre::{eyre::eyre, Result, Section};
 use console::style;
@@ -262,57 +262,22 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
             continue;
         }
 
-        match path.extension().unwrap_or_default().as_encoded_bytes() {
-            b"spec" => {
-                debug!("Found spec file: {}", path.display());
-                if yes
-                    || prompt_default(
-                        format!("Add spec file `{}` to manifest?", path.display()),
-                        true,
-                    )?
-                {
-                    let project_name = path.file_stem().unwrap().to_str().unwrap();
-                    let project = Project {
-                        rpm: Some(RpmBuild { spec: path.to_path_buf(), ..Default::default() }),
-                        ..Default::default()
-                    };
-                    config.project.insert(project_name.to_owned(), project);
-                }
+        if path.extension().unwrap_or_default().as_encoded_bytes() == b"spec" {
+            debug!("Found spec file: {}", path.display());
+            if yes
+                || prompt_default(format!("Add spec file `{}` to manifest?", path.display()), true)?
+            {
+                let project_name = path.file_stem().unwrap().to_str().unwrap();
+                let project = Project {
+                    rpm: Some(RpmBuild { spec: path.to_path_buf(), ..Default::default() }),
+                    ..Default::default()
+                };
+                config.project.insert(project_name.to_owned(), project);
             }
-            b"dockerfile" => add_dockerfile_to_manifest(yes, path, &mut config)?,
-            _ if path.file_name().is_some_and(|f| f.eq("Dockerfile")) => {
-                add_dockerfile_to_manifest(yes, path, &mut config)?;
-            }
-            _ => {}
         }
     }
     println!("{}", anda_config::config::to_string(&config)?);
 
-    Ok(())
-}
-
-fn add_dockerfile_to_manifest(
-    yes: bool,
-    path: &Path,
-    config: &mut Manifest,
-) -> Result<(), color_eyre::eyre::Error> {
-    let add_oci =
-        yes || prompt_default(format!("Add Dockerfile `{}` to manifest?", path.display()), true)?;
-    if add_oci {
-        // create a new project called docker
-
-        let mut docker = Docker::default();
-
-        let image =
-            DockerImage { dockerfile: Some(path.display().to_string()), ..Default::default() };
-        let image_name = "docker-1".to_owned();
-        docker.image.insert(image_name, image);
-
-        let project = Project { docker: Some(docker), ..Default::default() };
-
-        // increment counter
-        config.project.insert("docker".to_owned(), project);
-    };
     Ok(())
 }
 

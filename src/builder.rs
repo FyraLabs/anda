@@ -1,12 +1,10 @@
 use crate::{
     artifacts::Artifacts,
-    cli::{Cli, FlatpakOpts, OciOpts, PackageType, RpmOpts},
+    cli::{Cli, PackageType, RpmOpts},
     cmd,
-    flatpak::{FlatpakArtifact, FlatpakBuilder},
-    oci::{build_oci, OCIBackend},
     rpm_spec::{RPMBuilder, RPMExtraOptions, RPMOptions},
 };
-use anda_config::{Docker, Flatpak, Project};
+use anda_config::Project;
 use color_eyre::{eyre::eyre, eyre::Context, Result};
 use itertools::Itertools;
 use std::path::{Path, PathBuf};
@@ -85,44 +83,6 @@ pub async fn build_rpm(
     Ok(builder)
 }
 
-/// Build a flatpak package.
-///
-/// # Errors
-/// - cannot create bundle
-pub async fn build_flatpak(
-    output_dir: &Path,
-    manifest: &Path,
-    flatpak_opts: &mut FlatpakOpts,
-) -> Result<Vec<FlatpakArtifact>> {
-    let mut artifacts = Vec::new();
-
-    let out = output_dir.join("flatpak");
-
-    let flat_out = out.join("build");
-    let flat_repo = out.join("repo");
-    let flat_bundles = out.join("bundles");
-
-    let mut builder = FlatpakBuilder::new(flat_out, flat_repo, flat_bundles);
-
-    for extra_source in &mut flatpak_opts.extra_sources {
-        builder.add_extra_source(PathBuf::from(std::mem::take(extra_source)));
-    }
-
-    for extra_source_url in &mut flatpak_opts.extra_sources_url {
-        builder.add_extra_source_url(std::mem::take(extra_source_url));
-    }
-
-    if !flatpak_opts.dont_delete_build_dir {
-        builder.add_extra_args("--delete-build-dirs".to_owned());
-    }
-
-    let flatpak = builder.build(manifest).await?;
-    artifacts.push(FlatpakArtifact::Ref(flatpak.clone()));
-    artifacts.push(FlatpakArtifact::Bundle(builder.bundle(&flatpak).await?));
-
-    Ok(artifacts)
-}
-
 macro_rules! script {
     ($name:expr, $scr:expr, $( $var:ident ),*) => {
         let sc = andax::run(
@@ -194,73 +154,22 @@ pub async fn build_rpm_call(
     Ok(())
 }
 
-pub async fn build_flatpak_call(
-    cli: &Cli,
-    flatpak: &Flatpak,
-    artifact_store: &mut Artifacts,
-    mut flatpak_opts: FlatpakOpts,
-) -> Result<()> {
-    if let Some(pre_script) = &flatpak.pre_script {
-        script!(
-            flatpak.manifest.as_path().to_str().unwrap_or("<flatpak>"),
-            pre_script,
-            flatpak_opts
-        );
-    }
-
-    let art = build_flatpak(&cli.target_dir, &flatpak.manifest, &mut flatpak_opts).await.unwrap();
-
-    for artifact in art {
-        artifact_store.add(artifact.to_string(), PackageType::Flatpak);
-    }
-
-    if let Some(post_script) = &flatpak.post_script {
-        script!(flatpak.manifest.as_path().to_str().unwrap_or("<flatpak>"), post_script,);
-    }
-
-    Ok(())
-}
-
-pub fn build_oci_call(
-    backend: OCIBackend,
-    _cli: &Cli,
-    manifest: &mut Docker,
-    artifact_store: &mut Artifacts,
-) {
-    let art_type = match backend {
-        OCIBackend::Docker => PackageType::Docker,
-        OCIBackend::Podman => PackageType::Podman,
-    };
-
-    for (tag, image) in std::mem::take(&mut manifest.image) {
-        let art = build_oci(
-            backend,
-            &image.dockerfile.unwrap(),
-            image.tag_latest.unwrap_or(false),
-            &tag,
-            &image.version.unwrap_or_else(|| "latest".into()),
-            &image.context,
-        );
-
-        for artifact in art {
-            artifact_store.add(artifact.clone(), art_type);
-        }
-    }
-}
-
 // project parser
 
 pub async fn build_project(
     cli: &Cli,
-    mut proj: Project,
+    proj: Project,
     package: PackageType,
     rbopts: &RpmOpts,
-    fpopts: &FlatpakOpts,
-    _oci_opts: &OciOpts,
 ) -> Result<()> {
     let cwd = std::env::current_dir().unwrap();
 
-    let mut rpm_opts = RPMOptions::new(rbopts.mock_config.clone(), cwd, cli.target_dir.clone());
+    let mut rpm_opts = RPMOptions {
+        mock_config: rbopts.mock_config.clone(),
+        sources: cwd,
+        resultdir: cli.target_dir.clone(),
+        ..RPMOptions::default()
+    };
 
     // export environment variables
     if let Some(env) = proj.env.as_ref() {
@@ -308,14 +217,11 @@ pub async fn build_project(
     }
     let mut arts = Artifacts::new();
 
-    _build_pkg(package, &mut proj, cli, rpm_opts, rbopts, &mut arts, fpopts).await?;
+    _build_pkg(package, &proj, cli, rpm_opts, rbopts, &mut arts).await?;
 
     for (path, arttype) in arts.packages {
         let type_string = match arttype {
             PackageType::Rpm => "RPM",
-            PackageType::Docker => "Docker image",
-            PackageType::Podman => "Podman image",
-            PackageType::Flatpak => "flatpak",
             // PackageType::RpmOstree => "rpm-ostree compose",
             PackageType::All => unreachable!(),
         };
@@ -335,15 +241,14 @@ pub async fn build_project(
 
 async fn _build_pkg(
     package: PackageType,
-    proj: &mut Project,
+    proj: &Project,
     cli: &Cli,
     rpm_opts: RPMOptions,
     rbopts: &RpmOpts,
     arts: &mut Artifacts,
-    fpopts: &FlatpakOpts,
 ) -> Result<(), color_eyre::Report> {
     match package {
-        PackageType::All => build_all(proj, cli, rpm_opts, rbopts, arts, fpopts).await?,
+        PackageType::All => build_all(proj, cli, rpm_opts, rbopts, arts).await?,
         PackageType::Rpm => {
             if let Some(rpmbuild) = &proj.rpm {
                 build_rpm_call(cli, rpm_opts, rpmbuild, rbopts.rpm_builder.into(), arts, rbopts)
@@ -353,54 +258,21 @@ async fn _build_pkg(
                 println!("No RPM build defined for project");
             }
         }
-        PackageType::Docker => {
-            proj.docker.as_mut().map_or_else(
-                || println!("No Docker build defined for project"),
-                |docker| build_oci_call(OCIBackend::Docker, cli, docker, arts),
-            );
-        }
-        PackageType::Podman => {
-            proj.podman.as_mut().map_or_else(
-                || println!("No Podman build defined for project"),
-                |podman| build_oci_call(OCIBackend::Podman, cli, podman, arts),
-            );
-        }
-        PackageType::Flatpak => {
-            if let Some(flatpak) = &proj.flatpak {
-                build_flatpak_call(cli, flatpak, arts, fpopts.clone())
-                    .await
-                    .with_context(|| "Failed to build Flatpaks".to_owned())?;
-            } else {
-                println!("No Flatpak build defined for project");
-            }
-        } // PackageType::RpmOstree => todo!(),
-    };
+    }
     Ok(())
 }
 
 async fn build_all(
-    project: &mut Project,
+    project: &Project,
     cli: &Cli,
     rpm_opts: RPMOptions,
     rbopts: &RpmOpts,
     artifacts: &mut Artifacts,
-    flatpak_opts: &FlatpakOpts,
 ) -> Result<(), color_eyre::Report> {
     if let Some(rpmbuild) = &project.rpm {
         build_rpm_call(cli, rpm_opts, rpmbuild, rbopts.rpm_builder.into(), artifacts, rbopts)
             .await
             .with_context(|| "Failed to build RPMs".to_owned())?;
-    }
-    if let Some(flatpak) = &project.flatpak {
-        build_flatpak_call(cli, flatpak, artifacts, flatpak_opts.clone())
-            .await
-            .with_context(|| "Failed to build Flatpaks".to_owned())?;
-    }
-    if let Some(podman) = project.podman.as_mut() {
-        build_oci_call(OCIBackend::Podman, cli, podman, artifacts);
-    }
-    if let Some(docker) = project.docker.as_mut() {
-        build_oci_call(OCIBackend::Docker, cli, docker, artifacts);
     }
     if let Some(scripts) = &project.scripts {
         info!("Running build scripts");
@@ -422,8 +294,6 @@ pub async fn builder(
     all: bool,
     project: Option<String>,
     package: PackageType,
-    flatpak_opts: FlatpakOpts,
-    oci_opts: OciOpts,
 ) -> Result<()> {
     // Parse the project manifest
     // todo
@@ -439,15 +309,14 @@ pub async fn builder(
     if all {
         for (name, project) in config.project {
             println!("Building project: {name}");
-            build_project(cli, project, package, &rpm_opts, &flatpak_opts, &oci_opts).await?;
+            build_project(cli, project, package, &rpm_opts).await?;
         }
     } else {
         // find project named project
         if let Some(name) = project {
             if let Some(project) = config.get_project(&name) {
                 // cannot take: get_project() returns immut ref
-                build_project(cli, project.clone(), package, &rpm_opts, &flatpak_opts, &oci_opts)
-                    .await?;
+                build_project(cli, project.clone(), package, &rpm_opts).await?;
             } else {
                 return Err(eyre!("Project not found: {name}"));
             }

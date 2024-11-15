@@ -5,8 +5,6 @@
 mod artifacts;
 mod builder;
 mod cli;
-mod flatpak;
-mod oci;
 mod rpm_spec;
 mod update;
 mod util;
@@ -37,14 +35,7 @@ async fn main() -> Result<()> {
 
     trace!("Matching subcommand");
     match cli.command {
-        Command::Build {
-            all,
-            ref mut project,
-            ref mut package,
-            ref mut rpm_opts,
-            ref mut flatpak_opts,
-            ref mut oci_opts,
-        } => {
+        Command::Build { all, ref mut project, ref mut package, ref mut rpm_opts } => {
             if project.is_none() && !all {
                 // print help
                 let mut app = Cli::command();
@@ -56,11 +47,9 @@ async fn main() -> Result<()> {
 
             let project = take(project);
             let package = std::mem::replace(package, cli::PackageType::Rpm);
-            let flatpak_opts = take(flatpak_opts);
-            let oci_opts = take(oci_opts);
             let rpm_opts = take(rpm_opts);
             debug!("{all:?}");
-            builder::builder(&cli, rpm_opts, all, project, package, flatpak_opts, oci_opts).await?;
+            builder::builder(&cli, rpm_opts, all, project, package).await?;
         }
         Command::Clean => {
             println!("Cleaning up build directory");

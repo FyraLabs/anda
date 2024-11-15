@@ -1,16 +1,4 @@
 {
-  "sqltools.connections": [
-    {
-      "previewLimit": 50,
-      "server": "localhost",
-      "port": 5432,
-      "driver": "PostgreSQL",
-      "name": "anda",
-      "database": "anda",
-      "username": "postgres",
-      "password": "example"
-    }
-  ],
   "rust-analyzer.checkOnSave.command": "clippy",
   "search.useGlobalIgnoreFiles": true,
   "files.exclude": {

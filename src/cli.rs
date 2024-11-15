@@ -16,10 +16,6 @@ pub enum RPMBuilder {
 #[derive(Copy, Clone, ValueEnum, Debug)]
 pub enum PackageType {
     Rpm,
-    Docker,
-    Podman,
-    Flatpak,
-    // RpmOstree,
     All,
 }
 
@@ -29,9 +25,6 @@ impl FromStr for PackageType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "rpm" => Ok(Self::Rpm),
-            "docker" => Ok(Self::Docker),
-            "podman" => Ok(Self::Podman),
-            "flatpak" => Ok(Self::Flatpak),
             // "rpm-ostree" => Ok(Self::RpmOstree),
             "all" => Ok(Self::All),
             _ => Err(format!("Invalid package type: {s}")),
@@ -65,38 +58,6 @@ pub struct Cli {
     /// Output directory for built packages
     #[clap(short, long, env = "TARGET_DIR", default_value = "anda-build")]
     pub target_dir: PathBuf,
-}
-
-#[derive(Args, Debug, Clone, Default)]
-pub struct FlatpakOpts {
-    /// Flatpak: Extra source directory
-    /// can be defined multiple times
-    #[clap(long, group = "extra-source")]
-    pub extra_sources: Vec<String>,
-
-    /// Flatpak: Extra source URL
-    /// can be defined multiple times
-    #[clap(long)]
-    pub extra_sources_url: Vec<String>,
-
-    /// Flatpak: Do not delete the build directory
-    #[clap(long, action)]
-    pub dont_delete_build_dir: bool,
-}
-
-#[derive(Args, Debug, Clone, Default)]
-pub struct OciOpts {
-    /// OCI: Labels to add to the image
-    #[clap(long)]
-    pub label: Vec<String>,
-
-    /// OCI: Build Arguments to pass to the build
-    #[clap(long)]
-    pub build_arg: Vec<String>,
-
-    /// OCI: compress the context with gzip
-    #[clap(long, action)]
-    pub compress: bool,
 }
 
 #[derive(Args, Debug, Clone, Default)]
@@ -159,14 +120,6 @@ pub enum Command {
         /// Options for RPM builds
         #[clap(flatten)]
         rpm_opts: RpmOpts,
-
-        /// Options for Flatpak builds
-        #[clap(flatten)]
-        flatpak_opts: FlatpakOpts,
-
-        /// Options for OCI builds
-        #[clap(flatten)]
-        oci_opts: OciOpts,
     },
     /// Cleans up the build directory
     Clean,

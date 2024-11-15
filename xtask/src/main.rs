@@ -1,6 +1,6 @@
 use anda::cli::Cli;
 use anyhow::Result;
-use clap::{Command, CommandFactory};
+use clap::CommandFactory;
 use clap_complete::{generate_to, shells::Shell};
 use std::env;
 use std::fs::create_dir_all;
@@ -29,7 +29,7 @@ completion         builds shell completions
 }
 
 /// WARN: Consumes subcommands
-fn gen_manpage(cmd: Rc<Command>, man_dir: &Path) {
+fn gen_manpage(cmd: Rc<clap::Command>, man_dir: &Path) {
     let name = cmd
         .get_display_name()
         .map(|s| s.to_string())

@@ -50,9 +50,6 @@ impl Manifest {
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
 pub struct Project {
     pub rpm: Option<RpmBuild>,
-    pub podman: Option<Docker>,
-    pub docker: Option<Docker>,
-    pub flatpak: Option<Flatpak>,
     pub pre_script: Option<PathBuf>,
     pub post_script: Option<PathBuf>,
     pub env: Option<BTreeMap<String, String>>,
@@ -191,11 +188,6 @@ pub struct RpmBuild {
     pub opts: Option<BTreeMap<String, String>>,
 }
 
-#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
-pub struct Docker {
-    pub image: BTreeMap<String, DockerImage>, // tag, file
-}
-
 pub fn parse_kv(input: &str) -> impl Iterator<Item = Option<(String, String)>> + '_ {
     input
         .split(',')
@@ -210,22 +202,6 @@ pub fn parse_filters(filters: &[String]) -> Option<Vec<Vec<(String, String)>>> {
 /// Turn a string into a BTreeMap<String, String>
 pub fn parse_labels<'a, I: Iterator<Item = &'a str>>(labels: I) -> Option<Vec<(String, String)>> {
     labels.flat_map(parse_kv).collect()
-}
-
-#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
-pub struct DockerImage {
-    pub dockerfile: Option<String>,
-    pub import: Option<PathBuf>,
-    pub tag_latest: Option<bool>,
-    pub context: String,
-    pub version: Option<String>,
-}
-
-#[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
-pub struct Flatpak {
-    pub manifest: PathBuf,
-    pub pre_script: Option<PathBuf>,
-    pub post_script: Option<PathBuf>,
 }
 
 /// Converts a [`Manifest`] to `String` (.hcl).
