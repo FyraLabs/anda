@@ -2,8 +2,6 @@
 //! This modules provides the RPM spec builder backend, which builds RPMs
 //! from a spec file.
 
-#![allow(dead_code)]
-
 use clap::clap_derive::ValueEnum;
 use tempfile::TempDir;
 
@@ -16,7 +14,7 @@ use std::{collections::BTreeMap, str::FromStr};
 use tokio::process::Command;
 use tracing::{debug, info};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RPMOptions {
     /// Mock config, only used if backend is mock
     pub mock_config: Option<String>,
@@ -48,52 +46,12 @@ pub struct RPMOptions {
     pub plugin_opts: Vec<String>,
 }
 
-impl RPMOptions {
-    pub const fn new(mock_config: Option<String>, sources: PathBuf, resultdir: PathBuf) -> Self {
-        Self {
-            mock_config,
-            with: Vec::new(),
-            without: Vec::new(),
-            target: None,
-            sources,
-            resultdir,
-            extra_repos: None,
-            no_mirror: false,
-            macros: BTreeMap::new(),
-            config_opts: Vec::new(),
-            scm_enable: false,
-            scm_opts: Vec::new(),
-            plugin_opts: Vec::new(),
-        }
-    }
-    pub fn add_extra_repo(&mut self, repo: String) {
-        if let Some(ref mut repos) = self.extra_repos {
-            repos.push(repo);
-        } else {
-            self.extra_repos = Some(vec![repo]);
-        }
-    }
-
-    pub fn no_mirror(&mut self, no_mirror: bool) {
-        self.no_mirror = no_mirror;
-    }
-}
-
 impl RPMExtraOptions for RPMOptions {
-    fn with_flags(&self) -> Vec<String> {
-        self.with.clone()
-    }
     fn with_flags_mut(&mut self) -> &mut Vec<String> {
         &mut self.with
     }
-    fn without_flags(&self) -> Vec<String> {
-        self.without.clone()
-    }
     fn without_flags_mut(&mut self) -> &mut Vec<String> {
         &mut self.without
-    }
-    fn macros(&self) -> BTreeMap<String, String> {
-        self.macros.clone()
     }
     fn macros_mut(&mut self) -> &mut BTreeMap<String, String> {
         &mut self.macros
@@ -188,8 +146,6 @@ pub trait RPMSpecBackend {
 }
 
 pub trait RPMExtraOptions {
-    /// Lists all macros
-    fn macros(&self) -> BTreeMap<String, String>;
     /// Returns macros as a mutable reference
     /// This is useful for advanced macro manipulation
     fn macros_mut(&mut self) -> &mut BTreeMap<String, String>;
@@ -197,53 +153,16 @@ pub trait RPMExtraOptions {
     /// Set target, used for cross-compile
     fn set_target(&mut self, target: Option<String>);
 
-    /// Adds a list of macros from an iterator
-    fn macros_iter<I>(&mut self, iter: I)
-    where
-        I: IntoIterator<Item = (String, String)>,
-    {
-        self.macros_mut().extend(iter);
-    }
-
     /// Defines a macro
     fn def_macro(&mut self, name: &str, value: &str) {
         self.macros_mut().insert(name.to_owned(), value.to_owned());
     }
-    /// Undefines a macro
-    fn undef_macro(&mut self, name: &str) {
-        self.macros_mut().remove(name);
-    }
-
-    // Configuration flags
-    // === with flags ===
-    /// Returns a list of `with` flags
-    fn with_flags(&self) -> Vec<String>;
 
     /// Returns a mutable reference to the `with` flags
     fn with_flags_mut(&mut self) -> &mut Vec<String>;
 
-    /// Sets a `with` flag for the build from an iterator
-    fn with_flags_iter<I>(&mut self, iter: I)
-    where
-        I: IntoIterator<Item = String>,
-    {
-        self.with_flags_mut().extend(iter);
-    }
-
-    // === without flags ===
-    /// Returns a list of `without` flags
-    fn without_flags(&self) -> Vec<String>;
-
     /// Returns a mutable reference to the `without` flags
     fn without_flags_mut(&mut self) -> &mut Vec<String>;
-
-    /// Sets a `without` flag for the build from an iterator
-    fn without_flags_iter<I>(&mut self, iter: I)
-    where
-        I: IntoIterator<Item = String>,
-    {
-        self.without_flags_mut().extend(iter);
-    }
 }
 
 /// An RPM spec backend that uses Mock to build RPMs
@@ -264,20 +183,11 @@ pub struct MockBackend {
 }
 
 impl RPMExtraOptions for MockBackend {
-    fn with_flags(&self) -> Vec<String> {
-        self.with.clone()
-    }
     fn with_flags_mut(&mut self) -> &mut Vec<String> {
         &mut self.with
     }
-    fn without_flags(&self) -> Vec<String> {
-        self.without.clone()
-    }
     fn without_flags_mut(&mut self) -> &mut Vec<String> {
         &mut self.without
-    }
-    fn macros(&self) -> BTreeMap<String, String> {
-        self.macros.clone()
     }
     fn macros_mut(&mut self) -> &mut BTreeMap<String, String> {
         &mut self.macros
@@ -310,10 +220,6 @@ impl MockBackend {
         self.config_opts.extend(opts);
     }
 
-    pub fn add_config_opt(&mut self, opt: String) {
-        self.config_opts.push(opt);
-    }
-
     pub fn add_extra_repo(&mut self, repo: String) {
         self.extra_repos.push(repo);
     }
@@ -327,10 +233,6 @@ impl MockBackend {
 
     pub fn extend_scm_opts(&mut self, opts: Vec<String>) {
         self.scm_opts.extend(opts);
-    }
-
-    pub fn add_scm_opt(&mut self, opt: String) {
-        self.scm_opts.push(opt);
     }
 
     pub fn plugin_opts(&mut self, opts: Vec<String>) {
@@ -486,20 +388,11 @@ pub struct RPMBuildBackend {
 }
 
 impl RPMExtraOptions for RPMBuildBackend {
-    fn with_flags(&self) -> Vec<String> {
-        self.with.clone()
-    }
     fn with_flags_mut(&mut self) -> &mut Vec<String> {
         &mut self.with
     }
-    fn without_flags(&self) -> Vec<String> {
-        self.without.clone()
-    }
     fn without_flags_mut(&mut self) -> &mut Vec<String> {
         &mut self.without
-    }
-    fn macros(&self) -> BTreeMap<String, String> {
-        self.macros.clone()
     }
     fn macros_mut(&mut self) -> &mut BTreeMap<String, String> {
         &mut self.macros

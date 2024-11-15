@@ -158,13 +158,18 @@ pub async fn build_rpm_call(
 
 pub async fn build_project(
     cli: &Cli,
-    mut proj: Project,
+    proj: Project,
     package: PackageType,
     rbopts: &RpmOpts,
 ) -> Result<()> {
     let cwd = std::env::current_dir().unwrap();
 
-    let mut rpm_opts = RPMOptions::new(rbopts.mock_config.clone(), cwd, cli.target_dir.clone());
+    let mut rpm_opts = RPMOptions {
+        mock_config: rbopts.mock_config.clone(),
+        sources: cwd,
+        resultdir: cli.target_dir.clone(),
+        ..RPMOptions::default()
+    };
 
     // export environment variables
     if let Some(env) = proj.env.as_ref() {
@@ -212,7 +217,7 @@ pub async fn build_project(
     }
     let mut arts = Artifacts::new();
 
-    _build_pkg(package, &mut proj, cli, rpm_opts, rbopts, &mut arts).await?;
+    _build_pkg(package, &proj, cli, rpm_opts, rbopts, &mut arts).await?;
 
     for (path, arttype) in arts.packages {
         let type_string = match arttype {
@@ -236,7 +241,7 @@ pub async fn build_project(
 
 async fn _build_pkg(
     package: PackageType,
-    proj: &mut Project,
+    proj: &Project,
     cli: &Cli,
     rpm_opts: RPMOptions,
     rbopts: &RpmOpts,
@@ -258,7 +263,7 @@ async fn _build_pkg(
 }
 
 async fn build_all(
-    project: &mut Project,
+    project: &Project,
     cli: &Cli,
     rpm_opts: RPMOptions,
     rbopts: &RpmOpts,

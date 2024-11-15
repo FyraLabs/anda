@@ -262,24 +262,18 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
             continue;
         }
 
-        match path.extension().unwrap_or_default().as_encoded_bytes() {
-            b"spec" => {
-                debug!("Found spec file: {}", path.display());
-                if yes
-                    || prompt_default(
-                        format!("Add spec file `{}` to manifest?", path.display()),
-                        true,
-                    )?
-                {
-                    let project_name = path.file_stem().unwrap().to_str().unwrap();
-                    let project = Project {
-                        rpm: Some(RpmBuild { spec: path.to_path_buf(), ..Default::default() }),
-                        ..Default::default()
-                    };
-                    config.project.insert(project_name.to_owned(), project);
-                }
+        if path.extension().unwrap_or_default().as_encoded_bytes() == b"spec" {
+            debug!("Found spec file: {}", path.display());
+            if yes
+                || prompt_default(format!("Add spec file `{}` to manifest?", path.display()), true)?
+            {
+                let project_name = path.file_stem().unwrap().to_str().unwrap();
+                let project = Project {
+                    rpm: Some(RpmBuild { spec: path.to_path_buf(), ..Default::default() }),
+                    ..Default::default()
+                };
+                config.project.insert(project_name.to_owned(), project);
             }
-            _ => {}
         }
     }
     println!("{}", anda_config::config::to_string(&config)?);
