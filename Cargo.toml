@@ -7,7 +7,7 @@ description = "Andaman Build toolchain"
 license = "MIT"
 repository = "https://github.com/FyraLabs/anda"
 readme = "README.md"
-keywords = ["build", "toolchain", "rpm", "flatpak", "oci"]
+keywords = ["build", "toolchain", "rpm"]
 exclude = [
     "anda-build",
     "anda-config",
@@ -29,7 +29,6 @@ walkdir = "2.5.0"
 tempfile = "3.14.0"
 anda-config = { workspace = true }
 andax = { path = "./andax", version = "0.3.1" }
-flatpak = "0.18.1"
 clap-verbosity-flag = "2.2.2"
 tokio = { version = "1.41.1", features = [
     "process",
