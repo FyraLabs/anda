@@ -1,6 +1,6 @@
 //! Utility functions and types
 use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
-use clap_verbosity_flag::LevelFilter;
+use clap_verbosity_flag::log::LevelFilter;
 use color_eyre::{eyre::eyre, Result, Section};
 use console::style;
 use nix::{sys::signal, unistd::Pid};

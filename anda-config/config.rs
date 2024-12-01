@@ -183,6 +183,8 @@ pub struct RpmBuild {
     pub pre_script: Option<PathBuf>,
     pub post_script: Option<PathBuf>,
     pub enable_scm: Option<bool>,
+    #[serde(default)]
+    pub extra_repos: Vec<String>,
     pub scm_opts: Option<BTreeMap<String, String>>,
     pub config: Option<BTreeMap<String, String>>,
     pub mock_config: Option<String>,
