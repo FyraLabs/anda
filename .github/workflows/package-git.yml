@@ -7,12 +7,12 @@ jobs:
   anda:
     strategy:
       matrix:
-        version: ["f40"]
+        version: ["f41"]
         arch: ["x86_64", "aarch64"]
       fail-fast: false
     runs-on: ${{ matrix.arch == 'aarch64' && 'ARM64' || 'ubuntu-latest' }}
     container:
-      image: ghcr.io/terrapkg/builder:main
+      image: ghcr.io/terrapkg/builder:${{ matrix.version }}
       options: --cap-add=SYS_ADMIN --privileged
 
     steps:
@@ -20,5 +20,5 @@ jobs:
       - uses: terrapkg/anda-build@main
         with:
           name: "anda-git"
-          mockConfig: terra-40-${{ matrix.arch }}
+          mockConfig: terra-41-${{ matrix.arch }}
           andaRepo: https://github.com/terrapkg/subatomic-repos/raw/main/terra.repo
