@@ -276,6 +276,7 @@ pub async fn build_project(
     }
 
     if let Some(rpmbuild) = &proj.rpm {
+        rpm_opts.extra_repos = Some(rpmbuild.extra_repos.clone());
         if let Some(srcdir) = &rpmbuild.sources {
             rpm_opts.sources.clone_from(srcdir);
         }
