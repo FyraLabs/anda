@@ -3,9 +3,11 @@ use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
 use clap_verbosity_flag::log::LevelFilter;
 use color_eyre::{eyre::eyre, Result, Section};
 use console::style;
+use itertools::Itertools;
 use nix::{sys::signal, unistd::Pid};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use shell_quote::QuoteRefExt;
 use std::{collections::BTreeMap, path::Path};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use tracing::{debug, info};
@@ -101,8 +103,12 @@ impl CommandLog for Command {
 
         // make process name a constant string that we can reuse every time we call print_log
         let process = self.as_std().get_program().to_owned().into_string().unwrap();
-        let args =
-            self.as_std().get_args().map(|a| a.to_str().unwrap()).collect::<Vec<&str>>().join(" ");
+        let args = self
+            .as_std()
+            .get_args()
+            .map(shell_quote::Sh::quote_vec)
+            .map(|s| String::from_utf8(s).unwrap())
+            .join(" ");
         debug!("Running command: {process} {args}",);
 
         // Wrap the command in `script` to force it to give it a TTY
