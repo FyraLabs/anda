@@ -7,7 +7,6 @@ use itertools::Itertools;
 use nix::{sys::signal, unistd::Pid};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use shell_quote::QuoteRefExt;
 use std::{collections::BTreeMap, path::Path};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use tracing::{debug, info};
