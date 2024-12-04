@@ -533,7 +533,7 @@ impl RPMBuildBackend {
         }
 
         for (name, value) in &self.macros {
-            cmd.arg("-D").arg(format!("'{name} {value}'"));
+            cmd.arg("-D").arg(format!("{name} {value}"));
         }
 
         cmd
