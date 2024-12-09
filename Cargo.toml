@@ -31,7 +31,7 @@ anda-config = { workspace = true }
 andax = { path = "./andax", version = "0.4.2" }
 flatpak = "0.18.1"
 clap-verbosity-flag = "3.0.1"
-tokio = { version = "1.41.1", features = [
+tokio = { version = "1.42.0", features = [
     "process",
     "io-util",
     "macros",
