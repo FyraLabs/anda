@@ -1,5 +1,4 @@
 use crate::error::{AndaxError as AErr, AndaxRes};
-use crate::run::rf;
 use regex::Regex;
 use rhai::{
     plugin::{
@@ -29,14 +28,20 @@ pub mod ar {
         serde_json::from_str(&a).ehdl(&ctx)
     }
     #[rhai_fn(return_raw, global)]
-    pub fn find(ctx: NativeCallContext, r: &str, text: &str, group: i64) -> Res<String> {
+    pub fn find(ctx: NativeCallContext, r: &str, text: &str, group: usize) -> Res<String> {
         let captures = Regex::new(r).ehdl(&ctx)?.captures(text);
         let cap = captures.ok_or_else(|| format!("Can't match regex: {r}\nText: {text}"))?;
-        Ok(cap
-            .get(rf(&ctx, group.try_into().map_err(color_eyre::Report::new))?)
-            .ok_or_else(|| format!("Can't get group: {r}\nText: {text}"))?
+        Ok((cap.get(group).ok_or_else(|| format!("Can't get group: {r}\nText: {text}"))?)
             .as_str()
             .into())
+    }
+    #[rhai_fn(return_raw, global)]
+    pub fn find_all(ctx: NativeCallContext, r: &str, text: &str) -> Res<Vec<Vec<Option<String>>>> {
+        Ok(Regex::new(r)
+            .ehdl(&ctx)?
+            .captures_iter(text)
+            .map(|cap| cap.iter().map(|m| m.map(|m| m.as_str().to_owned())).collect())
+            .collect())
     }
     #[rhai_fn(return_raw, global)]
     pub fn sub(ctx: NativeCallContext, r: &str, rep: &str, text: &str) -> Res<String> {
