@@ -30,12 +30,14 @@ pub mod ar {
         serde_json::from_str(&a).ehdl(&ctx)
     }
     #[rhai_fn(return_raw, global)]
-    pub fn find(ctx: NativeCallContext, r: &str, text: &str, group: usize) -> Res<String> {
+    pub fn find(ctx: NativeCallContext, r: &str, text: &str, group: i64) -> Res<String> {
         let captures = Regex::new(r).ehdl(&ctx)?.captures(text);
         let cap = captures.ok_or_else(|| format!("Can't match regex: {r}\nText: {text}"))?;
-        Ok((cap.get(group).ok_or_else(|| format!("Can't get group: {r}\nText: {text}"))?)
-            .as_str()
-            .into())
+        Ok((cap
+            .get(group.try_into().unwrap())
+            .ok_or_else(|| format!("Can't get group: {r}\nText: {text}"))?)
+        .as_str()
+        .into())
     }
     #[rhai_fn(return_raw, global)]
     pub fn find_all(ctx: NativeCallContext, r: &str, text: &str) -> Res<rhai::Array> {
