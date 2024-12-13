@@ -88,7 +88,7 @@ pub mod ar {
         o.2
     }
 
-    fn _parse_io_opt(opt: Option<&mut rhai::Dynamic>) -> Result<impl Into<Stdio>, rhai::Map> {
+    fn parse_io_opt(opt: Option<&mut rhai::Dynamic>) -> Result<impl Into<Stdio>, rhai::Map> {
         let Some(s) = opt else { return Ok(Stdio::inherit()) };
         let s = match std::mem::take(s).into_string() {
             Ok(s) => s,
@@ -122,11 +122,11 @@ pub mod ar {
             cmd.args(args)
         };
 
-        cmd.stdout(match _parse_io_opt(opts.get_mut("stdout")) {
+        cmd.stdout(match parse_io_opt(opts.get_mut("stdout")) {
             Ok(io) => io,
             Err(e) => return e,
         });
-        cmd.stderr(match _parse_io_opt(opts.get_mut("stderr")) {
+        cmd.stderr(match parse_io_opt(opts.get_mut("stderr")) {
             Ok(io) => io,
             Err(e) => return e,
         });
@@ -201,21 +201,20 @@ pub mod ar {
     /// ## Example
     /// ```rhai
     /// for x in ls("/") {
-    ///     if x == "bin" {
+    ///     if x == "/bin" {
     ///         print("I found the `/bin` folder!");
     ///     }
     /// }
     /// ```
     #[rhai_fn(return_raw, global)]
-    pub fn ls(
-        ctx: NativeCallContext,
-        dir: Option<&str>,
-    ) -> Result<Vec<String>, Box<EvalAltResult>> {
-        let mut res = vec![];
-        for dir in std::fs::read_dir(dir.unwrap_or(".")).ehdl(&ctx)? {
-            res.push(dir.ehdl(&ctx)?.path().to_string_lossy().to_string());
-        }
-        Ok(res)
+    pub fn ls(ctx: NativeCallContext, dir: &str) -> Result<rhai::Array, Box<EvalAltResult>> {
+        (std::fs::read_dir(dir).ehdl(&ctx)?)
+            .map(|dir| Ok(dir.ehdl(&ctx)?.path().to_string_lossy().to_string().into()))
+            .collect()
+    }
+    #[rhai_fn(return_raw, name = "ls", global)]
+    pub fn ls_cwd(ctx: NativeCallContext) -> Result<rhai::Array, Box<EvalAltResult>> {
+        ls(ctx, ".")
     }
     /// write data to file
     ///

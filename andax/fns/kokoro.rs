@@ -11,6 +11,8 @@ type Res<T = ()> = Result<T, Box<RhaiE>>;
 
 #[export_module]
 pub mod ar {
+    use std::str::FromStr;
+
     #[rhai_fn(return_raw, global)]
     pub fn terminate(ctx: NativeCallContext) -> Res {
         Err(Box::new(RhaiE::ErrorRuntime(Dynamic::from(AErr::Exit(false)), ctx.position())))
@@ -36,11 +38,14 @@ pub mod ar {
             .into())
     }
     #[rhai_fn(return_raw, global)]
-    pub fn find_all(ctx: NativeCallContext, r: &str, text: &str) -> Res<Vec<Vec<Option<String>>>> {
-        Ok(Regex::new(r)
-            .ehdl(&ctx)?
-            .captures_iter(text)
-            .map(|cap| cap.iter().map(|m| m.map(|m| m.as_str().to_owned())).collect())
+    pub fn find_all(ctx: NativeCallContext, r: &str, text: &str) -> Res<rhai::Array> {
+        Ok((Regex::new(r).ehdl(&ctx)?.captures_iter(text))
+            .map(|cap| {
+                // NOTE: Dynamic::from_str() is always Ok()
+                cap.iter()
+                    .map(|m| m.map_or(Dynamic::UNIT, |s| Dynamic::from_str(s.as_str()).unwrap()))
+                    .collect()
+            })
             .collect())
     }
     #[rhai_fn(return_raw, global)]
