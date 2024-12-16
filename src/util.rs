@@ -7,7 +7,7 @@ use itertools::Itertools;
 use nix::{sys::signal, unistd::Pid};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::Path};
+use std::{collections::BTreeMap, io::Write, path::Path};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use tracing::{debug, info};
 
@@ -80,7 +80,7 @@ pub trait CommandLog {
 #[async_trait::async_trait]
 impl CommandLog for Command {
     async fn log(&mut self) -> Result<()> {
-        fn print_log(process: &str, output: &str, out: ConsoleOut) {
+        fn print_log(process: &str, output: &[u8], out: ConsoleOut) {
             // check if no_color is set
             let no_color = std::env::var("NO_COLOR").is_ok();
 
@@ -94,10 +94,15 @@ impl CommandLog for Command {
                     }
                 }
             };
-
-            let output = output.replace('\r', &format!("\r{process} │ "));
-
-            println!("{process} │ {output}");
+            let mut output2 = Vec::with_capacity(output.len() + 10);
+            for &c in output {
+                if c == b'\r' {
+                    output2.extend_from_slice(format!("\r{process} │ ").as_bytes());
+                } else {
+                    output2.push(c);
+                }
+            }
+            std::io::stdout().write_all(&output2).unwrap();
         }
 
         // make process name a constant string that we can reuse every time we call print_log
@@ -139,21 +144,21 @@ impl CommandLog for Command {
         let t = process.clone();
 
         let stdout = output.stdout.take().unwrap();
-        let mut stdout_lines = tokio::io::BufReader::new(stdout).lines();
+        let mut stdout_lines = tokio::io::BufReader::new(stdout).split(b'\n');
 
         let stderr = output.stderr.take().unwrap();
-        let mut stderr_lines = tokio::io::BufReader::new(stderr).lines();
+        let mut stderr_lines = tokio::io::BufReader::new(stderr).split(b'\n');
 
         // handles so we can run both at the same time
         for task in [
             tokio::spawn(async move {
-                while let Some(line) = stdout_lines.next_line().await.unwrap() {
+                while let Some(line) = stdout_lines.next_segment().await.unwrap() {
                     print_log(&t, &line, ConsoleOut::Stdout);
                 }
                 Ok(())
             }),
             tokio::spawn(async move {
-                while let Some(line) = stderr_lines.next_line().await.unwrap() {
+                while let Some(line) = stderr_lines.next_segment().await.unwrap() {
                     print_log(&process, &line, ConsoleOut::Stderr);
                 }
                 Ok(())
