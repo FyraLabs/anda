@@ -48,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "anda"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "anda-config",
  "andax",
@@ -81,7 +81,7 @@ dependencies = [
 
 [[package]]
 name = "anda-config"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "dotenv",
  "env_logger",
@@ -95,7 +95,7 @@ dependencies = [
 
 [[package]]
 name = "andax"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "anda-config",
  "chrono",
@@ -289,9 +289,9 @@ dependencies = [
 
 [[package]]
 name = "clap-verbosity-flag"
-version = "3.0.1"
+version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54381ae56ad222eea3f529c692879e9c65e07945ae48d3dc4d1cb18dbec8cf44"
+checksum = "2678fade3b77aa3a8ff3aae87e9c008d3fb00473a41c71fbf74e91c8c7b37e84"
 dependencies = [
  "clap",
  "log",
