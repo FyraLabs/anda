@@ -95,6 +95,7 @@ impl CommandLog for Command {
                 }
             };
             let mut output2 = Vec::with_capacity(output.len() + 10);
+            output2.extend_from_slice(format!("{process} │ ").as_bytes());
             for &c in output {
                 if c == b'\r' {
                     output2.extend_from_slice(format!("\r{process} │ ").as_bytes());
@@ -103,6 +104,7 @@ impl CommandLog for Command {
                 }
             }
             std::io::stdout().write_all(&output2).unwrap();
+            std::io::stdout().write_all(b"\n").unwrap();
         }
 
         // make process name a constant string that we can reuse every time we call print_log
