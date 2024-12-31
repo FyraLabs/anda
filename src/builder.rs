@@ -128,7 +128,7 @@ macro_rules! script {
         let sc = andax::run(
             $name,
             &$scr,
-            std::iter::empty::<(String, String)>(),
+            std::iter::once(("script_path".to_string(), $scr.to_string_lossy().to_string())),
             |_sc| {
                 $( _sc.push(stringify!($var), $var); )*
             },

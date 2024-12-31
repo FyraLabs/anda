@@ -33,7 +33,7 @@ pub mod ar {
     #[rhai_fn(return_raw, global)]
     pub fn gh(ctx: NativeCallContext, repo: &str) -> Res<String> {
         let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/releases/latest"))
-            .set("Authorization", &format!("Bearer {}", env("GITHUB_TOKEN")?))
+            .set("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
             .set("User-Agent", USER_AGENT)
             .call()
             .ehdl(&ctx)?
@@ -45,7 +45,7 @@ pub mod ar {
     #[rhai_fn(return_raw, global)]
     pub fn gh_tag(ctx: NativeCallContext, repo: &str) -> Res<String> {
         let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/tags"))
-            .set("Authorization", &format!("Bearer {}", env("GITHUB_TOKEN")?))
+            .set("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
             .set("User-Agent", USER_AGENT)
             .call()
             .ehdl(&ctx)?
@@ -61,7 +61,7 @@ pub mod ar {
     #[rhai_fn(return_raw, global)]
     pub fn gh_commit(ctx: NativeCallContext, repo: &str) -> Res<String> {
         let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/commits/HEAD"))
-            .set("Authorization", &format!("Bearer {}", env("GITHUB_TOKEN")?))
+            .set("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
             .set("User-Agent", USER_AGENT)
             .call()
             .ehdl(&ctx)?
@@ -184,14 +184,20 @@ pub mod ar {
         obj.as_str().map(std::string::ToString::to_string).ok_or_else(|| "json not string?".into())
     }
 
-    #[rhai_fn(return_raw, global)]
-    pub fn env(key: &str) -> Res<String> {
+    #[rhai_fn(skip)]
+    pub fn internal_env(key: &str) -> Res<String> {
         trace!("env(`{key}`) = {:?}", std::env::var(key));
         match std::env::var(key) {
             Ok(s) => Ok(s),
             Err(VarError::NotPresent) => Err(format!("env(`{key}`) not present").into()),
             Err(VarError::NotUnicode(o)) => Err(format!("env(`{key}`): invalid UTF: {o:?}").into()),
         }
+    }
+
+    #[rhai_fn(global)]
+    pub fn env(key: &str) -> String {
+        trace!("env(`{key}`) = {:?}", std::env::var_os(key));
+        std::env::var_os(key).map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
     }
 }
 
