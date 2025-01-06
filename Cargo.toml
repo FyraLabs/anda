@@ -48,7 +48,7 @@ console = "0.15.10"
 serde = { workspace = true }
 serde_json = { workspace = true }
 regex = { workspace = true }
-itertools = "0.13.0"
+itertools = "0.14.0"
 lazy_format = "2.0.3"
 lazy_static = { workspace = true }
 shell-quote = "0.7.2"
