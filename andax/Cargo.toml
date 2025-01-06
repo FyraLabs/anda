@@ -21,7 +21,7 @@ ureq = { version = "~2", features = ["json"] }
 tracing = { workspace = true }
 color-eyre = { workspace = true }
 smartstring = "1.0.1"
-tempfile = "3.14.0"
+tempfile = "3.15.0"
 anda-config = { workspace = true }
 rhai-fs = "0.1.2"
 rhai-url = "0.0.5"
