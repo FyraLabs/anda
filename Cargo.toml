@@ -51,7 +51,7 @@ regex = { workspace = true }
 itertools = "0.13.0"
 lazy_format = "2.0.3"
 lazy_static = { workspace = true }
-shell-quote = "0.7.1"
+shell-quote = "0.7.2"
 
 
 [lints]
