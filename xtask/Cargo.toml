@@ -7,7 +7,7 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap_mangen = "0.2.24"
+clap_mangen = "0.2.26"
 anda = { path = ".." }
 clap = { workspace = true }
 anyhow = "1.0.95"
