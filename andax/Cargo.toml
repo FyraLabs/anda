@@ -26,7 +26,7 @@ anda-config = { workspace = true }
 rhai-fs = "0.1.2"
 rhai-url = "0.0.5"
 hcl-rs = "0.15.0"
-directories = "5.0.1"
+directories = "6.0.0"
 chrono = { workspace = true }
 
 [lints]
