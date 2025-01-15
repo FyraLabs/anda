@@ -103,8 +103,8 @@ impl CommandLog for Command {
                     output2.push(c);
                 }
             }
+            output2.push(b'\n');
             std::io::stdout().write_all(&output2).unwrap();
-            std::io::stdout().write_all(b"\n").unwrap();
         }
 
         // make process name a constant string that we can reuse every time we call print_log
