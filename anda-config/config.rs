@@ -8,11 +8,13 @@ use tracing::{debug, instrument, trace};
 use crate::error::ProjectError;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde_with::skip_serializing_none]
 pub struct ProjectData {
     pub manifest: HashMap<String, String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde_with::skip_serializing_none]
 pub struct Manifest {
     pub project: BTreeMap<String, Project>,
     #[serde(default)]
@@ -20,6 +22,7 @@ pub struct Manifest {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
+#[serde_with::skip_serializing_none]
 pub struct Config {
     pub mock_config: Option<String>,
     pub strip_prefix: Option<String>,
@@ -48,6 +51,7 @@ impl Manifest {
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
+#[serde_with::skip_serializing_none]
 pub struct Project {
     pub rpm: Option<RpmBuild>,
     pub podman: Option<Docker>,
@@ -76,7 +80,7 @@ where
 {
     struct WildString;
 
-    impl<'de> serde::de::Visitor<'de> for WildString {
+    impl serde::de::Visitor<'_> for WildString {
         type Value = String;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -176,6 +180,7 @@ where
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
+#[serde_with::skip_serializing_none]
 pub struct RpmBuild {
     pub spec: PathBuf,
     pub sources: Option<PathBuf>,
@@ -194,6 +199,7 @@ pub struct RpmBuild {
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
+#[serde_with::skip_serializing_none]
 pub struct Docker {
     pub image: BTreeMap<String, DockerImage>, // tag, file
 }
@@ -215,6 +221,7 @@ pub fn parse_labels<'a, I: Iterator<Item = &'a str>>(labels: I) -> Option<Vec<(S
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone, Default)]
+#[serde_with::skip_serializing_none]
 pub struct DockerImage {
     pub dockerfile: Option<String>,
     pub import: Option<PathBuf>,
@@ -224,6 +231,7 @@ pub struct DockerImage {
 }
 
 #[derive(Deserialize, PartialEq, Eq, Serialize, Debug, Clone)]
+#[serde_with::skip_serializing_none]
 pub struct Flatpak {
     pub manifest: PathBuf,
     pub pre_script: Option<PathBuf>,

@@ -47,23 +47,19 @@ pub fn fetch_build_entries(config: Manifest) -> Vec<BuildEntry> {
 
         if let Some(rpm) = project.rpm {
             if rpm.enable_scm.unwrap_or(false) {
-                for arch in &*DEFAULT_ARCHES {
-                    entries.push(BuildEntry {
-                        pkg: std::mem::take(&mut name),
-                        arch: arch.clone(),
-                        labels: project.labels.clone(),
-                    });
-                }
+                entries.extend(DEFAULT_ARCHES.iter().map(|arch| BuildEntry {
+                    pkg: std::mem::take(&mut name),
+                    arch: arch.clone(),
+                    labels: project.labels.clone(),
+                }));
                 continue;
             }
         }
-        for arch in project.arches.unwrap_or_else(|| DEFAULT_ARCHES.to_vec()) {
-            entries.push(BuildEntry {
-                pkg: name.clone(),
-                arch: arch.clone(),
-                labels: project.labels.clone(),
-            });
-        }
+        entries.extend(project.arches.unwrap_or_else(|| DEFAULT_ARCHES.to_vec()).into_iter().map(|arch| BuildEntry {
+            pkg: name.clone(),
+            arch,
+            labels: project.labels.clone(),
+        }));
     }
 
     entries

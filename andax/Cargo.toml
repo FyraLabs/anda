@@ -5,8 +5,7 @@ edition = "2021"
 license = "MIT"
 description = "Andaman scripting runtime"
 repository = "https://github.com/FyraLabs/anda"
-# TODO:
-# readme = "README.md"
+readme = "../README.md"
 
 [lib]
 path = "./lib.rs"
@@ -22,12 +21,12 @@ ureq = { version = "~2", features = ["json"] }
 tracing = { workspace = true }
 color-eyre = { workspace = true }
 smartstring = "1.0.1"
-tempfile = "3.14.0"
+tempfile = "3.15.0"
 anda-config = { workspace = true }
 rhai-fs = "0.1.2"
 rhai-url = "0.0.5"
 hcl-rs = "0.15.0"
-directories = "5.0.1"
+directories = "6.0.0"
 chrono = { workspace = true }
 
 [lints]
