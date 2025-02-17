@@ -17,9 +17,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: terrapkg/anda-build@6bf9d4fc9d544e055d00554b8e17f998938bed22
+      - uses: terrapkg/anda-build@069637674859d994c5d6402cdfb97bc6156f6750
         with:
           name: "anda-git"
           mockConfig: terra-42-${{ matrix.arch }}
-          andaRepo: https://github.com/terrapkg/subatomic-repos/raw/main/terra.repo
           extraArgs: -rrpmbuild
