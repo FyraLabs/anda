@@ -17,7 +17,7 @@ serde_json = { workspace = true }
 regex = { workspace = true }
 lazy_static = { workspace = true }
 rhai = { version = "1.20.0", features = ["serde", "internals"] }
-ureq = { version = "~2", features = ["json"] }
+ureq = { version = "3", features = ["json"] }
 tracing = { workspace = true }
 color-eyre = { workspace = true }
 smartstring = "1.0.1"

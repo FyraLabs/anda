@@ -17,77 +17,65 @@ pub const USER_AGENT: &str = "AndaX";
 pub mod ar {
     type E = Box<rhai::EvalAltResult>;
 
+    static AGENT: std::sync::LazyLock<ureq::Agent> = std::sync::LazyLock::new(|| {
+        ureq::Agent::new_with_config(ureq::Agent::config_builder().max_redirects(0).build())
+    });
+
+    #[rhai_fn(return_raw, global)]
+    fn get_json(ctx: NativeCallContext, url: &str) -> Res<Dynamic> {
+        let resp = AGENT.get(url).header("User-Agent", USER_AGENT).call().ehdl(&ctx)?;
+        resp.into_body().read_json().ehdl(&ctx)
+    }
+
+    fn get_json_value(ctx: NativeCallContext, url: &str) -> Res<Value> {
+        let resp = AGENT.get(url).header("User-Agent", USER_AGENT).call().ehdl(&ctx)?;
+        resp.into_body().read_json().ehdl(&ctx)
+    }
+
     #[rhai_fn(return_raw, global)]
     pub fn get(ctx: NativeCallContext, url: &str) -> Res<String> {
-        ureq::AgentBuilder::new()
-            .redirects(0)
-            .build()
-            .get(url)
-            .set("User-Agent", USER_AGENT)
-            .call()
-            .ehdl(&ctx)?
-            .into_string()
-            .ehdl(&ctx)
+        let resp = AGENT.get(url).header("User-Agent", USER_AGENT).call().ehdl(&ctx)?;
+        resp.into_body().read_to_string().ehdl(&ctx)
     }
 
     #[rhai_fn(return_raw, global)]
     pub fn gh(ctx: NativeCallContext, repo: &str) -> Res<String> {
-        let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/releases/latest"))
-            .set("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
-            .set("User-Agent", USER_AGENT)
-            .call()
-            .ehdl(&ctx)?
-            .into_json()
-            .ehdl(&ctx)?;
+        let req = (AGENT.get(&format!("https://api.github.com/repos/{repo}/releases/latest")))
+            .header("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
+            .header("User-Agent", USER_AGENT);
+        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
         Ok(v["tag_name"].as_str().unwrap_or("").to_owned())
     }
     #[rhai_fn(return_raw, global)]
     pub fn gh_tag(ctx: NativeCallContext, repo: &str) -> Res<String> {
-        let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/tags"))
-            .set("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
-            .set("User-Agent", USER_AGENT)
-            .call()
-            .ehdl(&ctx)?
-            .into_json()
-            .ehdl(&ctx)?;
+        let req = (AGENT.get(&format!("https://api.github.com/repos/{repo}/tags")))
+            .header("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
+            .header("User-Agent", USER_AGENT);
+        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
-        let v = v
-            .as_array()
+        let v = (v.as_array())
             .ok_or_else(|| E::from("gh_tag received not array"))
             .map(|a| a.first().ok_or_else(|| E::from("gh_tag no tags")))??;
         Ok(v["name"].as_str().unwrap_or("").to_owned())
     }
     #[rhai_fn(return_raw, global)]
     pub fn gh_commit(ctx: NativeCallContext, repo: &str) -> Res<String> {
-        let v: Value = ureq::get(&format!("https://api.github.com/repos/{repo}/commits/HEAD"))
-            .set("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
-            .set("User-Agent", USER_AGENT)
-            .call()
-            .ehdl(&ctx)?
-            .into_json()
-            .ehdl(&ctx)?;
+        let req = (AGENT.get(&format!("https://api.github.com/repos/{repo}/commits/HEAD")))
+            .header("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
+            .header("User-Agent", USER_AGENT);
+        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
         Ok(v["sha"].as_str().unwrap_or("").to_owned())
     }
     #[rhai_fn(return_raw, global)]
     pub fn gh_rawfile(ctx: NativeCallContext, repo: &str, branch: &str, file: &str) -> Res<String> {
-        ureq::get(&format!("https://raw.githubusercontent.com/{repo}/{branch}/{file}"))
-            .set("User-Agent", USER_AGENT)
-            .call()
-            .ehdl(&ctx)?
-            .into_string()
-            .ehdl(&ctx)
+        get(ctx, &format!("https://raw.githubusercontent.com/{repo}/{branch}/{file}"))
     }
 
     #[rhai_fn(return_raw, name = "gitlab", global)]
     pub fn gitlab_domain(ctx: NativeCallContext, domain: &str, id: &str) -> Res<String> {
-        let v: Value = ureq::get(&format!("https://{domain}/api/v4/projects/{id}/releases/"))
-            .set("User-Agent", USER_AGENT)
-            .call()
-            .ehdl(&ctx)?
-            .into_json()
-            .ehdl(&ctx)?;
+        let v = get_json_value(ctx, &format!("https://{domain}/api/v4/projects/{id}/releases/"))?;
         trace!("Got json from {id}:\n{v}");
         Ok(v[0]["tag_name"].as_str().unwrap_or("").to_owned())
     }
@@ -97,12 +85,8 @@ pub mod ar {
     }
     #[rhai_fn(return_raw, name = "gitlab_tag", global)]
     pub fn gitlab_tag_domain(ctx: NativeCallContext, domain: &str, id: &str) -> Res<String> {
-        let v: Value = ureq::get(&format!("https://{domain}/api/v4/projects/{id}/repository/tags"))
-            .set("User-Agent", USER_AGENT)
-            .call()
-            .ehdl(&ctx)?
-            .into_json()
-            .ehdl(&ctx)?;
+        let v =
+            get_json_value(ctx, &format!("https://{domain}/api/v4/projects/{id}/repository/tags"))?;
         trace!("Got json from {id}:\n{v}");
         Ok(v[0]["name"].as_str().unwrap_or("").to_owned())
     }
@@ -117,14 +101,10 @@ pub mod ar {
         id: &str,
         branch: &str,
     ) -> Res<String> {
-        let v: Value = ureq::get(&format!(
-            "https://{domain}/api/v4/projects/{id}/repository/branches/{branch}"
-        ))
-        .set("User-Agent", USER_AGENT)
-        .call()
-        .ehdl(&ctx)?
-        .into_json()
-        .ehdl(&ctx)?;
+        let v = get_json_value(
+            ctx,
+            &format!("https://{domain}/api/v4/projects/{id}/repository/branches/{branch}"),
+        )?;
         trace!("Got json from {id}:\n{v}");
         Ok(v["commit"]["id"].as_str().unwrap_or("").to_owned())
     }
@@ -135,9 +115,7 @@ pub mod ar {
 
     #[rhai_fn(return_raw, global)]
     pub fn pypi(ctx: NativeCallContext, name: &str) -> Res<String> {
-        let obj = ureq::get(&format!("https://pypi.org/pypi/{name}/json"));
-        let obj: serde_json::Value =
-            obj.set("User-Agent", USER_AGENT).call().ehdl(&ctx)?.into_json().ehdl(&ctx)?;
+        let obj = get_json_value(ctx, &format!("https://pypi.org/pypi/{name}/json"))?;
         let obj = obj.get("info").ok_or_else(|| E::from("No json[`info`]?"))?;
         let obj = obj.get("version").ok_or_else(|| E::from("No json[`info`][`version`]?"))?;
         obj.as_str().map(std::string::ToString::to_string).ok_or_else(|| "json not string?".into())
@@ -145,9 +123,7 @@ pub mod ar {
 
     #[rhai_fn(return_raw, global)]
     pub fn crates(ctx: NativeCallContext, name: &str) -> Res<String> {
-        let obj = ureq::get(&format!("https://crates.io/api/v1/crates/{name}"));
-        let obj: serde_json::Value =
-            obj.set("User-Agent", USER_AGENT).call().ehdl(&ctx)?.into_json().ehdl(&ctx)?;
+        let obj = get_json_value(ctx, &format!("https://crates.io/api/v1/crates/{name}"))?;
         let obj = obj.get("crate").ok_or_else(|| E::from("No json[`crate`]?"))?;
         let obj = obj.get("max_stable_version");
         let obj = obj.ok_or_else(|| E::from("No json[`crate`][`max_stable_version`]?"))?;
@@ -156,9 +132,7 @@ pub mod ar {
 
     #[rhai_fn(return_raw, global)]
     pub fn crates_max(ctx: NativeCallContext, name: &str) -> Res<String> {
-        let obj = ureq::get(&format!("https://crates.io/api/v1/crates/{name}"));
-        let obj: serde_json::Value =
-            obj.set("User-Agent", USER_AGENT).call().ehdl(&ctx)?.into_json().ehdl(&ctx)?;
+        let obj = get_json_value(ctx, &format!("https://crates.io/api/v1/crates/{name}"))?;
         let obj = obj.get("crate").ok_or_else(|| E::from("No json[`crate`]?"))?;
         let obj = obj.get("max_version");
         let obj = obj.ok_or_else(|| E::from("No json[`crate`][`max_version`]?"))?;
@@ -167,9 +141,7 @@ pub mod ar {
 
     #[rhai_fn(return_raw, global)]
     pub fn crates_newest(ctx: NativeCallContext, name: &str) -> Res<String> {
-        let obj = ureq::get(&format!("https://crates.io/api/v1/crates/{name}"));
-        let obj: serde_json::Value =
-            obj.set("User-Agent", USER_AGENT).call().ehdl(&ctx)?.into_json().ehdl(&ctx)?;
+        let obj = get_json_value(ctx, &format!("https://crates.io/api/v1/crates/{name}"))?;
         let obj = obj.get("crate").ok_or_else(|| E::from("No json[`crate`]?"))?;
         let obj = obj.get("newest_version");
         let obj = obj.ok_or_else(|| E::from("No json[`crate`][`newest_version`]?"))?;
@@ -177,9 +149,7 @@ pub mod ar {
     }
     #[rhai_fn(return_raw, global)]
     pub fn npm(ctx: NativeCallContext, name: &str) -> Res<String> {
-        let obj = ureq::get(&format!("https://registry.npmjs.org/{name}/latest"));
-        let obj: serde_json::Value =
-            obj.set("User-Agent", USER_AGENT).call().ehdl(&ctx)?.into_json().ehdl(&ctx)?;
+        let obj = get_json_value(ctx, &format!("https://registry.npmjs.org/{name}/latest"))?;
         let obj = obj.get("version").ok_or_else(|| E::from("No json[`version`]?"))?;
         obj.as_str().map(std::string::ToString::to_string).ok_or_else(|| "json not string?".into())
     }
@@ -224,13 +194,13 @@ impl Req {
         Self { url, headers: vec![], redirects: 0 }
     }
     pub fn get(self) -> color_eyre::Result<String> {
-        let r =
-            ureq::AgentBuilder::new().redirects(self.redirects.try_into()?).build().get(&self.url);
-        let mut r = r.set("User-Agent", USER_AGENT);
+        let cfg = ureq::Agent::config_builder().max_redirects(self.redirects.try_into()?).build();
+        let r = ureq::Agent::new_with_config(cfg).get(&self.url);
+        let mut r = r.header("User-Agent", USER_AGENT);
         for (k, v) in self.headers {
-            r = r.set(k.as_str(), v.as_str());
+            r = r.header(k.as_str(), v.as_str());
         }
-        Ok(r.call()?.into_string()?)
+        Ok(r.call()?.into_body().read_to_string()?)
     }
     pub fn head(&mut self, key: String, val: String) {
         self.headers.push((key, val));
