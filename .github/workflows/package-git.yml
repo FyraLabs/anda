@@ -21,4 +21,3 @@ jobs:
         with:
           name: "anda-git"
           mockConfig: terra-42-${{ matrix.arch }}
-          extraArgs: -rrpmbuild
