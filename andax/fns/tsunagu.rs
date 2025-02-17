@@ -22,7 +22,7 @@ pub mod ar {
     });
 
     #[rhai_fn(return_raw, global)]
-    fn get_json(ctx: NativeCallContext, url: &str) -> Res<Dynamic> {
+    pub fn get_json(ctx: NativeCallContext, url: &str) -> Res<Dynamic> {
         let resp = AGENT.get(url).header("User-Agent", USER_AGENT).call().ehdl(&ctx)?;
         resp.into_body().read_json().ehdl(&ctx)
     }
