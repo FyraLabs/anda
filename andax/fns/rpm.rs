@@ -8,8 +8,8 @@ use tracing::{error, info};
 lazy_static::lazy_static! {
     static ref RE_RELEASE: regex::Regex = regex::Regex::new(r"Release:(\s+)(.+?)\n").unwrap();
     static ref RE_VERSION: regex::Regex = regex::Regex::new(r"Version:(\s+)(\S+)\n").unwrap();
-    static ref RE_DEFINE: regex::Regex = regex::Regex::new(r"(?m)%define(\s+)(\S+)(\s+)(\S+)$").unwrap();
-    static ref RE_GLOBAL: regex::Regex = regex::Regex::new(r"(?m)%global(\s+)(\S+)(\s+)(\S+)$").unwrap();
+    static ref RE_DEFINE: regex::Regex = regex::Regex::new(r"(?m)%define(\s+)(\S+)(\s+)(.+?)$").unwrap();
+    static ref RE_GLOBAL: regex::Regex = regex::Regex::new(r"(?m)%global(\s+)(\S+)(\s+)(.+?)$").unwrap();
     static ref RE_SOURCE: regex::Regex = regex::Regex::new(r"Source(\d+):(\s+)([^\n]+)\n").unwrap();
 }
 
@@ -66,14 +66,14 @@ impl RPMSpec {
     /// Change the value of a `%define` macro by the name
     pub fn define(&mut self, name: &str, val: &str) {
         let Some(cap) = RE_DEFINE.captures_iter(self.f.as_str()).find(|cap| &cap[2] == name) else {
-            return error!("No `Version:` preamble for {}", self.name);
+            return error!("Cannot find `%define` for {}", self.name);
         };
         self.f = self.f.replace(&cap[0], &format!("%define{}{name}{}{val}", &cap[1], &cap[3]));
     }
     /// Change the value of a `%global` macro by the name
     pub fn global(&mut self, name: &str, val: &str) {
         let Some(cap) = RE_GLOBAL.captures_iter(self.f.as_str()).find(|cap| &cap[2] == name) else {
-            return error!("No `Version:` preamble for {}", self.name);
+            return error!("Cannot find `%global` for {}", self.name);
         };
         self.f = self.f.replace(&cap[0], &format!("%global{}{name}{}{val}", &cap[1], &cap[3]));
     }
