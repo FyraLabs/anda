@@ -44,7 +44,7 @@ git2 = "0.20.0"
 chrono = { workspace = true }
 ignore = { workspace = true }
 promptly = "0.3.1"
-console = "0.15.10"
+console = "0.15.11"
 serde = { workspace = true }
 serde_json = { workspace = true }
 regex = { workspace = true }
