@@ -721,7 +721,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33d852cb9b869c2a9b3df2f71a3074817f01e1844f839a144f5fcef059a4eb5d"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1754,7 +1754,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2052,7 +2052,7 @@ dependencies = [
  "getrandom 0.3.1",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2308,9 +2308,9 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "ureq"
-version = "3.0.6"
+version = "3.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca2e2dbdf4e95780e5d41804fab88b928a24585721018409eb429b1d29356bde"
+checksum = "06f78313c985f2fba11100dd06d60dd402d0cabb458af4d94791b8e09c025323"
 dependencies = [
  "base64",
  "cookie_store",
@@ -2329,9 +2329,9 @@ dependencies = [
 
 [[package]]
 name = "ureq-proto"
-version = "0.3.0"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c51fe73e1d8c4e06bb2698286f7e7453c6fc90528d6d2e7fc36bb4e87fe09b1"
+checksum = "64adb55464bad1ab1aa9229133d0d59d2f679180f4d15f0d9debe616f541f25e"
 dependencies = [
  "base64",
  "http",
@@ -2515,7 +2515,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
