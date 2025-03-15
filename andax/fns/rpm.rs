@@ -8,8 +8,8 @@ use tracing::{error, info};
 lazy_static::lazy_static! {
     static ref RE_RELEASE: regex::Regex = regex::Regex::new(r"Release:(\s+)(.+?)\n").unwrap();
     static ref RE_VERSION: regex::Regex = regex::Regex::new(r"Version:(\s+)(\S+)\n").unwrap();
-    static ref RE_DEFINE: regex::Regex = regex::Regex::new(r"(?m)%define(\s+)(\S+)(\s+)(.+?)$").unwrap();
-    static ref RE_GLOBAL: regex::Regex = regex::Regex::new(r"(?m)%global(\s+)(\S+)(\s+)(.+?)$").unwrap();
+    static ref RE_DEFINE: regex::Regex = regex::Regex::new(r"(?m)%define(\s+)(\S+)(\s+)([^\n]+?)$").unwrap();
+    static ref RE_GLOBAL: regex::Regex = regex::Regex::new(r"(?m)%global(\s+)(\S+)(\s+)([^\n]+?)$").unwrap();
     static ref RE_SOURCE: regex::Regex = regex::Regex::new(r"Source(\d+):(\s+)([^\n]+)\n").unwrap();
 }
 
