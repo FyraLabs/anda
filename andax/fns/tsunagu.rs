@@ -18,7 +18,7 @@ pub mod ar {
     type E = Box<rhai::EvalAltResult>;
 
     static AGENT: std::sync::LazyLock<ureq::Agent> = std::sync::LazyLock::new(|| {
-        ureq::Agent::new_with_config(ureq::Agent::config_builder().max_redirects(0).build())
+        ureq::Agent::new_with_config(ureq::Agent::config_builder().build())
     });
 
     #[rhai_fn(return_raw, global)]
