@@ -93,7 +93,13 @@ fn print_log(process: &str, output: &[u8], out: ConsoleOut) {
     output2.extend_from_slice(format!("{process} │ ").as_bytes());
     for &c in output {
         if c == b'\r' {
-            output2.extend_from_slice(format!("\r{process} │ ").as_bytes());
+            // check if is terminal
+            if atty::is(atty::Stream::Stdout) {
+                output2.extend_from_slice(format!("\r{process} │ ").as_bytes());
+            } else {
+                // format!("{process} │ ").as_bytes().clone_into(&mut output2);
+                break;
+            }
         } else {
             output2.push(c);
         }
@@ -115,19 +121,11 @@ impl CommandLog for Command {
         // Wrap the command in `script` to force it to give it a TTY
         let mut c = Self::new("script");
 
-        let is_terminal = atty::is(atty::Stream::Stdout);
-
-        let pipe = if is_terminal {
-            || std::process::Stdio::piped()
-        } else {
-            || std::process::Stdio::inherit()
-        };
-
         c.args(["-e", "-f", "/dev/null", "-q", "-c"])
             .arg(format!("{process} {args}"))
             .stdin(std::process::Stdio::null())
-            .stdout(pipe())
-            .stderr(pipe());
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
 
         // c.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
 
@@ -143,28 +141,20 @@ impl CommandLog for Command {
 
         // HACK: Rust ownership is very fun.
         let t = process.clone();
-        let stdout = output.stdout.take();
-        let stderr = output.stderr.take();
+        let stdout = output.stdout.take().unwrap();
+        let mut stdout_lines = tokio::io::BufReader::new(stdout).split(b'\n');
+        let stderr = output.stderr.take().unwrap();
+        let mut stderr_lines = tokio::io::BufReader::new(stderr).split(b'\n');
 
         // handles so we can run both at the same time
         for task in [
             tokio::spawn(async move {
-                if !is_terminal {
-                    return Ok(());
-                };
-
-                let mut stdout_lines = tokio::io::BufReader::new(stdout.unwrap()).split(b'\n');
                 while let Some(line) = stdout_lines.next_segment().await.unwrap() {
                     print_log(&t, &line, ConsoleOut::Stdout);
                 }
                 Ok(())
             }),
             tokio::spawn(async move {
-                if !is_terminal {
-                    return Ok(());
-                };
-
-                let mut stderr_lines = tokio::io::BufReader::new(stderr.unwrap()).split(b'\n');
                 while let Some(line) = stderr_lines.next_segment().await.unwrap() {
                     print_log(&process, &line, ConsoleOut::Stderr);
                 }
