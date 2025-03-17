@@ -7,7 +7,11 @@ use itertools::Itertools;
 use nix::{sys::signal, unistd::Pid};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, io::Write, path::Path};
+use std::{
+    collections::BTreeMap,
+    io::{IsTerminal, Write},
+    path::Path,
+};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use tracing::{debug, info};
 
@@ -94,7 +98,7 @@ fn print_log(process: &str, output: &[u8], out: ConsoleOut) {
     for &c in output {
         if c == b'\r' {
             // check if is terminal
-            if atty::is(atty::Stream::Stdout) {
+            if std::io::stdout().is_terminal() {
                 output2.extend_from_slice(format!("\r{process} │ ").as_bytes());
             } else {
                 // format!("{process} │ ").as_bytes().clone_into(&mut output2);
