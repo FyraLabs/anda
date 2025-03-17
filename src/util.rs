@@ -55,11 +55,13 @@ pub fn fetch_build_entries(config: Manifest) -> Vec<BuildEntry> {
                 continue;
             }
         }
-        entries.extend(project.arches.unwrap_or_else(|| DEFAULT_ARCHES.to_vec()).into_iter().map(|arch| BuildEntry {
-            pkg: name.clone(),
-            arch,
-            labels: project.labels.clone(),
-        }));
+        entries.extend(
+            project
+                .arches
+                .unwrap_or_else(|| DEFAULT_ARCHES.to_vec())
+                .into_iter()
+                .map(|arch| BuildEntry { pkg: name.clone(), arch, labels: project.labels.clone() }),
+        );
     }
 
     entries
@@ -73,41 +75,38 @@ pub fn fetch_build_entries(config: Manifest) -> Vec<BuildEntry> {
 pub trait CommandLog {
     async fn log(&mut self) -> Result<()>;
 }
+fn print_log(process: &str, output: &[u8], out: ConsoleOut) {
+    // check if no_color is set
+    let no_color = std::env::var("NO_COLOR").is_ok();
+
+    let process = {
+        if no_color {
+            style(process)
+        } else {
+            match out {
+                ConsoleOut::Stdout => style(process).cyan(),
+                ConsoleOut::Stderr => style(process).yellow(),
+            }
+        }
+    };
+    let mut output2 = Vec::with_capacity(output.len() + 10);
+    output2.extend_from_slice(format!("{process} │ ").as_bytes());
+    for &c in output {
+        if c == b'\r' {
+            output2.extend_from_slice(format!("\r{process} │ ").as_bytes());
+        } else {
+            output2.push(c);
+        }
+    }
+    output2.push(b'\n');
+    std::io::stdout().write_all(&output2).unwrap();
+}
 #[async_trait::async_trait]
 impl CommandLog for Command {
     async fn log(&mut self) -> Result<()> {
-        fn print_log(process: &str, output: &[u8], out: ConsoleOut) {
-            // check if no_color is set
-            let no_color = std::env::var("NO_COLOR").is_ok();
-
-            let process = {
-                if no_color {
-                    style(process)
-                } else {
-                    match out {
-                        ConsoleOut::Stdout => style(process).cyan(),
-                        ConsoleOut::Stderr => style(process).yellow(),
-                    }
-                }
-            };
-            let mut output2 = Vec::with_capacity(output.len() + 10);
-            output2.extend_from_slice(format!("{process} │ ").as_bytes());
-            for &c in output {
-                if c == b'\r' {
-                    output2.extend_from_slice(format!("\r{process} │ ").as_bytes());
-                } else {
-                    output2.push(c);
-                }
-            }
-            output2.push(b'\n');
-            std::io::stdout().write_all(&output2).unwrap();
-        }
-
         // make process name a constant string that we can reuse every time we call print_log
         let process = self.as_std().get_program().to_owned().into_string().unwrap();
-        let args = self
-            .as_std()
-            .get_args()
+        let args = (self.as_std().get_args())
             .map(shell_quote::Sh::quote_vec)
             .map(|s| String::from_utf8(s).unwrap())
             .join(" ");
@@ -116,15 +115,19 @@ impl CommandLog for Command {
         // Wrap the command in `script` to force it to give it a TTY
         let mut c = Self::new("script");
 
-        c.arg("-e")
-            .arg("-f")
-            .arg("/dev/null")
-            .arg("-q")
-            .arg("-c")
+        let is_terminal = atty::is(atty::Stream::Stdout);
+
+        let pipe = if is_terminal {
+            || std::process::Stdio::piped()
+        } else {
+            || std::process::Stdio::inherit()
+        };
+
+        c.args(["-e", "-f", "/dev/null", "-q", "-c"])
             .arg(format!("{process} {args}"))
             .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped());
+            .stdout(pipe())
+            .stderr(pipe());
 
         // c.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
 
@@ -140,22 +143,28 @@ impl CommandLog for Command {
 
         // HACK: Rust ownership is very fun.
         let t = process.clone();
-
-        let stdout = output.stdout.take().unwrap();
-        let mut stdout_lines = tokio::io::BufReader::new(stdout).split(b'\n');
-
-        let stderr = output.stderr.take().unwrap();
-        let mut stderr_lines = tokio::io::BufReader::new(stderr).split(b'\n');
+        let stdout = output.stdout.take();
+        let stderr = output.stderr.take();
 
         // handles so we can run both at the same time
         for task in [
             tokio::spawn(async move {
+                if !is_terminal {
+                    return Ok(());
+                };
+
+                let mut stdout_lines = tokio::io::BufReader::new(stdout.unwrap()).split(b'\n');
                 while let Some(line) = stdout_lines.next_segment().await.unwrap() {
                     print_log(&t, &line, ConsoleOut::Stdout);
                 }
                 Ok(())
             }),
             tokio::spawn(async move {
+                if !is_terminal {
+                    return Ok(());
+                };
+
+                let mut stderr_lines = tokio::io::BufReader::new(stderr.unwrap()).split(b'\n');
                 while let Some(line) = stderr_lines.next_segment().await.unwrap() {
                     print_log(&process, &line, ConsoleOut::Stderr);
                 }
@@ -167,15 +176,11 @@ impl CommandLog for Command {
                         info!("Received ctrl-c, sending sigint to child process");
                         #[allow(clippy::cast_possible_wrap)]
                         signal::kill(Pid::from_raw(output.id().unwrap() as i32), signal::Signal::SIGINT).unwrap();
-
-                        // exit program
                         eprintln!("Received ctrl-c, exiting");
                         // std::process::exit(127);
                         Err(eyre!("Received ctrl-c, exiting"))
                     }
                     w = output.wait() => {
-
-                        // check exit status
                         let status = w.unwrap();
                         if status.success() {
                             info!("Command exited successfully");
@@ -184,7 +189,6 @@ impl CommandLog for Command {
                             info!("Command exited with status: {status}");
                             Err(eyre!("Command exited with status: {status}"))
                         }
-                        // info!("Child process finished");
                     }
                 }
             }),

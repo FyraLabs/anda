@@ -52,6 +52,7 @@ itertools = "0.14.0"
 lazy_format = "2.0.3"
 lazy_static = { workspace = true }
 shell-quote = "0.7.2"
+atty = "0.2.14"
 
 
 [lints]
