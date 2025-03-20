@@ -23,6 +23,7 @@ BuildRequires:  rust-packaging >= 21
 BuildRequires:  anda-srpm-macros
 BuildRequires:  openssl-devel
 BuildRequires:  git-core
+BuildRequires:  mold
 
 Requires:       mock
 Requires:       rpm-build
