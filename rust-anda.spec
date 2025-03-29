@@ -5,7 +5,7 @@
 %global crate anda
 
 Name:           rust-anda
-Version:        0.4.11
+Version:        0.4.10
 Release:        1%{?dist}
 Summary:        Andaman Build toolchain
 
@@ -74,4 +74,3 @@ rm -rf %{buildroot}%{cargo_registry}
 
 %changelog
 %autochangelog
-
