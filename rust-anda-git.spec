@@ -4,7 +4,7 @@
 
 %global crate anda
 
-%global _version 0.4.10
+%global _version 0.4.11
 
 Name:           rust-anda
 Version:        %{_version}.%{autogitversion}
@@ -78,3 +78,4 @@ rm -rf %{buildroot}%{cargo_registry}
 
 %changelog
 %autochangelog
+
