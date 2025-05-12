@@ -40,7 +40,7 @@ tokio = { version = "1.44.2", features = [
 ] }
 async-trait = "0.1.87"
 nix = { version = "0.30.1", features = ["signal"], default-features = false }
-git2 = "0.20.1"
+git2 = "0.20.2"
 chrono = { workspace = true }
 ignore = { workspace = true }
 promptly = "0.3.1"
