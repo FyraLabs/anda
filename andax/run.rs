@@ -223,6 +223,7 @@ pub fn run<
     f(&mut sc);
     let lbls: rhai::Map = labels.map(|(k, v)| (k.into(), v.into())).collect();
     sc.push("labels", lbls);
+    sc.push("__script_path", format!("{}", scr.display()));
     exec(name, scr, sc, en)
 }
 
