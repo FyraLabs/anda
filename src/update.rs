@@ -11,12 +11,12 @@ use tracing::{debug, error, instrument, trace};
 
 /// Return true only if the project `lbls` does not have the key or the value does not match.
 fn filter_project(lbls: &BTreeMap<String, String>) -> impl Fn(&(String, String)) -> bool + '_ {
-    |(k, v)| lbls.get(k).map_or(true, |val| val != v)
+    |(k, v)| lbls.get(k) != Some(v)
 }
 
 /// Return true only if `lbls` have the key and the value matches.
 fn exclude_project(lbls: &BTreeMap<String, String>) -> impl Fn(&(String, String)) -> bool + '_ {
-    |(k, v)| lbls.get(k).is_some_and(|val| val == v)
+    |(k, v)| lbls.get(k) == Some(v)
 }
 
 #[allow(clippy::arithmetic_side_effects)]
