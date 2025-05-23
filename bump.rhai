@@ -1,3 +1,5 @@
+#!anda run
+
 if labels.newver == () {
     print("please supply --labels newver=...");
     terminate();
