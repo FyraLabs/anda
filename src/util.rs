@@ -93,7 +93,7 @@ fn print_log(process: &str, output: &[u8], out: ConsoleOut) {
             }
         }
     };
-    let mut output2 = Vec::with_capacity(output.len() + 10);
+    let mut output2 = Vec::with_capacity(output.len().saturating_add(10));
     output2.extend_from_slice(format!("{process} │ ").as_bytes());
     for &c in output {
         if c == b'\r' {
@@ -131,16 +131,12 @@ impl CommandLog for Command {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
 
-        // c.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
-
         trace!(?c, "Running command");
 
         let mut output = c.spawn().map_err(|e| {
-            eyre!("Cannot run command")
+            eyre!("Cannot run `script`")
                 .wrap_err(e)
-                .note(format!("Process: {process}"))
-                .note("Args: {args}")
-                .suggestion(format!("You might need to install `{process}` via a package manager."))
+                .suggestion("You might need to install `script` via a package manager.")
         })?;
 
         // HACK: Rust ownership is very fun.
@@ -318,7 +314,7 @@ fn add_dockerfile_to_manifest(
 
         // increment counter
         config.project.insert("docker".to_owned(), project);
-    };
+    }
     Ok(())
 }
 
@@ -388,7 +384,7 @@ pub fn cmd<const N: usize>(
         (_, Some(rc)) => color_eyre::Report::msg("Command exited")
             .warning(lazy_format::lazy_format!("Status code: {rc}"))
             .with_note(|| format!("Command: `{cmd_str}`"))
-            .note("Status: {status}"),
+            .note(lazy_format::lazy_format!("Status: {status}")),
         _ => color_eyre::Report::msg("Script terminated unexpectedly")
             .note(lazy_format::lazy_format!("Status: {status}")),
     })
