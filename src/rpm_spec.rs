@@ -623,7 +623,8 @@ impl RPMSpecBackend for RPMBuildBackend {
             .arg("--define")
             .arg(format!("_srcrpmdir {}", tmp.path().display()))
             .arg("--define")
-            .arg(format!("_rpmdir {}", tmp.path().display()));
+            .arg(format!("_rpmdir {}", tmp.path().display()))
+            .args(self.target.as_ref().map(|target| format!("--target={target}")));
         cmd.log().await?;
 
         let mut rpms = Vec::new();
