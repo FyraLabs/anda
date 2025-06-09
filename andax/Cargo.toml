@@ -16,7 +16,7 @@ path = "./lib.rs"
 serde_json = { workspace = true }
 regex = { workspace = true }
 lazy_static = { workspace = true }
-rhai = { version = "1.22.0", features = ["serde", "internals"] }
+rhai = { version = "1.22.2", features = ["serde", "internals"] }
 ureq = { version = "3", features = ["json"] }
 tracing = { workspace = true }
 color-eyre = { workspace = true }
