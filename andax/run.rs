@@ -28,10 +28,10 @@ where
         Box::new(RhaiE::ErrorRuntime(
             Dynamic::from(AErr::RustReport(
                 ctx.fn_name().into(),
-                ctx.source().unwrap_or("").into(),
+                ctx.fn_source().unwrap_or("").into(),
                 std::rc::Rc::from(err),
             )),
-            ctx.position(),
+            ctx.call_position(),
         ))
     })
 }
@@ -169,7 +169,7 @@ pub fn traceback(proj: &str, scr: &Path, nntz: TbErr, pos: Position, rhai_fn: &s
     if c > 0 {
         code = code.replacen('└', "├", c - 1);
     }
-    return error!("Script Exception —— {proj}\n{code}");
+    error!("Script Exception —— {proj}\n{code}");
 }
 
 /// Handles an exception thrown while executing an AndaX script.

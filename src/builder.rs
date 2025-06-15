@@ -375,7 +375,7 @@ async fn _build_pkg(
                 println!("No Flatpak build defined for project");
             }
         } // PackageType::RpmOstree => todo!(),
-    };
+    }
     Ok(())
 }
 
@@ -413,7 +413,7 @@ async fn build_all(
                 .as_slice(),
             project.labels.iter().map(|(a, b)| (a.clone(), b.clone())).collect(),
         )?;
-    };
+    }
     Ok(())
 }
 

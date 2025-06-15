@@ -205,7 +205,7 @@ impl Req {
     pub fn head(&mut self, key: String, val: String) {
         self.headers.push((key, val));
     }
-    pub fn redirects(&mut self, i: i64) {
+    pub const fn redirects(&mut self, i: i64) {
         self.redirects = i;
     }
 }
