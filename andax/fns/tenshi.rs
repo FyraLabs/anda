@@ -31,7 +31,7 @@ pub mod ar {
             });
             // let value = hcl::value::Value::try_from(_val);
         }
-        println!("{:?}", ctx.source());
+        println!("{:?}", ctx.fn_source());
 
         let template =
             <hcl::template::Template as std::str::FromStr>::from_str(&input).ehdl(&ctx)?;

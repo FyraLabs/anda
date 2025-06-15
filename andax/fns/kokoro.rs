@@ -15,11 +15,11 @@ pub mod ar {
 
     #[rhai_fn(return_raw, global)]
     pub fn terminate(ctx: NativeCallContext) -> Res {
-        Err(Box::new(RhaiE::ErrorRuntime(Dynamic::from(AErr::Exit(false)), ctx.position())))
+        Err(Box::new(RhaiE::ErrorRuntime(Dynamic::from(AErr::Exit(false)), ctx.call_position())))
     }
     #[rhai_fn(return_raw, global)]
     pub fn defenestrate(ctx: NativeCallContext) -> Res {
-        Err(Box::new(RhaiE::ErrorRuntime(Dynamic::from(AErr::Exit(true)), ctx.position())))
+        Err(Box::new(RhaiE::ErrorRuntime(Dynamic::from(AErr::Exit(true)), ctx.call_position())))
     }
     #[rhai_fn(return_raw, global)]
     pub fn json(ctx: NativeCallContext, a: String) -> Res<rhai::Map> {

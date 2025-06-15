@@ -28,10 +28,10 @@ where
         Box::new(RhaiE::ErrorRuntime(
             Dynamic::from(AErr::RustReport(
                 ctx.fn_name().into(),
-                ctx.source().unwrap_or("").into(),
+                ctx.fn_source().unwrap_or("").into(),
                 std::rc::Rc::from(err),
             )),
-            ctx.position(),
+            ctx.call_position(),
         ))
     })
 }

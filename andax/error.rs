@@ -50,14 +50,14 @@ where
         Self: Sized,
     {
         self.map_err(|err| {
-            trace!(func = ctx.fn_name(), source = ctx.source(), "Oops!");
+            trace!(func = ctx.fn_name(), source = ctx.fn_source(), "Oops!");
             Box::new(EvalAltResult::ErrorRuntime(
                 rhai::Dynamic::from(AndaxError::RustError(
                     ctx.fn_name().into(),
-                    ctx.source().unwrap_or("").into(),
+                    ctx.fn_source().unwrap_or("").into(),
                     std::rc::Rc::from(err),
                 )),
-                ctx.position(),
+                ctx.call_position(),
             ))
         })
     }
