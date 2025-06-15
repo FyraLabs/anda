@@ -31,7 +31,7 @@ anda-config = { workspace = true }
 andax = { path = "./andax", version = "0.4.12" }
 flatpak = "0.18.1"
 clap-verbosity-flag = "3.0.2"
-tokio = { version = "1.45.0", features = [
+tokio = { version = "1.45.1", features = [
     "process",
     "io-util",
     "macros",
@@ -67,7 +67,7 @@ serde = { version = "1.0", default-features = false, features = ["derive"] }
 lazy_static = "1.5"
 regex = "1.11.1"
 serde_json = "1.0"
-color-eyre = "0.6.4"
+color-eyre = "0.6.5"
 tracing = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["now"] }
 ignore = "0.4.23"
