@@ -169,7 +169,7 @@ pub fn traceback(proj: &str, scr: &Path, nntz: TbErr, pos: Position, rhai_fn: &s
     if c > 0 {
         code = code.replacen('└', "├", c - 1);
     }
-    return error!("Script Exception —— {proj}\n{code}");
+    error!("Script Exception —— {proj}\n{code}");
 }
 
 /// Handles an exception thrown while executing an AndaX script.

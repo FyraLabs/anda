@@ -74,7 +74,7 @@ impl RPMOptions {
         }
     }
 
-    pub fn no_mirror(&mut self, no_mirror: bool) {
+    pub const fn no_mirror(&mut self, no_mirror: bool) {
         self.no_mirror = no_mirror;
     }
 }
@@ -317,11 +317,11 @@ impl MockBackend {
     pub fn add_extra_repo(&mut self, repo: String) {
         self.extra_repos.push(repo);
     }
-    pub fn no_mirror(&mut self, no_mirror: bool) {
+    pub const fn no_mirror(&mut self, no_mirror: bool) {
         self.no_mirror = no_mirror;
     }
 
-    pub fn enable_scm(&mut self, enable: bool) {
+    pub const fn enable_scm(&mut self, enable: bool) {
         self.scm_enable = enable;
     }
 
