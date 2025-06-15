@@ -47,12 +47,14 @@ impl RPMSpec {
     }
     /// Sets the release number in the spec file
     pub fn release(&mut self, rel: &str) {
+        let rel = rel.trim();
         let m = RE_RELEASE.captures(self.f.as_str());
         let Some(m) = m else { return error!("No `Release:` preamble for {}", self.name) };
         self.f = RE_RELEASE.replace(&self.f, format!("Release:{}{rel}%?dist\n", &m[1])).to_string();
     }
     /// Sets the version in the spec file
     pub fn version(&mut self, ver: &str) {
+        let ver = ver.trim();
         let Some(m) = RE_VERSION.captures(self.f.as_str()) else {
             return error!("No `Version:` preamble for {}", self.name);
         };
@@ -65,6 +67,7 @@ impl RPMSpec {
     }
     /// Change the value of a `%define` macro by the name
     pub fn define(&mut self, name: &str, val: &str) {
+        let (name, val) = (name.trim(), val.trim());
         let Some(cap) = RE_DEFINE.captures_iter(self.f.as_str()).find(|cap| &cap[2] == name) else {
             return error!("Cannot find `%define` for {}", self.name);
         };
@@ -72,6 +75,7 @@ impl RPMSpec {
     }
     /// Change the value of a `%global` macro by the name
     pub fn global(&mut self, name: &str, val: &str) {
+        let (name, val) = (name.trim(), val.trim());
         let Some(cap) = RE_GLOBAL.captures_iter(self.f.as_str()).find(|cap| &cap[2] == name) else {
             return error!("Cannot find `%global` for {}", self.name);
         };
@@ -79,6 +83,7 @@ impl RPMSpec {
     }
     /// Change the `SourceN:` preamble value by `N`
     pub fn source(&mut self, i: i64, p: &str) {
+        let p = p.trim();
         let si = i.to_string();
         let Some(cap) = RE_SOURCE.captures_iter(self.f.as_str()).find(|cap| cap[1] == si) else {
             return error!("No `Source{i}:` preamble for {}", self.name);
