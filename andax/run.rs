@@ -6,7 +6,6 @@ use crate::{
     fns as f,
 };
 use directories::BaseDirs;
-use lazy_static::lazy_static;
 use regex::Regex;
 use rhai::{
     module_resolvers::ModuleResolversCollection,

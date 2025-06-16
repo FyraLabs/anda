@@ -23,11 +23,7 @@ impl std::fmt::Display for ProjectError {
             Self::NoManifest => write!(f, "No manifest found"),
             Self::InvalidManifest(e) => write!(f, "Invalid manifest: {e}"),
             Self::Other(msg) => write!(f, "{msg}"),
-            Self::HclError(e) => write!(
-                f,
-                "Error parsing HCL: {e}{}",
-                e.location().map(|l| format!(" at {}:{}", l.line, l.col)).unwrap_or_default()
-            ),
+            Self::HclError(e) => write!(f, "Error parsing HCL: {e}"),
             Self::Multiple(errors) => {
                 write!(f, "Multiple errors:")?;
                 for error in errors {

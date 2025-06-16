@@ -1,42 +1,28 @@
-use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
-use hcl::eval::{Context, FuncArgs, FuncDef};
+use hcl::eval::{Context, FuncDef};
 use hcl::Value;
 
-// once_cell for global context
-use once_cell::sync::OnceCell;
-use parking_lot::Mutex;
+static GLOBAL_CONTEXT: LazyLock<Context> = LazyLock::new(|| {
+    dotenv::dotenv().ok();
+    let mut ctx = Context::new();
+    let env_func = FuncDef::builder().param(hcl::eval::ParamType::String).build(|args| {
+        let [Value::String(key)] = &args.into_values()[..] else {
+            return Err("Invalid argument, expected 1 string argument".into());
+        };
+        let value = std::env::var(key).map_err(|e| format!("env(`${key}`): {e:?}"))?;
+        Ok(Value::String(value))
+    });
+    ctx.declare_func("env", env_func);
 
-// todo: let this be mutable
-static GLOBAL_CONTEXT: OnceCell<Mutex<Context>> = OnceCell::new();
+    ctx.declare_var(
+        "env",
+        Value::Object(std::env::vars().map(|(k, v)| (k, Value::String(v))).collect()),
+    );
+    ctx
+});
 
 /// Generate Context for HCL evaluation
-///
-/// # Panics
-/// - cannot lock mutex (poison?)
-/// - cannot convert FuncArgs to str
-/// - cannot find FuncArgs as key in environment variables
 pub fn hcl_context() -> Context<'static> {
-    let env_func = |args: FuncArgs| {
-        let env = std::env::vars().collect::<BTreeMap<String, String>>();
-        let key = args.first().and_then(|v| v.as_str()).ok_or("Invalid argument")?;
-        let value = env.get(key).ok_or("Key not found in environment variables")?;
-        Ok(Value::String(value.to_string()))
-    };
-    let c = GLOBAL_CONTEXT.get_or_init(|| {
-        dotenv::dotenv().ok();
-        let mut ctx = Context::new();
-        let env_func = FuncDef::builder().param(hcl::eval::ParamType::String).build(env_func);
-        ctx.declare_func("env", env_func);
-
-        let env = std::env::vars().collect::<BTreeMap<String, String>>();
-        let mut map = hcl::Map::new();
-
-        map.extend(env.into_iter().map(|(k, v)| (k, Value::String(v))));
-
-        ctx.declare_var("env", Value::Object(map));
-
-        Mutex::new(ctx)
-    });
-    c.lock().clone()
+    GLOBAL_CONTEXT.clone()
 }
