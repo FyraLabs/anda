@@ -14,7 +14,7 @@ use rhai::{
     plugin::{exported_module, Dynamic, EvalAltResult, Position},
     Engine, EvalAltResult as RhaiE, NativeCallContext as Ctx, Scope,
 };
-use std::fmt::Write;
+use std::{fmt::Write, sync::LazyLock};
 use std::{io::BufRead, path::Path};
 use tracing::{debug, error, instrument, trace, warn};
 
@@ -107,20 +107,19 @@ pub fn gen_en() -> (Engine, Scope<'static>) {
 }
 
 #[inline]
-fn _gpos(p: Position) -> Option<(usize, usize)> {
-    p.line().map(|l| (l, p.position().unwrap_or(0)))
+fn gpos(p: Position) -> Option<(usize, usize)> {
+    Some((p.line()?, p.position().unwrap_or(0)))
 }
-lazy_static! {
-    static ref WORD_REGEX: Regex = Regex::new("[A-Za-z_][A-Za-z0-9_]*").unwrap();
-}
+static WORD_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new("[A-Za-z_][A-Za-z0-9_]*").unwrap());
 
 // proj: project name, scr: script path, nntz (nanitozo): just give me the error
 // pos: error position, rhai_fn: function that caused the issue, fn_src: idk…
 #[allow(clippy::arithmetic_side_effects)]
 #[instrument]
-pub fn traceback(proj: &str, scr: &Path, nntz: TbErr, pos: Position, rhai_fn: &str, fn_src: &str) {
+pub fn traceback(proj: &str, scr: &Path, nntz: &TbErr, pos: Position, rhai_fn: &str, fn_src: &str) {
     trace!("Formulating traceback");
-    let Some((line, col)) = _gpos(pos) else {
+    let Some((line, col)) = gpos(pos) else {
         return error!("{proj}: {scr:?} (no position data)\n{nntz}");
     };
     let f = std::fs::File::open(scr);
@@ -165,7 +164,7 @@ pub fn traceback(proj: &str, scr: &Path, nntz: TbErr, pos: Position, rhai_fn: &s
         _ = write!(code, "\n {lns} └─═ Function source: {fn_src}");
     }
     _ = write!(code, "\n {lns} └─═ {nntz}");
-    code += &hint(&sl, &lns, &nntz, rhai_fn).unwrap_or_default();
+    code += &hint(&sl, &lns, nntz, rhai_fn).unwrap_or_default();
     // slow but works!
     let c = code.matches('└').count();
     if c > 0 {
@@ -183,14 +182,14 @@ pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
                 return traceback(
                     name,
                     scr,
-                    Report(others),
+                    &Report(others),
                     pos,
                     rhai_fn.as_str(),
                     fn_src.as_str(),
                 );
             }
             Some(AErr::RustError(rhai_fn, fn_src, others)) => {
-                return traceback(name, scr, Arb(others), pos, rhai_fn.as_str(), fn_src.as_str());
+                return traceback(name, scr, &Arb(others), pos, rhai_fn.as_str(), fn_src.as_str());
             }
             Some(AErr::Exit(b)) => {
                 if b {
@@ -205,7 +204,7 @@ pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
     }
     trace!("Rhai moment: {err:#?}");
     let pos = err.position();
-    traceback(name, scr, Rhai(err), pos, "", "");
+    traceback(name, scr, &Rhai(err), pos, "", "");
 }
 
 /// Executes an AndaX script.
