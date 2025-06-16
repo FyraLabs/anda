@@ -88,6 +88,7 @@ pub fn gen_en() -> (Engine, Scope<'static>) {
     sc.push("IS_WIN32", cfg!(windows));
     sc.push("ANDAX_VER", env!("CARGO_PKG_VERSION"));
     let mut en = Engine::new();
+    en.set_optimization_level(rhai::OptimizationLevel::Simple);
 
     let resolv = module_resolver();
     en.set_module_resolver(resolv)
@@ -118,6 +119,7 @@ lazy_static! {
 #[allow(clippy::arithmetic_side_effects)]
 #[instrument]
 pub fn traceback(proj: &str, scr: &Path, nntz: TbErr, pos: Position, rhai_fn: &str, fn_src: &str) {
+    trace!("Formulating traceback");
     let Some((line, col)) = _gpos(pos) else {
         return error!("{proj}: {scr:?} (no position data)\n{nntz}");
     };
@@ -209,7 +211,7 @@ pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
 /// Executes an AndaX script.
 pub fn run<
     'a,
-    F: FnOnce(&mut Scope<'a>),
+    F: FnOnce(&mut Scope<'static>),
     K: Into<rhai::Identifier>,
     V: Into<rhai::Dynamic>,
     L: Iterator<Item = (K, V)>,
@@ -224,6 +226,10 @@ pub fn run<
     let lbls: rhai::Map = labels.map(|(k, v)| (k.into(), v.into())).collect();
     sc.push("labels", lbls);
     sc.push("__script_path", format!("{}", scr.display()));
+    sc.push("get_sc", {
+        let sc = sc.clone();
+        move |k: &str| sc.get(k).cloned().unwrap_or(Dynamic::UNIT)
+    });
     exec(name, scr, sc, en)
 }
 

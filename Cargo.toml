@@ -73,6 +73,7 @@ chrono = { version = "0.4", default-features = false, features = ["now"] }
 ignore = "0.4.23"
 clap_complete = "4"
 clap = { version = "4", features = ["derive", "env"] }
+parking_lot = "0.12.4"
 
 [workspace.lints.clippy]
 cargo = { level = "warn", priority = -1 }

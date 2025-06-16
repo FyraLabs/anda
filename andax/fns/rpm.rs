@@ -1,6 +1,7 @@
 use rhai::CustomType;
 use std::{
     fs,
+    hash::{Hash, Hasher},
     path::{Path, PathBuf},
 };
 use tracing::{error, info};
@@ -17,7 +18,7 @@ lazy_static::lazy_static! {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RPMSpec {
     /// Original spec file content
-    original: String,
+    original: u64,
     /// Name of project
     pub name: String,
     /// AndaX chkupdate script of project
@@ -39,18 +40,40 @@ impl RPMSpec {
         U: Into<PathBuf> + AsRef<Path>,
     {
         let f = fs::read_to_string(&spec).expect("Cannot read spec to string");
-        Self { name, chkupdate: chkupdate.into(), original: f.clone(), f, spec: spec.into() }
+        let mut hasher = std::hash::DefaultHasher::default();
+        f.hash(&mut hasher);
+        Self { name, chkupdate: chkupdate.into(), original: hasher.finish(), f, spec: spec.into() }
     }
     /// Resets the release number to 1
     pub fn reset_release(&mut self) {
         self.release("1");
     }
     /// Sets the release number in the spec file
+    pub fn release_num(&mut self, rel: i64) {
+        if !RE_RELEASE.is_match(&self.f) {
+            return error!("No `Release:` preamble for {}", self.name);
+        }
+        match RE_RELEASE.replace(&self.f, format!("Release:${{1}}{rel}%?dist\n")) {
+            std::borrow::Cow::Borrowed(_) => {
+                return info!("{}: Release: {rel}%?dist [UNCHANGED]", self.name)
+            }
+            std::borrow::Cow::Owned(f) => self.f = f,
+        }
+        info!("{}: Release: {rel}%?dist", self.name);
+    }
+    /// Sets the release number in the spec file
     pub fn release(&mut self, rel: &str) {
+        if !RE_RELEASE.is_match(&self.f) {
+            return error!("No `Release:` preamble for {}", self.name);
+        }
         let rel = rel.trim();
-        let m = RE_RELEASE.captures(self.f.as_str());
-        let Some(m) = m else { return error!("No `Release:` preamble for {}", self.name) };
-        self.f = RE_RELEASE.replace(&self.f, format!("Release:{}{rel}%?dist\n", &m[1])).to_string();
+        match RE_RELEASE.replace(&self.f, format!("Release:${{1}}{rel}%?dist\n")) {
+            std::borrow::Cow::Borrowed(_) => {
+                return info!("{}: Release: {rel} [UNCHANGED]", self.name)
+            }
+            std::borrow::Cow::Owned(f) => self.f = f,
+        }
+        info!("{}: Release: {rel}", self.name);
     }
     /// Sets the version in the spec file
     pub fn version(&mut self, ver: &str) {
@@ -112,7 +135,9 @@ impl RPMSpec {
     /// Check if file has been changed
     #[must_use]
     pub fn changed(&mut self) -> bool {
-        self.f != self.original
+        let mut hasher = std::hash::DefaultHasher::default();
+        self.f.hash(&mut hasher);
+        hasher.finish() != self.original
     }
 }
 
@@ -126,6 +151,7 @@ impl CustomType for RPMSpec {
             .with_fn("global", Self::global)
             .with_fn("release", Self::reset_release)
             .with_fn("release", Self::release)
+            .with_fn("release", Self::release_num)
             .with_fn("changed", Self::changed)
             .with_get_set("f", Self::get, Self::set);
     }

@@ -98,6 +98,7 @@ dependencies = [
  "directories",
  "hcl-rs",
  "lazy_static",
+ "parking_lot",
  "regex",
  "rhai",
  "rhai-fs",

@@ -28,6 +28,7 @@ rhai-url = "0.0.5"
 hcl-rs = "0.15.0"
 directories = "6.0.0"
 chrono = { workspace = true }
+parking_lot = { workspace = true }
 
 [lints]
 workspace = true
