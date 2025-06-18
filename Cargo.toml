@@ -61,6 +61,9 @@ workspace = true
 [workspace]
 members = ["anda-config", "xtask", "andax"]
 
+[patch.crates-io]
+rhai = { git = "https://github.com/rhaiscript/rhai", rev = "614a3e73d108bd436a3e063bd8d85ee3f168119a" }
+
 [workspace.dependencies]
 anda-config = { path = "./anda-config", version = "0.4.13" }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
