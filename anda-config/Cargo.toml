@@ -19,7 +19,7 @@ serde = { workspace = true }
 tracing = "0.1"
 ignore = { workspace = true }
 parking_lot = { workspace = true }
-serde_with = "3.13.0"
+serde_with = "3.14.0"
 
 [dev-dependencies]
 env_logger = ">= 0.10, < 0.12"
