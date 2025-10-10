@@ -76,7 +76,7 @@ chrono = { version = "0.4", default-features = false, features = ["now"] }
 ignore = "0.4.23"
 clap_complete = "4"
 clap = { version = "4", features = ["derive", "env"] }
-parking_lot = "0.12.4"
+parking_lot = "0.12.5"
 hcl-rs = "0.18.5"
 
 [workspace.lints.clippy]
