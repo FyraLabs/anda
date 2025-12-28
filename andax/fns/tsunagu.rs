@@ -160,16 +160,16 @@ pub mod ar {
             ctx,
             &format!("https://hackage.haskell.org/package/{name}/preferred.json"),
         )?;
-        let versions = obj.get("normal-version").ok_or(E::from("No json[`normal-version`]"))?;
+        let versions = obj.get("normal-version").ok_or_else(|| E::from("No json[`normal-version`]"))?;
         let latest = versions
             .as_array()
-            .ok_or(E::from("`normal-version` is not an array"))?
-            .get(0)
-            .ok_or(E::from("No normal package versions avaialble"))?;
+            .ok_or_else(|| E::from("`normal-version` is not an array"))?
+            .first()
+            .ok_or_else(|| E::from("No normal package versions avaialble"))?;
         latest
             .as_str()
             .map(std::string::ToString::to_string)
-            .ok_or(E::from("Package version is not a string"))
+            .ok_or_else(|| E::from("Package version is not a string"))
     }
 
     #[rhai_fn(skip)]
