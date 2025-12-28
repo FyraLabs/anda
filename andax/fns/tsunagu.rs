@@ -154,6 +154,24 @@ pub mod ar {
         obj.as_str().map(std::string::ToString::to_string).ok_or_else(|| "json not string?".into())
     }
 
+    #[rhai_fn(return_raw, global)]
+    pub fn hackage(ctx: NativeCallContext, name: &str) -> Res<String> {
+        let obj = get_json_value(
+            ctx,
+            &format!("https://hackage.haskell.org/package/{name}/preferred.json"),
+        )?;
+        let versions = obj.get("normal-version").ok_or(E::from("No json[`normal-version`]"))?;
+        let latest = versions
+            .as_array()
+            .ok_or(E::from("`normal-version` is not an array"))?
+            .get(0)
+            .ok_or(E::from("No normal package versions avaialble"))?;
+        latest
+            .as_str()
+            .map(std::string::ToString::to_string)
+            .ok_or(E::from("Package version is not a string"))
+    }
+
     #[rhai_fn(skip)]
     pub fn internal_env(key: &str) -> Res<String> {
         trace!("env(`{key}`) = {:?}", std::env::var(key));
