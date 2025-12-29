@@ -166,7 +166,7 @@ pub mod ar {
             .as_array()
             .ok_or_else(|| E::from("`normal-version` is not an array"))?
             .first()
-            .ok_or_else(|| E::from("No normal package versions avaialble"))?;
+            .ok_or_else(|| E::from("No normal package versions available"))?;
         latest
             .as_str()
             .map(std::string::ToString::to_string)
