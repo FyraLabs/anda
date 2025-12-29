@@ -160,7 +160,8 @@ pub mod ar {
             ctx,
             &format!("https://hackage.haskell.org/package/{name}/preferred.json"),
         )?;
-        let versions = obj.get("normal-version").ok_or_else(|| E::from("No json[`normal-version`]"))?;
+        let versions =
+            obj.get("normal-version").ok_or_else(|| E::from("No json[`normal-version`]"))?;
         let latest = versions
             .as_array()
             .ok_or_else(|| E::from("`normal-version` is not an array"))?
