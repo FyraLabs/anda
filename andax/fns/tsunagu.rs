@@ -190,7 +190,12 @@ pub mod ar {
     }
 
     #[rhai_fn(return_raw, global)]
-    pub fn codeberg_rawfile(ctx: NativeCallContext, repo: &str, branch: &str, file: &str) -> Res<String> {
+    pub fn codeberg_rawfile(
+        ctx: NativeCallContext,
+        repo: &str,
+        branch: &str,
+        file: &str,
+    ) -> Res<String> {
         get(ctx, &format!("https://codeberg.org/{repo}/raw/branch/{branch}/{file}"))
     }
 
