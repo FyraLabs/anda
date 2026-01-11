@@ -189,6 +189,16 @@ pub mod ar {
         Ok(v[0]["sha"].as_str().unwrap_or("").to_owned())
     }
 
+    #[rhai_fn(return_raw, global)]
+    pub fn codeberg_rawfile(
+        ctx: NativeCallContext,
+        repo: &str,
+        branch: &str,
+        file: &str,
+    ) -> Res<String> {
+        get(ctx, &format!("https://codeberg.org/{repo}/raw/branch/{branch}/{file}"))
+    }
+
     #[rhai_fn(skip)]
     pub fn internal_env(key: &str) -> Res<String> {
         trace!("env(`{key}`) = {:?}", std::env::var(key));
