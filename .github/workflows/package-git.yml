@@ -16,7 +16,7 @@ jobs:
       options: --cap-add=SYS_ADMIN --privileged
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: terrapkg/anda-build@069637674859d994c5d6402cdfb97bc6156f6750
         with:
           name: "anda-git"
