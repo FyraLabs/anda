@@ -16,6 +16,10 @@ print(env("PATH"));
 
 // print(npm("discord.js"));
 
+//print(codeberg("valos/Komikku"));
+//print(codeberg_tag("valos/Komikku"));
+//print(codeberg_commit("valos/Komikku"));
+
 let obj = #{
     "a": 1,
     "b": 2 ,
