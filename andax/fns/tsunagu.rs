@@ -187,8 +187,8 @@ pub mod ar {
         let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
         let v = (v.as_array())
-        .ok_or_else(|| E::from("codeberg_tag received not array"))
-        .map(|a| a.first().ok_or_else(|| E::from("codeberg_tag no tags")))??;
+            .ok_or_else(|| E::from("codeberg_tag received not array"))
+            .map(|a| a.first().ok_or_else(|| E::from("codeberg_tag no tags")))??;
         Ok(v["name"].as_str().unwrap_or("").to_owned())
     }
 
