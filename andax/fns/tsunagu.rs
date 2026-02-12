@@ -182,6 +182,17 @@ pub mod ar {
     }
 
     #[rhai_fn(return_raw, global)]
+    pub fn codeberg_tag(ctx: NativeCallContext, repo: &str) -> Res<String> {
+        let req = AGENT.get(&format!("https://codeberg.org/api/v1/repos/{repo}/tags"));
+        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
+        trace!("Got json from {repo}:\n{v}");
+        let v = (v.as_array())
+            .ok_or_else(|| E::from("codeberg_tag received not array"))
+            .map(|a| a.first().ok_or_else(|| E::from("codeberg_tag no tags")))??;
+        Ok(v["name"].as_str().unwrap_or("").to_owned())
+    }
+
+    #[rhai_fn(return_raw, global)]
     pub fn codeberg_commit(ctx: NativeCallContext, repo: &str) -> Res<String> {
         let req = AGENT.get(&format!("https://codeberg.org/api/v1/repos/{repo}/commits?stat=false&verification=false&files=false&limit=1"));
         let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
