@@ -1,5 +1,6 @@
-use anda_config::Manifest;
+use anda_config::{Manifest, Project};
 use andax::{run, RPMSpec};
+use color_eyre::eyre::eyre;
 use color_eyre::{Result, Section};
 use itertools::Itertools;
 use std::io::Write;
@@ -17,6 +18,40 @@ fn filter_project(lbls: &BTreeMap<String, String>) -> impl Fn(&(String, String))
 /// Return true only if `lbls` have the key and the value matches.
 fn exclude_project(lbls: &BTreeMap<String, String>) -> impl Fn(&(String, String)) -> bool + '_ {
     |(k, v)| lbls.get(k) == Some(v)
+}
+
+#[instrument(skip(cfg))]
+pub fn single_update(
+    cfg: &Manifest,
+    proj: &str,
+    lbls: &[(String, String)],
+    fls: Vec<Vec<(String, String)>>,
+) -> Result<()> {
+    let Some(project) = cfg.get_project(proj) else {
+        return Err(eyre!("Project not found: {proj}"));
+    };
+    let Some(scr) = &project.update else {
+        return Err(eyre!("no update field in project"));
+    };
+    let lbls = project.labels.iter().chain(lbls.iter().map(|(k, v)| (k, v)));
+    let sc = run(proj, scr, lbls, |sc| {
+        // we have to do it here as `Dynamic` in andax::Map nu Sync impl
+        let filters = fls
+            .into_iter()
+            .flat_map(|fls| fls.into_iter().map(|(k, v)| (k.into(), v.into())))
+            .collect::<andax::Map>();
+        sc.push("filters", filters);
+        if let Some(rpm) = &project.rpm {
+            sc.push("rpm", andax::RPMSpec::new(proj.to_owned(), scr, &rpm.spec));
+        }
+    });
+    if let Some(sc) = sc {
+        let rpm: andax::RPMSpec = sc.get_value("rpm").expect("No rpm object in rhai scope");
+        if let Err(e) = rpm.write() {
+            tracing::error!("Failed to write RPM: {e}");
+        }
+    }
+    Ok(())
 }
 
 #[allow(clippy::arithmetic_side_effects)]
