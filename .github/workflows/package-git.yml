@@ -7,7 +7,7 @@ jobs:
   anda:
     strategy:
       matrix:
-        version: ["f42"]
+        version: ["f44"]
         arch: ["x86_64", "aarch64"]
       fail-fast: false
     runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
@@ -16,8 +16,8 @@ jobs:
       options: --cap-add=SYS_ADMIN --privileged
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: terrapkg/anda-build@069637674859d994c5d6402cdfb97bc6156f6750
         with:
           name: "anda-git"
-          mockConfig: terra-42-${{ matrix.arch }}
+          mockConfig: terra-44-${{ matrix.arch }}
