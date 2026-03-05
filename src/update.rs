@@ -1,4 +1,4 @@
-use anda_config::{Manifest, Project};
+use anda_config::Manifest;
 use andax::{run, RPMSpec};
 use color_eyre::eyre::eyre;
 use color_eyre::{Result, Section};
