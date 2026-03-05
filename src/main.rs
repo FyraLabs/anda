@@ -102,14 +102,19 @@ async fn main() -> Result<()> {
 
             println!("build_matrix={}", serde_json::to_string(&entries)?);
         }
-        Command::Update { labels, filters, excludes } => {
+        Command::Update { labels, filters, excludes, project } => {
             let labels = parse_labels(labels.iter().map(std::ops::Deref::deref))
                 .ok_or_else(|| eyre!("Cannot parse --labels"))?;
             let filters = anda_config::parse_filters(&filters)
                 .ok_or_else(|| eyre!("Cannot parse --filters"))?;
             let excludes = anda_config::parse_filters(&excludes)
                 .ok_or_else(|| eyre!("Cannot parse --excludes"))?;
-            update::update(anda_config::load_from_file(&cli.config)?, labels, filters, excludes)?;
+            let cfg = anda_config::load_from_file(&cli.config)?;
+            if let Some(proj) = project {
+                update::single_update(&cfg, &proj, &labels, filters)?;
+            } else {
+                update::update(cfg, labels, filters, excludes)?;
+            }
         }
         Command::Run { scripts, labels } => {
             if scripts.is_empty() {

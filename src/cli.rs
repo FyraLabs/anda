@@ -222,6 +222,9 @@ pub enum Command {
         /// This will always override `--filters`.
         #[clap(short, long)]
         excludes: Vec<String>,
+
+        #[clap()]
+        project: Option<String>,
     },
 
     /// Run .rhai scripts
