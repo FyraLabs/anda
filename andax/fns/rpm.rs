@@ -53,13 +53,13 @@ impl RPMSpec {
         if !RE_RELEASE.is_match(&self.f) {
             return error!("No `Release:` preamble for {}", self.name);
         }
-        match RE_RELEASE.replace(&self.f, format!("Release:${{1}}{rel}%?dist\n")) {
+        match RE_RELEASE.replace(&self.f, format!("Release:${{1}}{rel}%{{?dist}}\n")) {
             std::borrow::Cow::Borrowed(_) => {
-                return info!("{}: Release: {rel}%?dist [UNCHANGED]", self.name)
+                return info!("{}: Release: {rel}%{{?dist}} [UNCHANGED]", self.name)
             }
             std::borrow::Cow::Owned(f) => self.f = f,
         }
-        info!("{}: Release: {rel}%?dist", self.name);
+        info!("{}: Release: {rel}%{{?dist}}", self.name);
     }
     /// Sets the release number in the spec file
     pub fn release(&mut self, rel: &str) {
@@ -67,7 +67,7 @@ impl RPMSpec {
             return error!("No `Release:` preamble for {}", self.name);
         }
         let rel = rel.trim();
-        match RE_RELEASE.replace(&self.f, format!("Release:${{1}}{rel}%?dist\n")) {
+        match RE_RELEASE.replace(&self.f, format!("Release:${{1}}{rel}%{{?dist}}\n")) {
             std::borrow::Cow::Borrowed(_) => {
                 return info!("{}: Release: {rel} [UNCHANGED]", self.name)
             }
