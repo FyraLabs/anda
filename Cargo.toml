@@ -1,7 +1,7 @@
 # Cargo workspace
 [package]
 name = "anda"
-version = "0.5.1"
+version = "0.5.2"
 edition = "2021"
 description = "Andaman Build toolchain"
 license = "MIT"
@@ -28,7 +28,7 @@ color-eyre = { workspace = true }
 walkdir = "2.5.0"
 tempfile = "3.20.0"
 anda-config = { workspace = true }
-andax = { path = "./andax", version = "0.4.13" }
+andax = { path = "./andax", version = "0.5.2" }
 flatpak = "0.18.1"
 clap-verbosity-flag = "3.0.3"
 tokio = { version = "1.47.1", features = [
@@ -65,7 +65,7 @@ members = ["anda-config", "xtask", "andax"]
 rhai = { git = "https://github.com/rhaiscript/rhai", rev = "614a3e73d108bd436a3e063bd8d85ee3f168119a" }
 
 [workspace.dependencies]
-anda-config = { path = "./anda-config", version = "0.4.13" }
+anda-config = { path = "./anda-config", version = "0.5.2" }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 lazy_static = "1.5"
 regex = "1.12.3"
