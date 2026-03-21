@@ -42,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "anda"
-version = "0.4.13"
+version = "0.5.2"
 dependencies = [
  "anda-config",
  "andax",
@@ -75,7 +75,7 @@ dependencies = [
 
 [[package]]
 name = "anda-config"
-version = "0.4.13"
+version = "0.5.2"
 dependencies = [
  "dotenv",
  "env_logger",
@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "andax"
-version = "0.4.13"
+version = "0.5.2"
 dependencies = [
  "anda-config",
  "chrono",
@@ -1790,9 +1790,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.9"
+version = "0.103.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7df23109aa6c1567d1c575b9952556388da57401e4ace1d15f79eedad0d8f53"
+checksum = "df33b2b81ac578cabaf06b89b0631153a3f416b0a886e8a7a1707fb51abbd1ef"
 dependencies = [
  "ring",
  "rustls-pki-types",
