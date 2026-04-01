@@ -1,4 +1,6 @@
 name: Package Git build
+permissions:
+  contents: read
 on:
   push:
     branches: [main]
@@ -16,7 +18,7 @@ jobs:
       options: --cap-add=SYS_ADMIN --privileged
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: FyraLabs/anda-build@6ec778c6024582cfd3c78c77e398a99996481e58
         with:
           name: "anda-git"
