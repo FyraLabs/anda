@@ -8,6 +8,7 @@ on:
 jobs:
   rust:
     permissions:
-      security-events: write
-      contents: write
+      security-events: read
+      contents: read
+      pull-requests: read
     uses: FyraLabs/actions/.github/workflows/rust.yml@main
