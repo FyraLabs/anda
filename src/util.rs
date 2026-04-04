@@ -136,7 +136,7 @@ impl CommandLog for Command {
         let mut output = c.spawn().map_err(|e| {
             eyre!("Cannot run `script`")
                 .wrap_err(e)
-                .suggestion("You might need to install `script` via a package manager.")
+                .suggestion("You might need to install `util-linux` or `util-linux-script` via a package manager.")
         })?;
 
         // HACK: Rust ownership is very fun.
