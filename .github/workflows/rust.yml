@@ -9,4 +9,5 @@ jobs:
   rust:
     permissions:
       security-events: read
+      contents: read
     uses: FyraLabs/actions/.github/workflows/rust.yml@main
