@@ -125,7 +125,7 @@ impl CommandLog for Command {
         // Wrap the command in `script` to force it to give it a TTY
         let mut c = Self::new("script");
 
-        c.args(["-e", "-f", "/dev/null", "-q", "-c"])
+        c.args(["-e", "-f", "-O", "/dev/null", "-q", "-c"])
             .arg(format!("{process} {args}"))
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())
