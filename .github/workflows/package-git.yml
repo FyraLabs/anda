@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: FyraLabs/anda-build@6ec778c6024582cfd3c78c77e398a99996481e58
+      - uses: FyraLabs/anda-build@main
         with:
           name: "anda-git"
           mockConfig: terra-44-${{ matrix.arch }}
