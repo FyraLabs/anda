@@ -52,17 +52,14 @@ itertools = "0.14.0"
 lazy_format = "2.0.3"
 lazy_static = { workspace = true }
 shell-quote = "0.7.2"
+rhai = "1.24.0"
 
 
 [lints]
 workspace = true
 
-
 [workspace]
 members = ["anda-config", "xtask", "andax"]
-
-[patch.crates-io]
-rhai = { git = "https://github.com/rhaiscript/rhai", rev = "614a3e73d108bd436a3e063bd8d85ee3f168119a" }
 
 [workspace.dependencies]
 anda-config = { path = "./anda-config", version = "0.5.2" }
