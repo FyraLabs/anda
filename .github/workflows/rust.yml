@@ -2,8 +2,9 @@ name: Rust
 permissions:
   contents: read
 on:
-  push:
   pull_request:
+  push:
+    branches: ["main"]
 
 jobs:
   rust:
