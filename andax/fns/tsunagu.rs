@@ -217,7 +217,7 @@ pub mod ar {
             &format!("https://rubygems.org/api/v1/versions/{gem}/latest.json"),
         )?;
         let obj = obj.get("version").ok_or_else(|| E::from("No json[`version`]?"))?;
-        obj.as_str().map(std::string::ToString::to_string).ok_or_else(|| "json not string?".into())
+        obj.as_str().map(str::to_owned).ok_or_else(|| "json not string?".into())
     }
 
     #[rhai_fn(skip)]
