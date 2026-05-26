@@ -211,8 +211,11 @@ pub mod ar {
     }
 
     #[rhai_fn(return_raw, global)]
-    pub fn gems(ctx: NativeCallContext, module: &str) -> Res<String> {
-        let obj = get_json_value(ctx, &format!("https://rubygems.org/api/v1/versions/{module}/latest.json"))?;
+    pub fn gems(ctx: NativeCallContext, gem: &str) -> Res<String> {
+        let obj = get_json_value(
+            ctx,
+            &format!("https://rubygems.org/api/v1/versions/{gem}/latest.json"),
+        )?;
         let obj = obj.get("version").ok_or_else(|| E::from("No json[`version`]?"))?;
         obj.as_str().map(std::string::ToString::to_string).ok_or_else(|| "json not string?".into())
     }
