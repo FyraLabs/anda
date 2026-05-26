@@ -220,6 +220,33 @@ pub mod ar {
         obj.as_str().map(str::to_owned).ok_or_else(|| "json not string?".into())
     }
 
+    #[rhai_fn(return_raw, global)]
+    pub fn gitea(ctx: NativeCallContext, repo: &str, host: &str) -> Res<String> {
+        let req = AGENT.get(&format!("https://{host}/api/v1/repos/{repo}/releases/latest"));
+        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
+        trace!("Got json from {repo}:\n{v}");
+        Ok(v["tag_name"].as_str().unwrap_or("").to_owned())
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn gitea_tag(ctx: NativeCallContext, repo: &str, host: &str) -> Res<String> {
+        let req = AGENT.get(&format!("https://{host}/api/v1/repos/{repo}/tags"));
+        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
+        trace!("Got json from {repo}:\n{v}");
+        let v = (v.as_array())
+            .ok_or_else(|| E::from("gitea_tag received not array"))
+            .map(|a| a.first().ok_or_else(|| E::from("gitea_tag no tags")))??;
+        Ok(v["name"].as_str().unwrap_or("").to_owned())
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn gitea_commit(ctx: NativeCallContext, repo: &str, host: &str) -> Res<String> {
+        let req = AGENT.get(&format!("https://{host}/api/v1/repos/{repo}/commits?limit=1"));
+        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
+        trace!("Got json from {repo}:\n{v}");
+        Ok(v[0]["sha"].as_str().unwrap_or("").to_owned())
+    }
+
     #[rhai_fn(skip)]
     pub fn internal_env(key: &str) -> Res<String> {
         trace!("env(`{key}`) = {:?}", std::env::var(key));
