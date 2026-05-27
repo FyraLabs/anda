@@ -13,6 +13,7 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
   sccache-setup:
+    needs: git
     strategy:
       matrix:
         version: ["f44"]
@@ -33,7 +34,6 @@ jobs:
             await script({github, context, core, exec})
 
   rust:
-    needs: git
     permissions:
       security-events: write
       contents: read
