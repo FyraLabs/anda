@@ -221,7 +221,7 @@ pub mod ar {
     }
 
     #[rhai_fn(return_raw, global)]
-    pub fn gitea(ctx: NativeCallContext, repo: &str, host: &str) -> Res<String> {
+    pub fn gitea(ctx: NativeCallContext, host: &str, repo: &str) -> Res<String> {
         let req = AGENT.get(&format!("https://{host}/api/v1/repos/{repo}/releases/latest"));
         let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
@@ -229,7 +229,7 @@ pub mod ar {
     }
 
     #[rhai_fn(return_raw, global)]
-    pub fn gitea_tag(ctx: NativeCallContext, repo: &str, host: &str) -> Res<String> {
+    pub fn gitea_tag(ctx: NativeCallContext, host: &str, repo: &str) -> Res<String> {
         let req = AGENT.get(&format!("https://{host}/api/v1/repos/{repo}/tags"));
         let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
@@ -240,7 +240,7 @@ pub mod ar {
     }
 
     #[rhai_fn(return_raw, global)]
-    pub fn gitea_commit(ctx: NativeCallContext, repo: &str, host: &str) -> Res<String> {
+    pub fn gitea_commit(ctx: NativeCallContext, host: &str, repo: &str) -> Res<String> {
         let req = AGENT.get(&format!("https://{host}/api/v1/repos/{repo}/commits?limit=1"));
         let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
