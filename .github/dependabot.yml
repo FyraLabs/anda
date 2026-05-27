@@ -10,7 +10,6 @@ updates:
       - "/"
       - "/anda-config"
       - "/andax"
-      - "/xtask"
     schedule:
       interval: "weekly"
     groups:
