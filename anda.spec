@@ -3,7 +3,7 @@
 %global crate anda
 
 Name:           anda
-Version:        0.5.4
+Version:        0.6.0
 Release:        2%{?dist}
 Summary:        Andaman Build toolchain
 SourceLicense:  MIT

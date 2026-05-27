@@ -42,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "anda"
-version = "0.5.4"
+version = "0.6.0"
 dependencies = [
  "anda-config",
  "andax",
@@ -76,7 +76,7 @@ dependencies = [
 
 [[package]]
 name = "anda-config"
-version = "0.5.4"
+version = "0.6.0"
 dependencies = [
  "dotenv",
  "env_logger",
@@ -90,7 +90,7 @@ dependencies = [
 
 [[package]]
 name = "andax"
-version = "0.5.4"
+version = "0.6.0"
 dependencies = [
  "anda-config",
  "chrono",
