@@ -6,10 +6,8 @@
 version: 2
 updates:
   - package-ecosystem: cargo # See documentation for possible values
-    directories: 
+    directory: 
       - "/"
-      - "/anda-config"
-      - "/andax"
     schedule:
       interval: "weekly"
     groups:
