@@ -6,7 +6,11 @@
 version: 2
 updates:
   - package-ecosystem: cargo # See documentation for possible values
-    directory: "/" # Location of package manifests
+    directories: 
+      - "/"
+      - "/anda-config"
+      - "/andax"
+      - "/xtask"
     schedule:
       interval: "weekly"
   - package-ecosystem: "github-actions"
