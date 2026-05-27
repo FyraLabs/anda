@@ -5,28 +5,15 @@ on:
   push:
 
 jobs:
-  sccache-setup:
-    strategy:
-      matrix:
-        version: ["f44"]
+  sccache:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/terrapkg/builder:${{ matrix.version }}
-      options: --cap-add=SYS_ADMIN --privileged
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Configure sccache
         id: sccache
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          SCCACHE_GHA_VERSION: anda-${{ matrix.version }}-${{ hashFiles('**/Cargo.lock') }}
-          SCCACHE_GHA_CACHE_FROM: anda-${{ matrix.version }}-${{ hashFiles('**/Cargo.lock') }}
-        with:
-          script: |
-            const script = require('./.github/scripts/configure-sccache.js')
-            await script({github, context, core, exec})
+        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
 
   rust:
     needs: sccache-setup
@@ -34,23 +21,6 @@ jobs:
       security-events: write
       contents: read
     uses: FyraLabs/actions/.github/workflows/rust.yml@main
-
-  sccache:
-    needs: rust
-    strategy:
-      matrix:
-        version: ["f44"]
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/terrapkg/builder:${{ matrix.version }}
-      options: --cap-add=SYS_ADMIN --privileged
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Report Cache Summary
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            const script = require('./.github/scripts/sccache-stats.js')
-            await script({github, context, core, exec})
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
