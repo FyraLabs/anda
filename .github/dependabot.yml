@@ -13,6 +13,9 @@ updates:
       - "/xtask"
     schedule:
       interval: "weekly"
+    groups:
+      rhai:
+        patterns: ["rhai*"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
