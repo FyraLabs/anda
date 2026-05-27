@@ -6,6 +6,12 @@ on:
   push:
 
 jobs:
+  git:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Up Workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
   sccache-setup:
     strategy:
       matrix:
@@ -27,6 +33,7 @@ jobs:
             await script({github, context, core, exec})
 
   rust:
+    needs: git
     permissions:
       security-events: write
       contents: read
