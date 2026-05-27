@@ -7,7 +7,13 @@ on:
 
 jobs:
   sccache-setup:
+     strategy:
+      matrix:
+        version: ["f44"]
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/terrapkg/builder:${{ matrix.version }}
+      options: --cap-add=SYS_ADMIN --privileged
     steps:
       - name: Configure sccache
         id: sccache
@@ -28,7 +34,13 @@ jobs:
 
   sccache:
     needs: sccache-setup
+    strategy:
+      matrix:
+        version: ["f44"]
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/terrapkg/builder:${{ matrix.version }}
+      options: --cap-add=SYS_ADMIN --privileged
     steps:
       - name: Report Cache Summary
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
