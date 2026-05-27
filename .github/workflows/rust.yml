@@ -14,6 +14,9 @@ jobs:
       image: ghcr.io/terrapkg/builder:${{ matrix.version }}
       options: --cap-add=SYS_ADMIN --privileged
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - name: Configure sccache
         id: sccache
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -22,7 +25,7 @@ jobs:
           SCCACHE_GHA_CACHE_FROM: anda-${{ matrix.version }}-${{ hashFiles('**/Cargo.lock') }}
         with:
           script: |
-            const script = require('${{ github.workspace }}/.github/scripts/configure-sccache.js')
+            const script = require('./.github/scripts/configure-sccache.js')
             await script({github, context, core, exec})
 
   rust:
@@ -45,5 +48,5 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const script = require('${{ github.workspace }}/.github/scripts/sccache-stats.js')
+            const script = require('./.github/scripts/sccache-stats.js')
             await script({github, context, core, exec})
