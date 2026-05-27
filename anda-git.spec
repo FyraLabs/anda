@@ -44,7 +44,7 @@ Andaman Build toolchain.
 %pkg_completion -bfz
 
 %prep
-%autosetup -n %{crate}-%{version}
+%autosetup -n %{crate}-%{autogitcommit} -p1
 %cargo_prep_online
 %{__cargo} fetch --locked
 
