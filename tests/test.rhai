@@ -16,9 +16,11 @@ print(env("PATH"));
 
 // print(npm("discord.js"));
 
-//print(codeberg("valos/Komikku"));
-//print(codeberg_tag("valos/Komikku"));
-//print(codeberg_commit("valos/Komikku"));
+// print(gems("ruby"));
+
+// print(codeberg("valos/Komikku"));
+// print(codeberg_tag("valos/Komikku"));
+// print(codeberg_commit("valos/Komikku"));
 
 //print(gitea("git.pika-os.com", "general-packages/falcond"));
 //print(gitea_tag("git.pika-os.com", "general-packages/falcond"));
