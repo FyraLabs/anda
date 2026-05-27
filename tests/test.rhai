@@ -20,9 +20,9 @@ print(env("PATH"));
 //print(codeberg_tag("valos/Komikku"));
 //print(codeberg_commit("valos/Komikku"));
 
-//print(gitea("general-packages/falcond", "git.pika-os.com"));
-//print(gitea_tag("general-packages/falcond", "git.pika-os.com"));
-//print(gitea_commit("general-packages/falcond", "git.pika-os.com"));
+//print(gitea("git.pika-os.com", "general-packages/falcond"));
+//print(gitea_tag("git.pika-os.com", "general-packages/falcond"));
+//print(gitea_commit("git.pika-os.com", "general-packages/falcond"));
 
 let obj = #{
     "a": 1,
