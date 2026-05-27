@@ -6,8 +6,33 @@ on:
   push:
 
 jobs:
+  sccache-setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure sccache
+        id: sccache
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SCCACHE_GHA_VERSION: anda-${{ matrix.version }}-${{ matrix.arch }}
+          SCCACHE_GHA_CACHE_FROM: anda-${{ matrix.version }}-${{ matrix.arch }}
+        with:
+          script: |
+            const script = require('./.github/scripts/configure-sccache.js')
+            await script({github, context, core, exec})
+
   rust:
     permissions:
       security-events: write
       contents: read
     uses: FyraLabs/actions/.github/workflows/rust.yml@main
+
+  sccache:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report Cache Summary
+        needs: sccache-setup
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const script = require('./.github/scripts/sccache-stats.js')
+            await script({github, context, core, exec})

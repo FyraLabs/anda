@@ -25,27 +25,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Configure sccache
-        id: sccache
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          SCCACHE_GHA_VERSION: anda-${{ matrix.version }}-${{ matrix.arch }}
-          SCCACHE_GHA_CACHE_FROM: anda-${{ matrix.version }}-${{ matrix.arch }}
-        with:
-          script: |
-            const script = require('./.github/scripts/configure-sccache.js')
-            await script({github, context, core, exec})
-
       - name: Build Anda
         uses: FyraLabs/anda-build@main
         with:
           name: "anda-git"
           mockConfig: terra-44-${{ matrix.arch }}
-
-      - name: Report Cache Summary
-        if: steps.sccache.outcome == 'success'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            const script = require('./.github/scripts/sccache-stats.js')
-            await script({github, context, core, exec})
