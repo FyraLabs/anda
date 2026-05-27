@@ -27,15 +27,15 @@ edit_cargo_toml("andax/Cargo.toml", labels);
 edit_cargo_toml("Cargo.toml", labels);
 
 
-print(`Editing file: rust-anda-git.spec`);
-let spec1 = open_file("rust-anda-git.spec");
+print(`Editing file: anda-git.spec`);
+let spec1 = open_file("anda-git.spec");
 let s1 = sub(`(?m)^%global _version ${labels.oldver}$`, `%global _version ${labels.newver}`, spec1.read_string());
 spec1.seek(0);
 spec1.write(s1);
 
 
-print(`Editing file: rust-anda.spec`);
-let spec2 = open_file("rust-anda.spec");
+print(`Editing file: anda.spec`);
+let spec2 = open_file("anda.spec");
 let s2 = sub(`(?m)^(Version:\s+) ${labels.oldver}$`, `$1 ${labels.newver}`, spec2.read_string());
 spec2.seek(0);
 spec2.write(s2);
