@@ -29,13 +29,14 @@ jobs:
             await script({github, context, core, exec})
 
   rust:
+    needs: sccache-setup
     permissions:
       security-events: write
       contents: read
     uses: FyraLabs/actions/.github/workflows/rust.yml@main
 
   sccache:
-    needs: sccache-setup
+    needs: rust
     strategy:
       matrix:
         version: ["f44"]
@@ -46,7 +47,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
 
       - name: Report Cache Summary
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
