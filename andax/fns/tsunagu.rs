@@ -1,4 +1,5 @@
 use crate::{error::AndaxRes, run::rf};
+use git2::Remote;
 use rhai::{
     plugin::{
         export_module, mem, Dynamic, EvalAltResult, FnNamespace, ImmutableString, Module,
@@ -6,6 +7,7 @@ use rhai::{
     },
     CustomType, FuncRegistration,
 };
+use semver::Version;
 use serde_json::Value;
 use std::env::VarError;
 use tracing::trace;
@@ -246,6 +248,61 @@ pub mod ar {
         trace!("Got json from {repo}:\n{v}");
         Ok(v[0]["sha"].as_str().unwrap_or("").to_owned())
     }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn sourcehut(ctx: NativeCallContext, repo: &str) -> Res<String> {
+        let mut remote = Remote::create_detached(format!("https://git.sr.ht/{repo}")).ehdl(&ctx)?;
+        remote.connect(git2::Direction::Fetch).ehdl(&ctx)?;
+
+        let mut latest = Version::parse("0.0.0").unwrap();
+
+        let heads = remote.list().ehdl(&ctx)?;
+        for head in heads {
+            if head.name().ends_with("^{}") {
+                continue
+            }
+
+            let Some(version) = head.name().strip_prefix("refs/tags/") else {
+                continue
+            };
+            
+            let Ok(parsed_version) = Version::parse(version) else {
+                continue
+            };
+
+            if parsed_version > latest {
+                latest = parsed_version;
+            }
+        }
+
+        Ok(latest.to_string())
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn sourcehut_commit(ctx: NativeCallContext, repo: &str) -> Res<String> {
+        let mut remote = Remote::create_detached(format!("https://git.sr.ht/{repo}")).ehdl(&ctx)?;
+        remote.connect(git2::Direction::Fetch).ehdl(&ctx)?;
+
+        let heads = remote.list().ehdl(&ctx)?;
+        for head in heads {
+            if head.name() == "HEAD" {
+                return Ok(head.oid().to_string());
+            }
+        }
+
+        Err(E::from("Could not find HEAD in repository's reference advertisement list."))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn sourcehut_rawfile(
+        ctx: NativeCallContext,
+        repo: &str,
+        branch: &str,
+        file: &str,
+    ) -> Res<String> {
+        get(ctx, &format!("https://git.sr.ht/{repo}/blob/{branch}/{file}"))
+    }
+
 
     #[rhai_fn(skip)]
     pub fn internal_env(key: &str) -> Res<String> {
