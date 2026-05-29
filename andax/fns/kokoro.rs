@@ -2,10 +2,9 @@ use crate::error::{AndaxError as AErr, AndaxRes};
 use regex::Regex;
 use rhai::{
     plugin::{
-        export_module, mem, FnNamespace, ImmutableString, Module, NativeCallContext, PluginFunc,
-        RhaiResult, TypeId,
+        export_module, NativeCallContext,
     },
-    Dynamic, EvalAltResult as RhaiE, FuncRegistration,
+    Dynamic, EvalAltResult as RhaiE,
 };
 type Res<T = ()> = Result<T, Box<RhaiE>>;
 
