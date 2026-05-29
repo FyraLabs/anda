@@ -154,7 +154,7 @@ pub fn traceback(proj: &str, scr: &Path, nntz: &TbErr, pos: Position, rhai_fn: &
     let mut code = format!(
         "─{li}─┬{ri}\n {lns} │ {scr}:{line}:{col}\n─{li}─┼{ri}\n {line} │ {sl}\n {lns} │ {}{}",
         " ".repeat(col - 1), // padding at left of underline
-        "🭶".repeat(ma)        // underline the word
+        "🭶".repeat(ma)       // underline the word
     );
     if !rhai_fn.is_empty() {
         _ = write!(code, "\n {lns} └─═ When invoking: {rhai_fn}()");

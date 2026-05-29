@@ -1,9 +1,7 @@
 use crate::error::{AndaxError as AErr, AndaxRes};
 use regex::Regex;
 use rhai::{
-    plugin::{
-        export_module, NativeCallContext,
-    },
+    plugin::{export_module, NativeCallContext},
     Dynamic, EvalAltResult as RhaiE,
 };
 type Res<T = ()> = Result<T, Box<RhaiE>>;

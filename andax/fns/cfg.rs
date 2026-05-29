@@ -1,9 +1,7 @@
 use crate::error::AndaxRes;
 use anda_config::load_from_file;
 use rhai::{
-    plugin::{
-        export_module, NativeCallContext,
-    },
+    plugin::{export_module, NativeCallContext},
     EvalAltResult,
 };
 use std::path::PathBuf;

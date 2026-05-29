@@ -1,10 +1,7 @@
 use crate::{error::AndaxRes, run::rf};
 use git2::Remote;
 use rhai::{
-    plugin::{
-        export_module, Dynamic, EvalAltResult,
-        NativeCallContext,
-    },
+    plugin::{export_module, Dynamic, EvalAltResult, NativeCallContext},
     CustomType,
 };
 use semver::Version;
@@ -169,10 +166,7 @@ pub mod ar {
             .ok_or_else(|| E::from("`normal-version` is not an array"))?
             .first()
             .ok_or_else(|| E::from("No normal package versions available"))?;
-        latest
-            .as_str()
-            .map(str::to_owned)
-            .ok_or_else(|| E::from("Package version is not a string"))
+        latest.as_str().map(str::to_owned).ok_or_else(|| E::from("Package version is not a string"))
     }
 
     #[rhai_fn(return_raw, global)]

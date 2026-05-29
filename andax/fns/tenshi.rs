@@ -3,9 +3,8 @@
 use crate::error::AndaxRes;
 
 use rhai::{
-    plugin::{
-        export_module, NativeCallContext,
-    }, EvalAltResult as RhaiE,
+    plugin::{export_module, NativeCallContext},
+    EvalAltResult as RhaiE,
 };
 type Res<T = ()> = Result<T, Box<RhaiE>>;
 

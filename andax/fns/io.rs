@@ -1,8 +1,6 @@
 use crate::error::AndaxRes;
 use rhai::{
-    plugin::{
-        export_module, Dynamic, NativeCallContext,
-    },
+    plugin::{export_module, Dynamic, NativeCallContext},
     EvalAltResult,
 };
 use std::io::Write;
