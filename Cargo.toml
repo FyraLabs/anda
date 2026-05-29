@@ -39,7 +39,7 @@ tokio = { version = "1.52.3", features = [
     "rt-multi-thread",
 ] }
 async-trait = "0.1.89"
-nix = { version = "0.30.1", features = ["signal"], default-features = false }
+nix = { version = "0.31.3", features = ["signal"], default-features = false }
 git2 = { workspace = true }
 chrono = { workspace = true }
 ignore = { workspace = true }
@@ -52,7 +52,7 @@ itertools = "0.14.0"
 lazy_format = "2.0.3"
 lazy_static = { workspace = true }
 shell-quote = "0.7.2"
-rhai = "1.24.0"
+rhai = "1.25.1"
 
 
 [lints]
