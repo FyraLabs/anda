@@ -29,6 +29,8 @@ hcl-rs = { workspace = true }
 directories = "6.0.0"
 chrono = { workspace = true }
 parking_lot = { workspace = true }
+git2 = { workspace = true }
+semver = "1.0.28"
 
 [lints]
 workspace = true
