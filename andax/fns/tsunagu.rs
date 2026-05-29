@@ -259,16 +259,12 @@ pub mod ar {
         let heads = remote.list().ehdl(&ctx)?;
         for head in heads {
             if head.name().ends_with("^{}") {
-                continue
+                continue;
             }
 
-            let Some(version) = head.name().strip_prefix("refs/tags/") else {
-                continue
-            };
-            
-            let Ok(parsed_version) = Version::parse(version) else {
-                continue
-            };
+            let Some(version) = head.name().strip_prefix("refs/tags/") else { continue };
+
+            let Ok(parsed_version) = Version::parse(version) else { continue };
 
             if parsed_version > latest {
                 latest = parsed_version;
@@ -302,7 +298,6 @@ pub mod ar {
     ) -> Res<String> {
         get(ctx, &format!("https://git.sr.ht/{repo}/blob/{branch}/{file}"))
     }
-
 
     #[rhai_fn(skip)]
     pub fn internal_env(key: &str) -> Res<String> {
