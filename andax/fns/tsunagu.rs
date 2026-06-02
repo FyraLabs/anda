@@ -299,6 +299,57 @@ pub mod ar {
         get(ctx, &format!("https://git.sr.ht/{repo}/blob/{branch}/{file}"))
     }
 
+    #[rhai_fn(return_raw, global)]
+    pub fn gnome_extensions(ctx: NativeCallContext, uuid: &str) -> Res<String> {
+        let response_value = get_json_value(
+            ctx,
+            &format!("https://extensions.gnome.org/api/v1/extensions/{uuid}/versions/?format=json"),
+        )?;
+        trace!("Got json from {uuid}:\n{response_value}");
+
+        let results =
+            response_value.get("results").ok_or_else(|| E::from("No json[`results`]?"))?;
+        let results_arr =
+            results.as_array().ok_or_else(|| E::from("json[`results`] is not array type?"))?;
+
+        // There's both the version name and the internal/fallback version.
+        // We'll use the internal/fallback version since the version name is optional and not always present.
+        let mut latest_version = 0;
+        for result in results_arr {
+            let Some(result_obj) = result.as_object() else {
+                continue;
+            };
+            let Some(status_value) = result_obj.get("status") else {
+                continue;
+            };
+            let Some(status) = status_value.as_i64() else {
+                continue;
+            };
+
+            // Is version marked as "Active"?
+            if status != 3 {
+                continue;
+            }
+
+            let Some(version_value) = result_obj.get("version") else {
+                continue;
+            };
+            let Some(version) = version_value.as_i64() else {
+                continue;
+            };
+
+            if version > latest_version {
+                latest_version = version;
+            }
+        }
+
+        if latest_version == 0 {
+            return Err(E::from("No active extension version could be found!"));
+        }
+
+        Ok(latest_version.to_string())
+    }
+
     #[rhai_fn(skip)]
     pub fn internal_env(key: &str) -> Res<String> {
         trace!("env(`{key}`) = {:?}", std::env::var(key));
