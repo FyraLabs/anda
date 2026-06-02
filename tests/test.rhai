@@ -29,6 +29,8 @@ print(env("PATH"));
 // print(sourcehut("~alextee/libaudec"))
 // print(sourcehut_commit("~alextee/libaudec"))
 
+// print(gnome_extensions("live-lockscreen@nick-redwill"))
+
 let obj = #{
     "a": 1,
     "b": 2 ,
