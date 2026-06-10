@@ -1702,9 +1702,9 @@ dependencies = [
 
 [[package]]
 name = "rhai-fs"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ff6bcc2b38c35379cef1e32612deb925781602689fde73e9a76762c229e9075"
+checksum = "5e704b3f6fbe64d1f278f5752706444a63bfdb7060f795e6d8f6221f0cda0309"
 dependencies = [
  "rhai",
  "serde",
