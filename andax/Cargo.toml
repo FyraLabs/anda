@@ -23,7 +23,7 @@ color-eyre = { workspace = true }
 smartstring = "1.0.1"
 tempfile = "3.27.0"
 anda-config = { workspace = true }
-rhai-fs = "0.1.4"
+rhai-fs = "0.1.5"
 rhai-url = "0.0.6"
 hcl-rs = { workspace = true }
 directories = "6.0.0"
