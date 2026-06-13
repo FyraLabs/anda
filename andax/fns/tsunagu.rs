@@ -254,7 +254,7 @@ pub mod ar {
         let mut remote = Remote::create_detached(format!("https://git.sr.ht/{repo}")).ehdl(&ctx)?;
         remote.connect(git2::Direction::Fetch).ehdl(&ctx)?;
 
-        let mut latest = Version::parse("0.0.0").unwrap();
+        let mut latest = Version::new(0, 0, 0);
 
         let heads = remote.list().ehdl(&ctx)?;
         for head in heads {
@@ -262,13 +262,21 @@ pub mod ar {
                 continue;
             }
 
-            let Some(version) = head.name().strip_prefix("refs/tags/") else { continue };
+            // Let's find the version in the tag name...
+            let Some(tag_name) = head.name().strip_prefix("refs/tags/") else { continue };
+            let Some(version_start_index) = tag_name.find(char::is_numeric) else { continue };
+            let (_, version_str) = tag_name.split_at(version_start_index);
 
-            let Ok(parsed_version) = Version::parse(version) else { continue };
+            // Let's parse what should be a valid version
+            let Ok(parsed_version) = Version::parse(version_str) else { continue };
 
             if parsed_version > latest {
                 latest = parsed_version;
             }
+        }
+
+        if latest == Version::new(0, 0, 0) {
+            return Err(E::from("No valid version tags could be found."));
         }
 
         Ok(latest.to_string())
