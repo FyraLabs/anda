@@ -1,10 +1,7 @@
 //! This file contains functions for andax
 //! which implements procedures from building RPMs
 //! see `anda::rpm_spec.rs`
-use rhai::plugin::{
-    export_module, mem, Dynamic, FuncRegistration, ImmutableString, Module, NativeCallContext,
-    PluginFunc, RhaiResult, TypeId,
-};
+use rhai::plugin::export_module;
 
 // 正にこうです。 :3
 macro_rules! rpmargs {
