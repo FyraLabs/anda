@@ -133,6 +133,10 @@ pub struct RpmOpts {
     /// RPM: Extra repositories to pass to mock
     #[clap(long, short = 'R')]
     pub extra_repos: Vec<String>,
+
+    /// RPM: Extra arguments to the respective builder
+    #[clap(long, short = 'A')]
+    pub args: Vec<String>,
 }
 
 #[derive(Subcommand, Debug, Clone)]

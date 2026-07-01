@@ -260,12 +260,15 @@ pub async fn build_project(
 ) -> Result<()> {
     let cwd = std::env::current_dir().unwrap();
 
-    let mut rpm_opts = RPMOptions::new(rbopts.mock_config.clone(), cwd, cli.target_dir.clone());
+    let mut rpm_opts = RPMOptions::new(
+        rbopts.mock_config.clone(),
+        cwd,
+        cli.target_dir.clone(),
+        rbopts.args.clone(),
+    );
 
     // export environment variables
-    if let Some(env) = proj.env.as_ref() {
-        env.iter().for_each(|(k, v)| std::env::set_var(k, v));
-    }
+    proj.env.iter().for_each(|e| e.iter().for_each(|(k, v)| std::env::set_var(k, v)));
 
     if let Some(pre_script) = &proj.pre_script {
         if pre_script.extension().unwrap_or_default() == "rhai" {

@@ -16,7 +16,7 @@ use std::{collections::BTreeMap, str::FromStr};
 use tokio::process::Command;
 use tracing::{debug, info};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RPMOptions {
     /// Mock config, only used if backend is mock
     pub mock_config: Option<String>,
@@ -46,25 +46,18 @@ pub struct RPMOptions {
     pub scm_opts: Vec<String>,
     /// Plugin Options (mock)
     pub plugin_opts: Vec<String>,
+    /// Extra Arguments to the respective builder
+    pub args: Vec<String>,
 }
 
 impl RPMOptions {
-    pub const fn new(mock_config: Option<String>, sources: PathBuf, resultdir: PathBuf) -> Self {
-        Self {
-            mock_config,
-            with: Vec::new(),
-            without: Vec::new(),
-            target: None,
-            sources,
-            resultdir,
-            extra_repos: None,
-            no_mirror: false,
-            macros: BTreeMap::new(),
-            config_opts: Vec::new(),
-            scm_enable: false,
-            scm_opts: Vec::new(),
-            plugin_opts: Vec::new(),
-        }
+    pub fn new(
+        mock_config: Option<String>,
+        sources: PathBuf,
+        resultdir: PathBuf,
+        args: Vec<String>,
+    ) -> Self {
+        Self { mock_config, sources, resultdir, args, ..Self::default() }
     }
     pub fn add_extra_repo(&mut self, repo: String) {
         if let Some(ref mut repos) = self.extra_repos {
@@ -141,6 +134,7 @@ impl RPMBuilder {
                 take(&mut options.mock_config),
                 take(&mut options.sources),
                 take(&mut options.resultdir),
+                take(&mut options.args),
             );
             if let Some(extra_repos) = options.extra_repos.take() {
                 for extra_repo in extra_repos {
@@ -161,8 +155,11 @@ impl RPMBuilder {
 
             mock.build(spec).await
         } else {
-            let mut rpmbuild =
-                RPMBuildBackend::new(take(&mut options.sources), take(&mut options.resultdir));
+            let mut rpmbuild = RPMBuildBackend::new(
+                take(&mut options.sources),
+                take(&mut options.resultdir),
+                take(&mut options.args),
+            );
 
             options.macros.iter().for_each(|(k, v)| {
                 rpmbuild.def_macro(k, v);
@@ -247,6 +244,7 @@ pub trait RPMExtraOptions {
 }
 
 /// An RPM spec backend that uses Mock to build RPMs
+#[derive(Default)]
 pub struct MockBackend {
     mock_config: Option<String>,
     with: Vec<String>,
@@ -261,6 +259,7 @@ pub struct MockBackend {
     scm_opts: Vec<String>,
     plugin_opts: Vec<String>,
     target: Option<String>,
+    args: Vec<String>,
 }
 
 impl RPMExtraOptions for MockBackend {
@@ -288,22 +287,13 @@ impl RPMExtraOptions for MockBackend {
 }
 
 impl MockBackend {
-    pub const fn new(mock_config: Option<String>, sources: PathBuf, resultdir: PathBuf) -> Self {
-        Self {
-            mock_config,
-            with: Vec::new(),
-            without: Vec::new(),
-            sources,
-            resultdir,
-            extra_repos: Vec::new(),
-            no_mirror: false,
-            macros: BTreeMap::new(),
-            config_opts: Vec::new(),
-            scm_enable: false,
-            scm_opts: Vec::new(),
-            plugin_opts: Vec::new(),
-            target: None,
-        }
+    pub fn new(
+        mock_config: Option<String>,
+        sources: PathBuf,
+        resultdir: PathBuf,
+        args: Vec<String>,
+    ) -> Self {
+        Self { mock_config, sources, resultdir, args, ..Self::default() }
     }
 
     pub fn extend_config_opts(&mut self, opts: Vec<String>) {
@@ -385,6 +375,8 @@ impl MockBackend {
         self.scm_opts.iter().for_each(|scm| {
             cmd.arg("--scm-option").arg(scm);
         });
+
+        cmd.args(&self.args);
 
         cmd
     }
@@ -476,6 +468,7 @@ impl RPMSpecBackend for MockBackend {
 ///
 /// This backend is not recommended when building distros, as all changes will not
 /// be reflected for every package.
+#[derive(Default)]
 pub struct RPMBuildBackend {
     sources: PathBuf,
     resultdir: PathBuf,
@@ -483,6 +476,7 @@ pub struct RPMBuildBackend {
     without: Vec<String>,
     target: Option<String>,
     macros: BTreeMap<String, String>,
+    args: Vec<String>,
 }
 
 impl RPMExtraOptions for RPMBuildBackend {
@@ -510,15 +504,8 @@ impl RPMExtraOptions for RPMBuildBackend {
 }
 
 impl RPMBuildBackend {
-    pub const fn new(sources: PathBuf, resultdir: PathBuf) -> Self {
-        Self {
-            sources,
-            resultdir,
-            with: Vec::new(),
-            without: Vec::new(),
-            macros: BTreeMap::new(),
-            target: None,
-        }
+    pub fn new(sources: PathBuf, resultdir: PathBuf, args: Vec<String>) -> Self {
+        Self { sources, resultdir, args, ..Self::default() }
     }
 
     pub fn rpmbuild(&self) -> Command {
@@ -535,6 +522,8 @@ impl RPMBuildBackend {
         for (name, value) in &self.macros {
             cmd.arg("-D").arg(format!("{name} {value}"));
         }
+
+        cmd.args(&self.args);
 
         cmd
     }
