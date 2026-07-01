@@ -125,7 +125,7 @@ impl CommandLog for Command {
         // Wrap the command in `script` to force it to give it a TTY
         let mut c = Self::new("script");
 
-        c.args(["-e", "-f", "/dev/null", "-q", "-c"])
+        c.args(["-e", "-f", "-O", "/dev/null", "-q", "-c"])
             .arg(format!("{process} {args}"))
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())
@@ -136,7 +136,7 @@ impl CommandLog for Command {
         let mut output = c.spawn().map_err(|e| {
             eyre!("Cannot run `script`")
                 .wrap_err(e)
-                .suggestion("You might need to install `script` via a package manager.")
+                .suggestion("You might need to install `util-linux` or `util-linux-script` via a package manager.")
         })?;
 
         // HACK: Rust ownership is very fun.

@@ -1,4 +1,5 @@
 use crate::{error::AndaxRes, run::rf};
+use git2::Remote;
 use rhai::{
     plugin::{
         export_module, mem, Dynamic, EvalAltResult, FnNamespace, ImmutableString, Module,
@@ -6,6 +7,7 @@ use rhai::{
     },
     CustomType, FuncRegistration,
 };
+use semver::Version;
 use serde_json::Value;
 use std::env::VarError;
 use tracing::trace;
@@ -208,6 +210,152 @@ pub mod ar {
         file: &str,
     ) -> Res<String> {
         get(ctx, &format!("https://codeberg.org/{repo}/raw/branch/{branch}/{file}"))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn gems(ctx: NativeCallContext, gem: &str) -> Res<String> {
+        let obj = get_json_value(
+            ctx,
+            &format!("https://rubygems.org/api/v1/versions/{gem}/latest.json"),
+        )?;
+        let obj = obj.get("version").ok_or_else(|| E::from("No json[`version`]?"))?;
+        obj.as_str().map(str::to_owned).ok_or_else(|| "json not string?".into())
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn gitea(ctx: NativeCallContext, host: &str, repo: &str) -> Res<String> {
+        let req = AGENT.get(&format!("https://{host}/api/v1/repos/{repo}/releases/latest"));
+        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
+        trace!("Got json from {repo}:\n{v}");
+        Ok(v["tag_name"].as_str().unwrap_or("").to_owned())
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn gitea_tag(ctx: NativeCallContext, host: &str, repo: &str) -> Res<String> {
+        let req = AGENT.get(&format!("https://{host}/api/v1/repos/{repo}/tags"));
+        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
+        trace!("Got json from {repo}:\n{v}");
+        let v = (v.as_array())
+            .ok_or_else(|| E::from("gitea_tag received not array"))
+            .map(|a| a.first().ok_or_else(|| E::from("gitea_tag no tags")))??;
+        Ok(v["name"].as_str().unwrap_or("").to_owned())
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn gitea_commit(ctx: NativeCallContext, host: &str, repo: &str) -> Res<String> {
+        let req = AGENT.get(&format!("https://{host}/api/v1/repos/{repo}/commits?limit=1"));
+        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
+        trace!("Got json from {repo}:\n{v}");
+        Ok(v[0]["sha"].as_str().unwrap_or("").to_owned())
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn sourcehut(ctx: NativeCallContext, repo: &str) -> Res<String> {
+        let mut remote = Remote::create_detached(format!("https://git.sr.ht/{repo}")).ehdl(&ctx)?;
+        remote.connect(git2::Direction::Fetch).ehdl(&ctx)?;
+
+        let mut latest = Version::new(0, 0, 0);
+
+        let heads = remote.list().ehdl(&ctx)?;
+        for head in heads {
+            if head.name().ends_with("^{}") {
+                continue;
+            }
+
+            // Let's find the version in the tag name...
+            let Some(tag_name) = head.name().strip_prefix("refs/tags/") else { continue };
+            let Some(version_start_index) = tag_name.find(char::is_numeric) else { continue };
+            let (_, version_str) = tag_name.split_at(version_start_index);
+
+            // Let's parse what should be a valid version
+            let Ok(parsed_version) = Version::parse(version_str) else { continue };
+
+            if parsed_version > latest {
+                latest = parsed_version;
+            }
+        }
+
+        if latest == Version::new(0, 0, 0) {
+            return Err(E::from("No valid version tags could be found."));
+        }
+
+        Ok(latest.to_string())
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn sourcehut_commit(ctx: NativeCallContext, repo: &str) -> Res<String> {
+        let mut remote = Remote::create_detached(format!("https://git.sr.ht/{repo}")).ehdl(&ctx)?;
+        remote.connect(git2::Direction::Fetch).ehdl(&ctx)?;
+
+        let heads = remote.list().ehdl(&ctx)?;
+        for head in heads {
+            if head.name() == "HEAD" {
+                return Ok(head.oid().to_string());
+            }
+        }
+
+        Err(E::from("Could not find HEAD in repository's reference advertisement list."))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn sourcehut_rawfile(
+        ctx: NativeCallContext,
+        repo: &str,
+        branch: &str,
+        file: &str,
+    ) -> Res<String> {
+        get(ctx, &format!("https://git.sr.ht/{repo}/blob/{branch}/{file}"))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn gnome_extensions(ctx: NativeCallContext, uuid: &str) -> Res<String> {
+        let response_value = get_json_value(
+            ctx,
+            &format!("https://extensions.gnome.org/api/v1/extensions/{uuid}/versions/?format=json"),
+        )?;
+        trace!("Got json from {uuid}:\n{response_value}");
+
+        let results =
+            response_value.get("results").ok_or_else(|| E::from("No json[`results`]?"))?;
+        let results_arr =
+            results.as_array().ok_or_else(|| E::from("json[`results`] is not array type?"))?;
+
+        // There's both the version name and the internal/fallback version.
+        // We'll use the internal/fallback version since the version name is optional and not always present.
+        let mut latest_version = 0;
+        for result in results_arr {
+            let Some(result_obj) = result.as_object() else {
+                continue;
+            };
+            let Some(status_value) = result_obj.get("status") else {
+                continue;
+            };
+            let Some(status) = status_value.as_i64() else {
+                continue;
+            };
+
+            // Is version marked as "Active"?
+            if status != 3 {
+                continue;
+            }
+
+            let Some(version_value) = result_obj.get("version") else {
+                continue;
+            };
+            let Some(version) = version_value.as_i64() else {
+                continue;
+            };
+
+            if version > latest_version {
+                latest_version = version;
+            }
+        }
+
+        if latest_version == 0 {
+            return Err(E::from("No active extension version could be found!"));
+        }
+
+        Ok(latest_version.to_string())
     }
 
     #[rhai_fn(skip)]

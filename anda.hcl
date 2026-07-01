@@ -20,12 +20,12 @@ project "test" {
 
 project "anda" {
     rpm {
-        spec = "rust-anda.spec"
+        spec = "anda.spec"
     }
 }
 
 project "anda-git" {
     rpm {
-        spec = "rust-anda-git.spec"
+        spec = "anda-git.spec"
     }
 }

@@ -14,7 +14,7 @@ RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.
 # Add Andaman repo
 RUN dnf config-manager --add-repo https://raw.githubusercontent.com/terrapkg/subatomic-repos/main/terra.repo
 
-RUN dnf install -y anda-mock-configs anda-srpm-macros
+RUN dnf install -y terra-mock-configs anda-srpm-macros
 
 ENTRYPOINT ["/usr/local/share/docker-init.sh"]
 VOLUME [ "/var/lib/docker" ]
