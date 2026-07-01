@@ -1,11 +1,8 @@
 use crate::{error::AndaxRes, run::rf};
 use git2::Remote;
 use rhai::{
-    plugin::{
-        export_module, mem, Dynamic, EvalAltResult, FnNamespace, ImmutableString, Module,
-        NativeCallContext, PluginFunc, RhaiResult, TypeId,
-    },
-    CustomType, FuncRegistration,
+    plugin::{export_module, Dynamic, EvalAltResult, NativeCallContext},
+    CustomType,
 };
 use semver::Version;
 use serde_json::Value;
