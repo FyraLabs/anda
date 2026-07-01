@@ -46,6 +46,9 @@ pub struct RPMOptions {
     pub scm_opts: Vec<String>,
     /// Plugin Options (mock)
     pub plugin_opts: Vec<String>,
+    /// Cleanup Options (mock)
+    pub no_cleanup_before: bool,
+    pub no_cleanup_after: bool,
 }
 
 impl RPMOptions {
@@ -64,6 +67,8 @@ impl RPMOptions {
             scm_enable: false,
             scm_opts: Vec::new(),
             plugin_opts: Vec::new(),
+            no_cleanup_before: false,
+            no_cleanup_after: false,
         }
     }
     pub fn add_extra_repo(&mut self, repo: String) {
@@ -158,6 +163,8 @@ impl RPMBuilder {
             mock.enable_scm(options.scm_enable);
             mock.extend_scm_opts(take(&mut options.scm_opts));
             mock.plugin_opts(take(&mut options.plugin_opts));
+            mock.enable_no_cleanup_before(options.no_cleanup_before);
+            mock.enable_no_cleanup_after(options.no_cleanup_after);
 
             mock.build(spec).await
         } else {
@@ -261,6 +268,8 @@ pub struct MockBackend {
     scm_opts: Vec<String>,
     plugin_opts: Vec<String>,
     target: Option<String>,
+    no_cleanup_before: bool,
+    no_cleanup_after: bool,
 }
 
 impl RPMExtraOptions for MockBackend {
@@ -303,6 +312,8 @@ impl MockBackend {
             scm_opts: Vec::new(),
             plugin_opts: Vec::new(),
             target: None,
+            no_cleanup_before: false,
+            no_cleanup_after: false,
         }
     }
 
@@ -335,6 +346,14 @@ impl MockBackend {
 
     pub fn plugin_opts(&mut self, opts: Vec<String>) {
         self.plugin_opts.extend(opts);
+    }
+
+    pub const fn enable_no_cleanup_before(&mut self, enable: bool) {
+        self.no_cleanup_before = enable;
+    }
+
+    pub const fn enable_no_cleanup_after(&mut self, enable: bool) {
+        self.no_cleanup_after = enable;
     }
 
     pub fn target(&mut self, target: Option<String>) {
@@ -385,6 +404,14 @@ impl MockBackend {
         self.scm_opts.iter().for_each(|scm| {
             cmd.arg("--scm-option").arg(scm);
         });
+
+        if self.no_cleanup_before {
+            cmd.arg("--no-clean");
+        }
+
+        if self.no_cleanup_after {
+            cmd.arg("--no-cleanup-after");
+        }
 
         cmd
     }
