@@ -1,6 +1,6 @@
 use crate::{
     artifacts::Artifacts,
-    cli::{Cli, FlatpakOpts, OciOpts, PackageType, RpmOpts},
+    cli::{Cli, FlatpakOpts, OciOpts, PackageType, RpmOpts, NoMockCleanup},
     cmd,
     flatpak::{FlatpakArtifact, FlatpakBuilder},
     oci::{build_oci, OCIBackend},
@@ -11,6 +11,7 @@ use color_eyre::{eyre::eyre, eyre::Context, Result};
 use itertools::Itertools;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace};
+
 
 pub async fn build_rpm(
     opts: &mut RPMOptions,
@@ -308,6 +309,17 @@ pub async fn build_project(
                 rpm_opts.mock_config = Some(mockcfg.to_owned());
             }
             // TODO: Implement global settings
+        }
+
+        if let Some(mock_no_cleanup) = &rbopts.mock_no_cleanup {
+            match mock_no_cleanup {
+                NoMockCleanup::Before => rpm_opts.no_cleanup_before = true,
+                NoMockCleanup::After => rpm_opts.no_cleanup_after = true,
+                NoMockCleanup::All => {
+                    rpm_opts.no_cleanup_before = true;
+                    rpm_opts.no_cleanup_after = true;
+                }
+            }
         }
     }
     let mut arts = Artifacts::new();

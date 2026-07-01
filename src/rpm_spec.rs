@@ -48,6 +48,9 @@ pub struct RPMOptions {
     pub plugin_opts: Vec<String>,
     /// Extra Arguments to the respective builder
     pub args: Vec<String>,
+    /// Cleanup Options (mock)
+    pub no_cleanup_before: bool,
+    pub no_cleanup_after: bool,
 }
 
 impl RPMOptions {
@@ -152,6 +155,8 @@ impl RPMBuilder {
             mock.enable_scm(options.scm_enable);
             mock.extend_scm_opts(take(&mut options.scm_opts));
             mock.plugin_opts(take(&mut options.plugin_opts));
+            mock.enable_no_cleanup_before(options.no_cleanup_before);
+            mock.enable_no_cleanup_after(options.no_cleanup_after);
 
             mock.build(spec).await
         } else {
@@ -260,6 +265,8 @@ pub struct MockBackend {
     plugin_opts: Vec<String>,
     target: Option<String>,
     args: Vec<String>,
+    no_cleanup_before: bool,
+    no_cleanup_after: bool,
 }
 
 impl RPMExtraOptions for MockBackend {
@@ -295,7 +302,6 @@ impl MockBackend {
     ) -> Self {
         Self { mock_config, sources, resultdir, args, ..Self::default() }
     }
-
     pub fn extend_config_opts(&mut self, opts: Vec<String>) {
         self.config_opts.extend(opts);
     }
@@ -325,6 +331,14 @@ impl MockBackend {
 
     pub fn plugin_opts(&mut self, opts: Vec<String>) {
         self.plugin_opts.extend(opts);
+    }
+
+    pub const fn enable_no_cleanup_before(&mut self, enable: bool) {
+        self.no_cleanup_before = enable;
+    }
+
+    pub const fn enable_no_cleanup_after(&mut self, enable: bool) {
+        self.no_cleanup_after = enable;
     }
 
     pub fn target(&mut self, target: Option<String>) {
@@ -377,6 +391,14 @@ impl MockBackend {
         });
 
         cmd.args(&self.args);
+
+        if self.no_cleanup_before {
+            cmd.arg("--no-clean");
+        }
+
+        if self.no_cleanup_after {
+            cmd.arg("--no-cleanup-after");
+        }
 
         cmd
     }

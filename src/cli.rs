@@ -13,6 +13,13 @@ pub enum RPMBuilder {
     Rpmbuild,
 }
 
+#[derive(ValueEnum, Debug, Clone, Copy)]
+pub enum NoMockCleanup {
+    Before,
+    After,
+    All,
+}
+
 #[derive(Copy, Clone, ValueEnum, Debug)]
 pub enum PackageType {
     Rpm,
@@ -137,6 +144,10 @@ pub struct RpmOpts {
     /// RPM: Extra arguments to the respective builder
     #[clap(long, short = 'A')]
     pub args: Vec<String>,
+
+    /// RPM: Whether to clean up a mock chroot and when
+    #[clap(long)]
+    pub mock_no_cleanup: Option<NoMockCleanup>,
 }
 
 #[derive(Subcommand, Debug, Clone)]
