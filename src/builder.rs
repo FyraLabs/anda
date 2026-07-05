@@ -1,6 +1,6 @@
 use crate::{
     artifacts::Artifacts,
-    cli::{Cli, FlatpakOpts, OciOpts, PackageType, RpmOpts, NoMockCleanup},
+    cli::{Cli, FlatpakOpts, NoMockCleanup, OciOpts, PackageType, RpmOpts},
     cmd,
     flatpak::{FlatpakArtifact, FlatpakBuilder},
     oci::{build_oci, OCIBackend},
@@ -11,7 +11,6 @@ use color_eyre::{eyre::eyre, eyre::Context, Result};
 use itertools::Itertools;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace};
-
 
 pub async fn build_rpm(
     opts: &mut RPMOptions,
