@@ -117,7 +117,7 @@ pub mod ar {
         let obj = get_json_value(ctx, &format!("https://pypi.org/pypi/{name}/json"))?;
         let obj = obj.get("info").ok_or_else(|| E::from("No json[`info`]?"))?;
         let obj = obj.get("version").ok_or_else(|| E::from("No json[`info`][`version`]?"))?;
-        obj.as_str().map(std::string::ToString::to_string).ok_or_else(|| "json not string?".into())
+        obj.as_str().map(str::to_owned).ok_or_else(|| "json not string?".into())
     }
 
     #[rhai_fn(return_raw, global)]
@@ -126,7 +126,7 @@ pub mod ar {
         let obj = obj.get("crate").ok_or_else(|| E::from("No json[`crate`]?"))?;
         let obj = obj.get("max_stable_version");
         let obj = obj.ok_or_else(|| E::from("No json[`crate`][`max_stable_version`]?"))?;
-        obj.as_str().map(std::string::ToString::to_string).ok_or_else(|| "json not string?".into())
+        obj.as_str().map(str::to_owned).ok_or_else(|| "json not string?".into())
     }
 
     #[rhai_fn(return_raw, global)]
@@ -135,7 +135,7 @@ pub mod ar {
         let obj = obj.get("crate").ok_or_else(|| E::from("No json[`crate`]?"))?;
         let obj = obj.get("max_version");
         let obj = obj.ok_or_else(|| E::from("No json[`crate`][`max_version`]?"))?;
-        obj.as_str().map(std::string::ToString::to_string).ok_or_else(|| "json not string?".into())
+        obj.as_str().map(str::to_owned).ok_or_else(|| "json not string?".into())
     }
 
     #[rhai_fn(return_raw, global)]
@@ -144,13 +144,13 @@ pub mod ar {
         let obj = obj.get("crate").ok_or_else(|| E::from("No json[`crate`]?"))?;
         let obj = obj.get("newest_version");
         let obj = obj.ok_or_else(|| E::from("No json[`crate`][`newest_version`]?"))?;
-        obj.as_str().map(std::string::ToString::to_string).ok_or_else(|| "json not string?".into())
+        obj.as_str().map(str::to_owned).ok_or_else(|| "json not string?".into())
     }
     #[rhai_fn(return_raw, global)]
     pub fn npm(ctx: NativeCallContext, name: &str) -> Res<String> {
         let obj = get_json_value(ctx, &format!("https://registry.npmjs.org/{name}/latest"))?;
         let obj = obj.get("version").ok_or_else(|| E::from("No json[`version`]?"))?;
-        obj.as_str().map(std::string::ToString::to_string).ok_or_else(|| "json not string?".into())
+        obj.as_str().map(str::to_owned).ok_or_else(|| "json not string?".into())
     }
 
     #[rhai_fn(return_raw, global)]
@@ -166,10 +166,7 @@ pub mod ar {
             .ok_or_else(|| E::from("`normal-version` is not an array"))?
             .first()
             .ok_or_else(|| E::from("No normal package versions available"))?;
-        latest
-            .as_str()
-            .map(std::string::ToString::to_string)
-            .ok_or_else(|| E::from("Package version is not a string"))
+        latest.as_str().map(str::to_owned).ok_or_else(|| E::from("Package version is not a string"))
     }
 
     #[rhai_fn(return_raw, global)]
