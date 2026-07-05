@@ -26,8 +26,10 @@ print(env("PATH"));
 // print(gitea_tag("git.pika-os.com", "general-packages/falcond"));
 // print(gitea_commit("git.pika-os.com", "general-packages/falcond"));
 
-// print(sourcehut("~alextee/libaudec"))
-// print(sourcehut_commit("~alextee/libaudec"))
+// print(sourcehut("~alextee/libaudec"));
+// print(sourcehut_commit("~alextee/libaudec"));
+
+// print(gnome_extensions("live-lockscreen@nick-redwill"));
 
 let obj = #{
     "a": 1,
