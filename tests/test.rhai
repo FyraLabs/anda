@@ -31,6 +31,10 @@ print(env("PATH"));
 
 // print(gnome_extensions("live-lockscreen@nick-redwill"));
 
+// print(forgejo("forgejo.ellis.link", "continuwuation/continuwuity"));
+// print(forgejo_tag("forgejo.ellis.link", "continuwuation/continuwuity"));
+// print(forgejo_commit("forgejo.ellis.link", "continuwuation/continuwuity"));
+
 let obj = #{
     "a": 1,
     "b": 2 ,
