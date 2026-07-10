@@ -30,6 +30,7 @@ print(env("PATH"));
 // print(sourcehut_commit("~alextee/libaudec"));
 
 // print(gnome_extensions("live-lockscreen@nick-redwill"));
+print(ansible_galaxy("a10", "acos_axapi"));
 
 let obj = #{
     "a": 1,
