@@ -44,7 +44,7 @@ git2 = { workspace = true }
 chrono = { workspace = true }
 ignore = { workspace = true }
 promptly = "0.3.1"
-console = "0.16.3"
+console = "0.16.4"
 serde = { workspace = true }
 serde_json = { workspace = true }
 regex = { workspace = true }
@@ -65,12 +65,12 @@ members = ["anda-config", "xtask", "andax"]
 anda-config = { path = "./anda-config", version = "0.7.2" }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 lazy_static = "1.5"
-regex = "1.12.4"
+regex = "1.13.0"
 serde_json = "1.0"
 color-eyre = "0.6.5"
 tracing = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["now"] }
-ignore = "0.4.26"
+ignore = "0.4.28"
 clap_complete = "4"
 clap = { version = "4", features = ["derive", "env"] }
 parking_lot = "0.12.5"

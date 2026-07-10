@@ -10,5 +10,5 @@ publish = false
 clap_mangen = "0.3.0"
 anda = { path = ".." }
 clap = { workspace = true }
-anyhow = "1.0.102"
+anyhow = "1.0.103"
 clap_complete = { workspace = true }
