@@ -121,7 +121,7 @@ pub fn traceback(proj: &str, scr: &Path, nntz: &TbErr, pos: Position, rhai_fn: &
     let Some((line, col)) = gpos(pos) else {
         return error!("{proj}: {scr:?} (no position data)\n{nntz}");
     };
-    let f = std::fs::File::open(scr);
+    let fi = std::fs::File::open(scr);
     let scr = scr.display();
     macro_rules! die {
         ($var:expr, $msg:expr) => {{
@@ -132,29 +132,29 @@ pub fn traceback(proj: &str, scr: &Path, nntz: &TbErr, pos: Position, rhai_fn: &
             $var.unwrap()
         }};
     }
-    let f = die!(f, "{proj}: Cannot open `{scr}`: {}");
-    let Some(sl) = std::io::BufReader::new(f).lines().nth(line - 1) else {
+    let fi = die!(fi, "{proj}: Cannot open `{scr}`: {}");
+    let Some(sl) = std::io::BufReader::new(fi).lines().nth(line - 1) else {
         error!("{proj}: Non-existence exception at {scr}:{line}:{col}");
         return error!("{proj}: {scr} (no position data)\n{nntz}");
     };
     // replace tabs to avoid wrong position when print
     let sl = die!(sl, "{proj}: Cannot read line: {}").replace('\t', " ");
-    let m = WORD_REGEX.find_at(sl.as_str(), col - 1).map_or(1, |x| {
-        let r = x.range();
-        if r.start == col - 1 {
-            r.len()
+    let ma = WORD_REGEX.find_at(sl.as_str(), col - 1).map_or(1, |x| {
+        let ri = x.range();
+        if ri.start == col - 1 {
+            ri.len()
         } else {
             1
         }
     }); // number of underline chars
     let ln = line.to_string().len(); // length of the string of the line number
     let lns = " ".repeat(ln); // spaces for padding the left hand side line number place
-    let l = "─".repeat(ln); // padding for the top of line number display
-    let r = "─".repeat(sl.len() + 2); // right hand side padding
+    let li = "─".repeat(ln); // padding for the top of line number display
+    let ri = "─".repeat(sl.len() + 2); // right hand side padding
     let mut code = format!(
-        "─{l}─┬{r}\n {lns} │ {scr}:{line}:{col}\n─{l}─┼{r}\n {line} │ {sl}\n {lns} │ {}{}",
+        "─{li}─┬{ri}\n {lns} │ {scr}:{line}:{col}\n─{li}─┼{ri}\n {line} │ {sl}\n {lns} │ {}{}",
         " ".repeat(col - 1), // padding at left of underline
-        "🭶".repeat(m)        // underline the word
+        "🭶".repeat(ma)       // underline the word
     );
     if !rhai_fn.is_empty() {
         _ = write!(code, "\n {lns} └─═ When invoking: {rhai_fn}()");
@@ -165,9 +165,9 @@ pub fn traceback(proj: &str, scr: &Path, nntz: &TbErr, pos: Position, rhai_fn: &
     _ = write!(code, "\n {lns} └─═ {nntz}");
     code += &hint(&sl, &lns, nntz, rhai_fn).unwrap_or_default();
     // slow but works!
-    let c = code.matches('└').count();
-    if c > 0 {
-        code = code.replacen('└', "├", c - 1);
+    let cm = code.matches('└').count();
+    if cm > 0 {
+        code = code.replacen('└', "├", cm - 1);
     }
     error!("Script Exception —— {proj}\n{code}");
 }

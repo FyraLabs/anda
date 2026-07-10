@@ -1,6 +1,6 @@
 use crate::{
     artifacts::Artifacts,
-    cli::{Cli, FlatpakOpts, OciOpts, PackageType, RpmOpts},
+    cli::{Cli, FlatpakOpts, NoMockCleanup, OciOpts, PackageType, RpmOpts},
     cmd,
     flatpak::{FlatpakArtifact, FlatpakBuilder},
     oci::{build_oci, OCIBackend},
@@ -260,12 +260,15 @@ pub async fn build_project(
 ) -> Result<()> {
     let cwd = std::env::current_dir().unwrap();
 
-    let mut rpm_opts = RPMOptions::new(rbopts.mock_config.clone(), cwd, cli.target_dir.clone());
+    let mut rpm_opts = RPMOptions::new(
+        rbopts.mock_config.clone(),
+        cwd,
+        cli.target_dir.clone(),
+        rbopts.args.clone(),
+    );
 
     // export environment variables
-    if let Some(env) = proj.env.as_ref() {
-        env.iter().for_each(|(k, v)| std::env::set_var(k, v));
-    }
+    proj.env.iter().for_each(|e| e.iter().for_each(|(k, v)| std::env::set_var(k, v)));
 
     if let Some(pre_script) = &proj.pre_script {
         if pre_script.extension().unwrap_or_default() == "rhai" {
@@ -305,6 +308,17 @@ pub async fn build_project(
                 rpm_opts.mock_config = Some(mockcfg.to_owned());
             }
             // TODO: Implement global settings
+        }
+
+        if let Some(mock_no_cleanup) = &rbopts.mock_no_cleanup {
+            match mock_no_cleanup {
+                NoMockCleanup::Before => rpm_opts.no_cleanup_before = true,
+                NoMockCleanup::After => rpm_opts.no_cleanup_after = true,
+                NoMockCleanup::All => {
+                    rpm_opts.no_cleanup_before = true;
+                    rpm_opts.no_cleanup_after = true;
+                }
+            }
         }
     }
     let mut arts = Artifacts::new();
