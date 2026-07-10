@@ -358,6 +358,18 @@ pub mod ar {
         Ok(latest_version.to_string())
     }
 
+    #[rhai_fn(return_raw, global)]
+    pub fn ansible_galaxy(ctx: NativeCallContext, namespace: &str, collection: &str) -> Res<String> {
+        let response =
+            AGENT.get(&format!("https://galaxy.ansible.com/api/v3/plugin/ansible/content/published/collections/index/{namespace}/{collection}/versions/?limit=1&ordering=-version"))
+                .header("User-Agent", USER_AGENT)
+                .header("Accept", "application/json")
+                .call()
+                .ehdl(&ctx)?;
+        let response: Value = response.into_body().read_json().ehdl(&ctx)?;
+        Ok(response["data"][0]["version"].to_string())
+    }
+
     #[rhai_fn(skip)]
     pub fn internal_env(key: &str) -> Res<String> {
         trace!("env(`{key}`) = {:?}", std::env::var(key));
