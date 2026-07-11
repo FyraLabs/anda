@@ -1,7 +1,7 @@
 # Work around a bug in rustc 1.95.0 with GCC
 %global toolchain clang
 %global crate anda
-%global _version 0.7.2
+%global _version 0.7.3
 
 Name:           anda
 Version:        %{_version}^%{autogitversion}
