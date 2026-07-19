@@ -353,7 +353,11 @@ pub mod ar {
     }
 
     #[rhai_fn(return_raw, global)]
-    pub fn ansible_galaxy(ctx: NativeCallContext, namespace: &str, collection: &str) -> Res<String> {
+    pub fn ansible_galaxy(
+        ctx: NativeCallContext,
+        namespace: &str,
+        collection: &str,
+    ) -> Res<String> {
         let response =
             AGENT.get(&format!("https://galaxy.ansible.com/api/v3/plugin/ansible/content/published/collections/index/{namespace}/{collection}/versions/?limit=1&ordering=-version"))
                 .header("User-Agent", USER_AGENT)
@@ -361,9 +365,9 @@ pub mod ar {
                 .call()
                 .ehdl(&ctx)?;
         let response: Value = response.into_body().read_json().ehdl(&ctx)?;
-        Ok(response["data"][0]["version"].to_string())
+        Ok(response["data"][0]["version"].as_str().unwrap_or_default().to_owned())
     }
-   
+
     #[rhai_fn(return_raw, global)]
     pub fn forgejo(ctx: NativeCallContext, host: &str, repo: &str) -> Res<String> {
         let req = AGENT.get(&format!("https://{host}/api/v1/repos/{repo}/releases/latest"));
