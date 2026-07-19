@@ -93,14 +93,25 @@ impl CommandLog for Command {
         let process = self.as_std().get_program();
 
         let mut winsize = nix::libc::winsize { ws_row: 0, ws_col: 0, ws_xpixel: 0, ws_ypixel: 0 };
-        assert_eq!(
-            // SAFETY: see documentations for TIOCGWINSZ. This obtains the terminal window size
-            unsafe {
-                nix::libc::ioctl(nix::libc::STDOUT_FILENO, nix::libc::TIOCGWINSZ, &raw mut winsize)
-            },
-            0,
-            "ioctl failed"
-        );
+
+        if std::io::stdout().is_terminal() {
+            assert_eq!(
+                // SAFETY: see documentations for TIOCGWINSZ. This obtains the terminal window size
+                unsafe {
+                    nix::libc::ioctl(
+                        nix::libc::STDOUT_FILENO,
+                        nix::libc::TIOCGWINSZ,
+                        &raw mut winsize,
+                    )
+                },
+                0,
+                "ioctl failed"
+            );
+        } else {
+            // default to 80x24 if no tty is connected (ex: ci)
+            winsize = nix::libc::winsize { ws_row: 24, ws_col: 80, ws_xpixel: 0, ws_ypixel: 0 };
+        }
+
         winsize.ws_col -= u16::try_from(process.len()).expect("process name too long");
         winsize.ws_col -= 3; // ` │ ` ← 3 cols
 
