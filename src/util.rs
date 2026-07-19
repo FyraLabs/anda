@@ -98,7 +98,11 @@ impl CommandLog for Command {
             assert_eq!(
                 // SAFETY: see documentations for TIOCGWINSZ. This obtains the terminal window size
                 unsafe {
-                    nix::libc::ioctl(nix::libc::STDOUT_FILENO, nix::libc::TIOCGWINSZ, &raw mut winsize)
+                    nix::libc::ioctl(
+                        nix::libc::STDOUT_FILENO,
+                        nix::libc::TIOCGWINSZ,
+                        &raw mut winsize,
+                    )
                 },
                 0,
                 "ioctl failed"
@@ -110,7 +114,6 @@ impl CommandLog for Command {
 
         winsize.ws_col -= u16::try_from(process.len()).expect("process name too long");
         winsize.ws_col -= 3; // ` │ ` ← 3 cols
-
 
         let pt_stdout = crate::pt::PseudoTerminal::new();
         pt_stdout.set_winsize(winsize);
