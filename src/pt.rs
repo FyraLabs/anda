@@ -56,7 +56,16 @@ impl PseudoTerminal {
             match unsafe { nix::libc::poll(&raw mut pollfd, 1, PRINT_LOG_TIMEOUT) } {
                 0 if crate::util::STOP.load(std::sync::atomic::Ordering::Relaxed) => break None,
                 0 => {}
-                1 => break Some(nix::unistd::read(self, buf)),
+                1 => {
+                    // in some cases a 1 is reported even when there isnt an error but the stream is just empty or ended
+                    if pollfd.revents & nix::libc::POLLHUP != 0 {
+                        break match nix::unistd::read(self, buf) {
+                            Ok(0) | Err(nix::errno::Errno::EIO) => None,
+                            other => Some(other),
+                        };
+                    }
+                    break Some(nix::unistd::read(self, buf));
+                }
                 rc => panic!("unexpected return value from poll(): {rc}"),
             }
         }

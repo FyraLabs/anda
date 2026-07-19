@@ -86,6 +86,9 @@ impl CommandLog for Command {
     async fn log(&mut self) -> Result<()> {
         debug!("running command");
 
+        // stop is set to true at the end of a command. we need to reset it to false cause its global when a command is started.
+        STOP.store(false, std::sync::atomic::Ordering::Relaxed);
+
         if !std::io::stdout().is_terminal() {
             tracing::warn!("stdout is not a terminal, output may get a bit more verbose!");
         }
@@ -132,7 +135,7 @@ impl CommandLog for Command {
             .stdout(stdout)
             .stderr(stderr);
 
-        trace!(?c, "Running command");
+        info!(?c, "Running command");
 
         let mut output = c.spawn().map_err(|e| {
             eyre!("Cannot run {process:?}")
@@ -169,7 +172,8 @@ impl CommandLog for Command {
                             info!("Command exited successfully");
                             Ok(())
                         } else {
-                            info!("Command exited with status: {status}");
+                            info!(?c, "Command exited with status: {status}");
+
                             Err(eyre!("Command exited with status: {status}"))
                         }
                     }
