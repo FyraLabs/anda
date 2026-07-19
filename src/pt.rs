@@ -56,7 +56,20 @@ impl PseudoTerminal {
             match unsafe { nix::libc::poll(&raw mut pollfd, 1, PRINT_LOG_TIMEOUT) } {
                 0 if crate::util::STOP.load(std::sync::atomic::Ordering::Relaxed) => break None,
                 0 => {}
-                1 => break Some(nix::unistd::read(self, buf)),
+                1 => {
+                    // POLLHUP is reported in `revents` even when not requested. On
+                    // Linux, reading a PTY master after the slave has been closed
+                    // returns EIO, which is the end-of-stream condition for a PTY
+                    // (a plain `read()` returning 0 does not happen here). Drain any
+                    // final buffered data first, then treat EIO as EOF.
+                    if pollfd.revents & nix::libc::POLLHUP != 0 {
+                        break match nix::unistd::read(self, buf) {
+                            Ok(0) | Err(nix::errno::Errno::EIO) => None,
+                            other => Some(other),
+                        };
+                    }
+                    break Some(nix::unistd::read(self, buf));
+                }
                 rc => panic!("unexpected return value from poll(): {rc}"),
             }
         }

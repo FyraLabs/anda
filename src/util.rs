@@ -86,6 +86,16 @@ impl CommandLog for Command {
     async fn log(&mut self) -> Result<()> {
         debug!("running command");
 
+        // `STOP` is a process-wide latch that gets set to `true` when a previous
+        // command finished (see the `tokio::select!` below). The `print_log`
+        // threads consult it to know when to stop polling the PTY. Without
+        // resetting it here, every command after the first one would see
+        // `STOP == true` on its first `poll()` timeout and silently drop all
+        // output. We can safely reset because the previous `log()` call's
+        // tasks are all joined by the `task.await??` loop before it returns,
+        // and Anda builds commands sequentially.
+        STOP.store(false, std::sync::atomic::Ordering::Relaxed);
+
         if !std::io::stdout().is_terminal() {
             tracing::warn!("stdout is not a terminal, output may get a bit more verbose!");
         }
@@ -132,7 +142,7 @@ impl CommandLog for Command {
             .stdout(stdout)
             .stderr(stderr);
 
-        trace!(?c, "Running command");
+        info!(?c, "Running command");
 
         let mut output = c.spawn().map_err(|e| {
             eyre!("Cannot run {process:?}")
@@ -169,7 +179,8 @@ impl CommandLog for Command {
                             info!("Command exited successfully");
                             Ok(())
                         } else {
-                            info!("Command exited with status: {status}");
+                            info!(?c, "Command exited with status: {status}");
+
                             Err(eyre!("Command exited with status: {status}"))
                         }
                     }
