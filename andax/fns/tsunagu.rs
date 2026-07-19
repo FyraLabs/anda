@@ -361,7 +361,7 @@ pub mod ar {
                 .call()
                 .ehdl(&ctx)?;
         let response: Value = response.into_body().read_json().ehdl(&ctx)?;
-        Ok(response["data"][0]["version"].to_string())
+        Ok(response["data"][0]["version"].as_str().unwrap_or_default().to_string())
     }
    
     #[rhai_fn(return_raw, global)]
