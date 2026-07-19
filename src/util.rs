@@ -86,14 +86,7 @@ impl CommandLog for Command {
     async fn log(&mut self) -> Result<()> {
         debug!("running command");
 
-        // `STOP` is a process-wide latch that gets set to `true` when a previous
-        // command finished (see the `tokio::select!` below). The `print_log`
-        // threads consult it to know when to stop polling the PTY. Without
-        // resetting it here, every command after the first one would see
-        // `STOP == true` on its first `poll()` timeout and silently drop all
-        // output. We can safely reset because the previous `log()` call's
-        // tasks are all joined by the `task.await??` loop before it returns,
-        // and Anda builds commands sequentially.
+        // stop is set to true at the end of a command. we need to reset it to false cause its global when a command is started.
         STOP.store(false, std::sync::atomic::Ordering::Relaxed);
 
         if !std::io::stdout().is_terminal() {
