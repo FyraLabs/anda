@@ -31,13 +31,7 @@ anda-config = { workspace = true }
 andax = { path = "./andax", version = "0.7.3" }
 flatpak = "0.18.1"
 clap-verbosity-flag = "3.0.4"
-tokio = { version = "1.52.3", features = [
-    "process",
-    "io-util",
-    "macros",
-    "signal",
-    "rt-multi-thread",
-] }
+tokio = { version = "1.52.3", features = ["process", "io-util", "macros", "signal", "rt-multi-thread"] }
 async-trait = "0.1.89"
 nix = { version = "0.31.3", features = ["signal"], default-features = false }
 git2 = { workspace = true }
@@ -48,7 +42,7 @@ console = "0.16.4"
 serde = { workspace = true }
 serde_json = { workspace = true }
 regex = { workspace = true }
-itertools = "0.14.0"
+itertools = "0.15.0"
 lazy_format = "2.0.3"
 lazy_static = { workspace = true }
 shell-quote = "0.7.2"
@@ -120,3 +114,5 @@ undocumented_unsafe_blocks = "deny"
 unimplemented = "warn"
 unneeded_field_pattern = "warn"
 unwrap_in_result = "warn"
+
+equatable_if_let = "allow"

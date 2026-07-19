@@ -2,17 +2,11 @@
 use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
 use clap_verbosity_flag::log::LevelFilter;
 use color_eyre::{eyre::eyre, Result, Section};
-use console::style;
-use itertools::Itertools;
 use nix::{sys::signal, unistd::Pid};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::BTreeMap,
-    io::{IsTerminal, Write},
-    path::Path,
-};
-use tokio::{io::AsyncBufReadExt, process::Command};
+use std::{collections::BTreeMap, io::IsTerminal, os::fd::FromRawFd, path::Path};
+use tokio::process::Command;
 use tracing::{debug, info};
 
 lazy_static::lazy_static! {
@@ -21,11 +15,14 @@ lazy_static::lazy_static! {
     static ref DEFAULT_ARCHES: [String; 2] = ["x86_64".to_owned(), "aarch64".to_owned()];
 }
 
-#[derive(Copy, Clone)]
-enum ConsoleOut {
+pub static STOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[derive(Copy, Clone, Debug)]
+pub enum ConsoleOut {
     Stdout,
     Stderr,
 }
+
 // Build entry for GHA
 #[derive(Debug, Clone, Serialize, Deserialize, Ord, Eq, PartialEq, PartialOrd)]
 pub struct BuildEntry {
@@ -79,89 +76,74 @@ pub fn fetch_build_entries(config: Manifest) -> Vec<BuildEntry> {
 pub trait CommandLog {
     async fn log(&mut self) -> Result<()>;
 }
-fn print_log(process: &str, output: &[u8], out: ConsoleOut) {
-    // check if no_color is set
-    let no_color = std::env::var("NO_COLOR").is_ok();
 
-    let process = {
-        if no_color {
-            style(process)
-        } else {
-            match out {
-                ConsoleOut::Stdout => style(process).cyan(),
-                ConsoleOut::Stderr => style(process).yellow(),
-            }
-        }
-    };
-    let mut output2 = Vec::with_capacity(output.len().saturating_add(10));
-    output2.extend_from_slice(format!("{process} │ ").as_bytes());
-    for &c in output {
-        if c == b'\r' {
-            // check if is terminal
-            if std::io::stdout().is_terminal() {
-                output2.extend_from_slice(format!("\r{process} │ ").as_bytes());
-            } else {
-                // format!("{process} │ ").as_bytes().clone_into(&mut output2);
-                break;
-            }
-        } else {
-            output2.push(c);
-        }
-    }
-    output2.push(b'\n');
-    std::io::stdout().write_all(&output2).unwrap();
-}
 #[async_trait::async_trait]
 impl CommandLog for Command {
+    #[allow(clippy::arithmetic_side_effects)]
+    // we are force-casting anyway
+    // #[allow(clippy::cast_possible_truncation)] // we are force-casting anyway
+    #[tracing::instrument]
     async fn log(&mut self) -> Result<()> {
-        // make process name a constant string that we can reuse every time we call print_log
-        let process = self.as_std().get_program().to_owned().into_string().unwrap();
-        let args = (self.as_std().get_args())
-            .map(shell_quote::Sh::quote_vec)
-            .map(|s| String::from_utf8(s).unwrap())
-            .join(" ");
-        debug!("Running command: {process} {args}",);
+        debug!("running command");
 
-        // Wrap the command in `script` to force it to give it a TTY
-        let mut c = Self::new("script");
+        if !std::io::stdout().is_terminal() {
+            tracing::warn!("stdout is not a terminal, output may get a bit more verbose!");
+        }
 
-        c.args(["-e", "-f", "-O", "/dev/null", "-q", "-c"])
-            .arg(format!("{process} {args}"))
+        let process = self.as_std().get_program();
+
+        let mut winsize = nix::libc::winsize { ws_row: 0, ws_col: 0, ws_xpixel: 0, ws_ypixel: 0 };
+        assert_eq!(
+            // SAFETY: see documentations for TIOCGWINSZ. This obtains the terminal window size
+            unsafe {
+                nix::libc::ioctl(nix::libc::STDOUT_FILENO, nix::libc::TIOCGWINSZ, &raw mut winsize)
+            },
+            0,
+            "ioctl failed"
+        );
+        winsize.ws_col -= u16::try_from(process.len()).expect("process name too long");
+        winsize.ws_col -= 3; // ` │ ` ← 3 cols
+
+        let pt_stdout = crate::pt::PseudoTerminal::new();
+        pt_stdout.set_winsize(winsize);
+        // SAFETY: turning into Stdio
+        let stdout = unsafe { std::process::Stdio::from_raw_fd(pt_stdout.slave()) };
+
+        let pt_stderr = crate::pt::PseudoTerminal::new();
+        pt_stderr.set_winsize(winsize);
+        // SAFETY: turning into Stdio
+        let stderr = unsafe { std::process::Stdio::from_raw_fd(pt_stderr.slave()) };
+
+        let mut c = Self::new(process);
+
+        c.args(self.as_std().get_args())
             .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped());
+            .stdout(stdout)
+            .stderr(stderr);
 
         trace!(?c, "Running command");
 
         let mut output = c.spawn().map_err(|e| {
-            eyre!("Cannot run `script`")
+            eyre!("Cannot run {process:?}")
                 .wrap_err(e)
-                .suggestion("You might need to install `util-linux` or `util-linux-script` via a package manager.")
+                .suggestion("You might need to install the program via a package manager.")
         })?;
 
-        // HACK: Rust ownership is very fun.
-        let t = process.clone();
-        let stdout = output.stdout.take().unwrap();
-        let mut stdout_lines = tokio::io::BufReader::new(stdout).split(b'\n');
-        let stderr = output.stderr.take().unwrap();
-        let mut stderr_lines = tokio::io::BufReader::new(stderr).split(b'\n');
+        let process = process.to_os_string();
+        let process2 = process.clone();
 
         // handles so we can run both at the same time
         for task in [
-            tokio::spawn(async move {
-                while let Some(line) = stdout_lines.next_segment().await.unwrap() {
-                    print_log(&t, &line, ConsoleOut::Stdout);
-                }
+            tokio::task::spawn_blocking(move || {
+                pt_stdout.print_log(&process, ConsoleOut::Stdout);
+                Ok(())
+            }),
+            tokio::task::spawn_blocking(move || {
+                pt_stderr.print_log(&process2, ConsoleOut::Stderr);
                 Ok(())
             }),
             tokio::spawn(async move {
-                while let Some(line) = stderr_lines.next_segment().await.unwrap() {
-                    print_log(&process, &line, ConsoleOut::Stderr);
-                }
-                Ok(())
-            }),
-            tokio::spawn(async move {
-                tokio::select! {
+                let res = tokio::select! {
                     _ = tokio::signal::ctrl_c() => {
                         info!("Received ctrl-c, sending sigint to child process");
                         #[allow(clippy::cast_possible_wrap)]
@@ -180,7 +162,9 @@ impl CommandLog for Command {
                             Err(eyre!("Command exited with status: {status}"))
                         }
                     }
-                }
+                };
+                STOP.store(true, std::sync::atomic::Ordering::Relaxed);
+                res
             }),
         ] {
             task.await??;

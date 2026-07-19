@@ -7,6 +7,7 @@ mod builder;
 mod cli;
 mod flatpak;
 mod oci;
+mod pt;
 mod rpm_spec;
 mod update;
 mod util;
