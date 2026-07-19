@@ -8,6 +8,9 @@ on:
     paths:
       - "anda-git.spec"
       - "anda.hcl"
+      - "anda-config/**"
+      - "andax/**"
+      - "src/**"
   workflow_dispatch:
 jobs:
   anda:
