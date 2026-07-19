@@ -39,3 +39,10 @@ let spec2 = open_file("anda.spec");
 let s2 = sub(`(?m)^(Version:\s+) ${labels.oldver}$`, `$1 ${labels.newver}`, spec2.read_string());
 spec2.seek(0);
 spec2.write(s2);
+
+
+print(`Editing file: README.md`);
+let readme = open_file("README.md");
+let s3 = sub(`(?m)^(git checkout) ${labels.oldver}$`, `$1 ${labels.newver}`, readme.read_string());
+readme.seek(0);
+readme.write(s3);
