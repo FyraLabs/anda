@@ -15,14 +15,6 @@ lazy_static::lazy_static! {
     static ref DEFAULT_ARCHES: [String; 2] = ["x86_64".to_owned(), "aarch64".to_owned()];
 }
 
-pub static STOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-#[derive(Copy, Clone, Debug)]
-pub enum ConsoleOut {
-    Stdout,
-    Stderr,
-}
-
 // Build entry for GHA
 #[derive(Debug, Clone, Serialize, Deserialize, Ord, Eq, PartialEq, PartialOrd)]
 pub struct BuildEntry {
@@ -85,107 +77,7 @@ impl CommandLog for Command {
     #[tracing::instrument]
     async fn log(&mut self) -> Result<()> {
         debug!("running command");
-
-        // stop is set to true at the end of a command. we need to reset it to false cause its global when a command is started.
-        STOP.store(false, std::sync::atomic::Ordering::Relaxed);
-
-        if !std::io::stdout().is_terminal() {
-            tracing::warn!("stdout is not a terminal, output may get a bit more verbose!");
-        }
-
-        let process = self.as_std().get_program();
-
-        let mut winsize = nix::libc::winsize { ws_row: 0, ws_col: 0, ws_xpixel: 0, ws_ypixel: 0 };
-
-        if std::io::stdout().is_terminal() {
-            assert_eq!(
-                // SAFETY: see documentations for TIOCGWINSZ. This obtains the terminal window size
-                unsafe {
-                    nix::libc::ioctl(
-                        nix::libc::STDOUT_FILENO,
-                        nix::libc::TIOCGWINSZ,
-                        &raw mut winsize,
-                    )
-                },
-                0,
-                "ioctl failed"
-            );
-        } else {
-            // default to 80x24 if no tty is connected (ex: ci)
-            winsize = nix::libc::winsize { ws_row: 24, ws_col: 80, ws_xpixel: 0, ws_ypixel: 0 };
-        }
-
-        winsize.ws_col -= u16::try_from(process.len()).expect("process name too long");
-        winsize.ws_col -= 3; // ` │ ` ← 3 cols
-
-        let pt_stdout = crate::pt::PseudoTerminal::new();
-        pt_stdout.set_winsize(winsize);
-        // SAFETY: turning into Stdio
-        let stdout = unsafe { std::process::Stdio::from_raw_fd(pt_stdout.slave()) };
-
-        let pt_stderr = crate::pt::PseudoTerminal::new();
-        pt_stderr.set_winsize(winsize);
-        // SAFETY: turning into Stdio
-        let stderr = unsafe { std::process::Stdio::from_raw_fd(pt_stderr.slave()) };
-
-        let mut c = Self::new(process);
-
-        c.args(self.as_std().get_args())
-            .stdin(std::process::Stdio::null())
-            .stdout(stdout)
-            .stderr(stderr);
-
-        info!(?c, "Running command");
-
-        let mut output = c.spawn().map_err(|e| {
-            eyre!("Cannot run {process:?}")
-                .wrap_err(e)
-                .suggestion("You might need to install the program via a package manager.")
-        })?;
-
-        let process = process.to_os_string();
-        let process2 = process.clone();
-
-        // handles so we can run both at the same time
-        for task in [
-            tokio::task::spawn_blocking(move || {
-                pt_stdout.print_log(&process, ConsoleOut::Stdout);
-                Ok(())
-            }),
-            tokio::task::spawn_blocking(move || {
-                pt_stderr.print_log(&process2, ConsoleOut::Stderr);
-                Ok(())
-            }),
-            tokio::spawn(async move {
-                let res = tokio::select! {
-                    _ = tokio::signal::ctrl_c() => {
-                        info!("Received ctrl-c, sending sigint to child process");
-                        #[allow(clippy::cast_possible_wrap)]
-                        signal::kill(Pid::from_raw(output.id().unwrap() as i32), signal::Signal::SIGINT).unwrap();
-                        eprintln!("Received ctrl-c, exiting");
-                        // std::process::exit(127);
-                        Err(eyre!("Received ctrl-c, exiting"))
-                    }
-                    w = output.wait() => {
-                        let status = w.unwrap();
-                        if status.success() {
-                            info!("Command exited successfully");
-                            Ok(())
-                        } else {
-                            info!(?c, "Command exited with status: {status}");
-
-                            Err(eyre!("Command exited with status: {status}"))
-                        }
-                    }
-                };
-                STOP.store(true, std::sync::atomic::Ordering::Relaxed);
-                res
-            }),
-        ] {
-            task.await??;
-        }
-
-        Ok(())
+        crate::pt::PseudoTerminalCtl::new(self.as_std().get_program()).run(self).await
     }
 }
 

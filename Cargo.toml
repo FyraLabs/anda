@@ -47,6 +47,7 @@ lazy_format = "2.0.3"
 lazy_static = { workspace = true }
 shell-quote = "0.7.2"
 rhai = "1.25.1"
+format-bytes = "0.3.0"
 
 
 [lints]

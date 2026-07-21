@@ -1,4 +1,7 @@
-use std::{io::Write, sync::atomic::AtomicBool};
+use std::{io::Write, os::fd::FromRawFd, sync::{atomic::AtomicBool, Arc}};
+
+use color_eyre::eyre::{eyre, Context};
+use nix::sys::signal;
 
 static LF: AtomicBool = AtomicBool::new(true);
 static CR: AtomicBool = AtomicBool::new(false);
@@ -7,6 +10,7 @@ const PRINT_LOG_TIMEOUT: i32 = 50;
 
 pub struct PseudoTerminal {
     fd: std::ffi::c_int,
+    stop: Arc<AtomicBool>,
 }
 
 impl PseudoTerminal {
@@ -18,7 +22,7 @@ impl PseudoTerminal {
         // SAFETY: unlock a pseudoterminal master/slave pair
         assert_eq!(unsafe { nix::libc::unlockpt(fd) }, 0, "unlockpt failed");
 
-        Self { fd }
+        Self { fd, stop: Arc::new(AtomicBool::new(false)) }
     }
     pub fn set_winsize(&self, winsize: nix::libc::winsize) {
         assert_eq!(
@@ -54,7 +58,7 @@ impl PseudoTerminal {
             // return value is number of modified objects in the `pollfd` array
             // here the return value must be either 1 (something happened) or 0 (timeout)
             match unsafe { nix::libc::poll(&raw mut pollfd, 1, PRINT_LOG_TIMEOUT) } {
-                0 if crate::util::STOP.load(std::sync::atomic::Ordering::Relaxed) => break None,
+                0 if self.stop.load(std::sync::atomic::Ordering::Relaxed) => break None,
                 0 => {}
                 1 => {
                     // in some cases a 1 is reported even when there isnt an error but the stream is just empty or ended
@@ -71,28 +75,10 @@ impl PseudoTerminal {
         }
     }
 
-    fn get_prefix(process: &std::ffi::OsStr, out: crate::util::ConsoleOut) -> String {
-        let process = process.to_str().expect("to_str() returns None");
-
-        let process = {
-            if std::env::var("NO_COLOR").is_ok() {
-                console::style(process)
-            } else {
-                match out {
-                    crate::util::ConsoleOut::Stdout => console::style(process).cyan(),
-                    crate::util::ConsoleOut::Stderr => console::style(process).yellow(),
-                }
-            }
-        };
-
-        format!("{process} │ ")
-    }
-
     // BUG: in extreme cases, comparing bytechars would not work for unicode that spans multiple
     // bytes, or in specific terminal modes that absolutely ignore them (e.g. sixel)
     #[tracing::instrument(skip(self))]
-    pub fn print_log(&self, process: &std::ffi::OsStr, out: crate::util::ConsoleOut) {
-        let prefix = Self::get_prefix(process, out);
+    pub fn print_log(&self, prefix: &[u8]) {
         let mut buf = [0u8; 256];
         let mut newbuf = Vec::with_capacity(256);
         let mut len;
@@ -107,7 +93,7 @@ impl PseudoTerminal {
             Self::transform_log(
                 buf.get(..len).expect("out of range buf slicing from read()"),
                 &mut newbuf,
-                prefix.as_bytes(),
+                prefix,
             );
 
             std::io::stdout().write_all(&newbuf).expect("cannot write to stdout");
@@ -192,3 +178,116 @@ impl Drop for PseudoTerminal {
         }
     }
 }
+
+pub struct PseudoTerminalCtl {
+    stdout: PseudoTerminal,
+    stderr: PseudoTerminal,
+    lf: AtomicBool,
+    cr: AtomicBool,
+}
+
+impl PseudoTerminalCtl {
+    pub fn new(process: &std::ffi::OsStr) -> Self {
+        let ret = Self {
+            stdout: PseudoTerminal::new(),
+            stderr: PseudoTerminal::new(),
+            lf: AtomicBool::new(true),
+            cr: AtomicBool::new(false),
+        };
+
+        let mut winsize = Self::real_winsize();
+        winsize.ws_col -= u16::try_from(process.len()).expect("process name too long");
+        winsize.ws_col -= 3; // ` │ ` ← 3 cols
+        ret.stdout.set_winsize(winsize);
+        ret.stderr.set_winsize(winsize);
+
+        ret
+    }
+
+    fn real_winsize() -> nix::libc::winsize {
+        let mut winsize = nix::libc::winsize { ws_row: 0, ws_col: 0, ws_xpixel: 0, ws_ypixel: 0 };
+
+        // SAFETY: see documentations for TIOCGWINSZ. This obtains the terminal window size
+        if unsafe {
+            nix::libc::ioctl(nix::libc::STDOUT_FILENO, nix::libc::TIOCGWINSZ, &raw mut winsize)
+        } != 0
+        {
+            // default to 80x24 if no tty is connected (ex: ci)
+            winsize = nix::libc::winsize { ws_row: 24, ws_col: 80, ws_xpixel: 0, ws_ypixel: 0 };
+        }
+
+        winsize
+    }
+
+    pub async fn run(self, cmd: &mut tokio::process::Command) -> color_eyre::Result<()> {
+        let process = cmd.as_std().get_program();
+        let process_str = process.to_string_lossy().into_owned();
+        let (stdout_prefix, stderr_prefix) = Self::get_prefix(process.as_encoded_bytes());
+
+let mut out = 
+        // SAFETY: turning into Stdio
+        cmd.stdout(unsafe { std::process::Stdio::from_raw_fd(self.stdout.slave()) })
+        // SAFETY: turning into Stdio
+        .stderr(unsafe { std::process::Stdio::from_raw_fd(self.stderr.slave()) })
+        .spawn().context(eyre!("Cannot run {process_str}"))?;
+
+        let (stdout_stop, stderr_stop) = (Arc::clone(&self.stdout.stop), Arc::clone(&self.stderr.stop));
+
+        tokio::join!(
+            tokio::task::spawn_blocking(move || {
+                self.stdout.print_log(&stdout_prefix);
+            }),
+            tokio::task::spawn_blocking(move || {
+                self.stderr.print_log(&stderr_prefix);
+            }),
+            tokio::spawn(async move {
+                let res = tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {
+                        tracing::info!("Received ctrl-c, sending sigint to child process");
+                        #[allow(clippy::cast_possible_wrap)]
+                        signal::kill(nix::unistd::Pid::from_raw(out.id().unwrap() as i32), signal::Signal::SIGINT).unwrap();
+                        Err(eyre!("Received ctrl-c, exiting"))
+                    }
+                    w = out.wait() => {
+                        let status = w.unwrap();
+                        if status.success() {
+                            tracing::info!("Command exited successfully");
+                            Ok(())
+                        } else {
+                            Err(eyre!("Command exited with status: {status}"))
+                        }
+                    }
+                };
+                stdout_stop.store(true, std::sync::atomic::Ordering::Relaxed);
+                stderr_stop.store(true, std::sync::atomic::Ordering::Relaxed);
+                res
+            })
+        ).2?
+    }
+
+    
+
+    fn get_prefix(process: &[u8]) -> (Vec<u8>, Vec<u8>){
+        const CYAN: &[u8] = b"\x1b[38;5;14m";
+        const YELLOW: &[u8] = b"\x1b[38;5;10m";
+
+        if std::env::var("NO_COLOR").is_ok() {
+            return (process.to_owned(), process.to_owned());
+        }
+
+        (
+            Self::generate_prefix(process, CYAN),
+            Self::generate_prefix(process, YELLOW),
+        )
+    }
+    fn generate_prefix(process: &[u8], color: &[u8]) -> Vec<u8> {
+        const RESET: &[u8] = b"\x1b[0m";
+        let mut v = Vec::with_capacity(color.len() + process.len() + RESET.len() + 5);
+        v.extend(color);
+        v.extend(process);
+        v.extend(RESET);
+        v.extend(" │ ".as_bytes());
+        v
+    }
+}
+
