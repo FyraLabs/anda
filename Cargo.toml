@@ -50,9 +50,6 @@ regex = { workspace = true }
 itertools = "0.15.0"
 lazy_format = "2.0.3"
 lazy_static = { workspace = true }
-shell-quote = "0.7.2"
-rhai = "1.25.1"
-format-bytes = "0.3.0"
 
 
 [lints]
@@ -73,7 +70,6 @@ chrono = { version = "0.4", default-features = false, features = ["now"] }
 ignore = "0.4.28"
 clap_complete = "4"
 clap = { version = "4", features = ["derive", "env"] }
-parking_lot = "0.12.5"
 hcl-rs = "0.19.7"
 git2 = { version = "0.21.0", features = ["https"] }
 

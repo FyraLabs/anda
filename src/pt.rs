@@ -253,7 +253,7 @@ impl PseudoTerminalCtl {
                 };
                 stdout_stop.store(true, std::sync::atomic::Ordering::Relaxed);
                 stderr_stop.store(true, std::sync::atomic::Ordering::Relaxed);
-                println!("");
+                println!();
                 res
             })
         ).2?
