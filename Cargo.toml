@@ -31,14 +31,19 @@ anda-config = { workspace = true }
 andax = { path = "./andax", version = "0.7.8" }
 flatpak = "0.18.1"
 clap-verbosity-flag = "3.0.4"
-tokio = { version = "1.52.3", features = ["process", "io-util", "macros", "signal", "rt-multi-thread"] }
+tokio = { version = "1.52.3", features = [
+    "process",
+    "io-util",
+    "macros",
+    "signal",
+    "rt-multi-thread",
+] }
 async-trait = "0.1.89"
 nix = { version = "0.31.3", features = ["signal"], default-features = false }
 git2 = { workspace = true }
 chrono = { workspace = true }
 ignore = { workspace = true }
 promptly = "0.3.1"
-console = "0.16.4"
 serde = { workspace = true }
 serde_json = { workspace = true }
 regex = { workspace = true }

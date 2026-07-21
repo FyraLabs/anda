@@ -1,13 +1,12 @@
 //! Utility functions and types
 use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
 use clap_verbosity_flag::log::LevelFilter;
-use color_eyre::{eyre::eyre, Result, Section};
-use nix::{sys::signal, unistd::Pid};
+use color_eyre::Result;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, io::IsTerminal, os::fd::FromRawFd, path::Path};
+use std::{collections::BTreeMap, path::Path};
 use tokio::process::Command;
-use tracing::{debug, info};
+use tracing::debug;
 
 lazy_static::lazy_static! {
     static ref BUILDARCH_REGEX: Regex = Regex::new("BuildArch:\\s*(.+)").unwrap();

@@ -1,20 +1,24 @@
-use std::{io::Write, os::fd::FromRawFd, sync::{atomic::AtomicBool, Arc}};
+use std::{
+    io::Write,
+    os::fd::FromRawFd,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use color_eyre::eyre::{eyre, Context};
 use nix::sys::signal;
 
-static LF: AtomicBool = AtomicBool::new(true);
-static CR: AtomicBool = AtomicBool::new(false);
 type PeekBuf<'a> = std::iter::Peekable<std::slice::Iter<'a, u8>>;
 const PRINT_LOG_TIMEOUT: i32 = 50;
 
 pub struct PseudoTerminal {
     fd: std::ffi::c_int,
     stop: Arc<AtomicBool>,
+    lf: Arc<AtomicBool>,
+    cr: Arc<AtomicBool>,
 }
 
 impl PseudoTerminal {
-    pub fn new() -> Self {
+    pub fn new(lf: Arc<AtomicBool>, cr: Arc<AtomicBool>) -> Self {
         // SAFETY: new pseudoterminal device
         let fd = unsafe { nix::libc::posix_openpt(nix::libc::O_RDWR | nix::libc::O_NONBLOCK) };
         // SAFETY: grant access to the slave pseudoterminal
@@ -22,7 +26,7 @@ impl PseudoTerminal {
         // SAFETY: unlock a pseudoterminal master/slave pair
         assert_eq!(unsafe { nix::libc::unlockpt(fd) }, 0, "unlockpt failed");
 
-        Self { fd, stop: Arc::new(AtomicBool::new(false)) }
+        Self { fd, stop: Arc::new(AtomicBool::new(false)), lf, cr }
     }
     pub fn set_winsize(&self, winsize: nix::libc::winsize) {
         assert_eq!(
@@ -49,30 +53,26 @@ impl PseudoTerminal {
         slave_fd
     }
 
+    pub fn slave_stdio(&self) -> std::process::Stdio {
+        // SAFETY: turning into Stdio
+        unsafe { std::process::Stdio::from_raw_fd(self.slave()) }
+    }
+
     pub fn read(&self, buf: &mut [u8]) -> Option<nix::Result<usize>> {
         let mut pollfd = nix::libc::pollfd { fd: self.fd, events: nix::libc::POLLIN, revents: 0 };
-        loop {
+        while !self.stop.load(std::sync::atomic::Ordering::Relaxed) {
             // SAFETY: int poll(struct pollfd *fds, nfds_t nfds, int timeout);
             // `fds` should be an array of `struct pollfd` with size `nfds`
             // negative `timeout` results in infinite waiting
             // return value is number of modified objects in the `pollfd` array
             // here the return value must be either 1 (something happened) or 0 (timeout)
             match unsafe { nix::libc::poll(&raw mut pollfd, 1, PRINT_LOG_TIMEOUT) } {
-                0 if self.stop.load(std::sync::atomic::Ordering::Relaxed) => break None,
                 0 => {}
-                1 => {
-                    // in some cases a 1 is reported even when there isnt an error but the stream is just empty or ended
-                    if pollfd.revents & nix::libc::POLLHUP != 0 {
-                        break match nix::unistd::read(self, buf) {
-                            Ok(0) | Err(nix::errno::Errno::EIO) => None,
-                            other => Some(other),
-                        };
-                    }
-                    break Some(nix::unistd::read(self, buf));
-                }
+                1 => return Some(nix::unistd::read(self, buf)),
                 rc => panic!("unexpected return value from poll(): {rc}"),
             }
         }
+        None
     }
 
     // BUG: in extreme cases, comparing bytechars would not work for unicode that spans multiple
@@ -81,16 +81,13 @@ impl PseudoTerminal {
     pub fn print_log(&self, prefix: &[u8]) {
         let mut buf = [0u8; 256];
         let mut newbuf = Vec::with_capacity(256);
-        let mut len;
-        while {
-            let Some(read) = self.read(&mut buf) else { return };
-            len = read.expect("read() failed");
-            len != 0
-        } {
+        while let Ok(Some(len @ 1..)) =
+            self.read(&mut buf).transpose().inspect_err(|e| tracing::error!("read(): {e:?}"))
+        {
             newbuf.clear();
             newbuf.reserve(len.saturating_add_signed(64));
 
-            Self::transform_log(
+            self.transform_log(
                 buf.get(..len).expect("out of range buf slicing from read()"),
                 &mut newbuf,
                 prefix,
@@ -100,14 +97,14 @@ impl PseudoTerminal {
         }
     }
 
-    fn transform_log(buf: &[u8], newbuf: &mut Vec<u8>, prefix: &[u8]) {
+    fn transform_log(&self, buf: &[u8], newbuf: &mut Vec<u8>, prefix: &[u8]) {
         let mut buf = buf.iter().peekable();
 
-        if Self::flag_was_true_then_set_false(&LF) {
+        if Self::flag_was_true_then_set_false(&self.lf) {
             newbuf.extend_from_slice(prefix);
         }
 
-        if Self::flag_was_true_then_set_false(&CR) {
+        if Self::flag_was_true_then_set_false(&self.cr) {
             if buf.peek() == Some(&&b'\n') {
                 buf.next(); // consume
                 newbuf.push(b'\n');
@@ -118,10 +115,9 @@ impl PseudoTerminal {
         while let Some(&c) = buf.next() {
             newbuf.push(c);
             if c == b'\n' {
-                Self::transform_lf(newbuf, prefix, &mut buf);
-            }
-            if c == b'\r' {
-                Self::transform_cr(newbuf, prefix, &mut buf);
+                self.transform_lf(newbuf, prefix, &mut buf);
+            } else if c == b'\r' {
+                self.transform_cr(newbuf, prefix, &mut buf);
             }
         }
     }
@@ -134,23 +130,23 @@ impl PseudoTerminal {
         ) == Ok(true)
     }
 
-    fn transform_lf(newbuf: &mut Vec<u8>, prefix: &[u8], buf: &mut PeekBuf<'_>) {
+    fn transform_lf(&self, newbuf: &mut Vec<u8>, prefix: &[u8], buf: &mut PeekBuf<'_>) {
         if buf.peek().is_none() {
-            LF.store(true, std::sync::atomic::Ordering::Relaxed);
+            self.lf.store(true, std::sync::atomic::Ordering::Relaxed);
         } else {
             newbuf.extend_from_slice(prefix);
         }
     }
 
-    fn transform_cr(newbuf: &mut Vec<u8>, prefix: &[u8], buf: &mut PeekBuf<'_>) {
+    fn transform_cr(&self, newbuf: &mut Vec<u8>, prefix: &[u8], buf: &mut PeekBuf<'_>) {
         let Some(&&next) = buf.peek() else {
-            CR.store(true, std::sync::atomic::Ordering::Relaxed);
+            self.cr.store(true, std::sync::atomic::Ordering::Relaxed);
             return;
         };
         if next == b'\n' {
             buf.next(); // consume
-            *newbuf.last_mut().unwrap() = b'\n'; // ignore \r
-            Self::transform_lf(newbuf, prefix, buf);
+            *newbuf.last_mut().unwrap() = b'\n'; // ignore \r (added by the caller)
+            self.transform_lf(newbuf, prefix, buf);
         }
     }
 }
@@ -182,17 +178,14 @@ impl Drop for PseudoTerminal {
 pub struct PseudoTerminalCtl {
     stdout: PseudoTerminal,
     stderr: PseudoTerminal,
-    lf: AtomicBool,
-    cr: AtomicBool,
 }
 
 impl PseudoTerminalCtl {
     pub fn new(process: &std::ffi::OsStr) -> Self {
+        let (lf, cr) = (Arc::new(AtomicBool::new(true)), Arc::new(AtomicBool::new(false)));
         let ret = Self {
-            stdout: PseudoTerminal::new(),
-            stderr: PseudoTerminal::new(),
-            lf: AtomicBool::new(true),
-            cr: AtomicBool::new(false),
+            stdout: PseudoTerminal::new(Arc::clone(&lf), Arc::clone(&cr)),
+            stderr: PseudoTerminal::new(Arc::clone(&lf), Arc::clone(&cr)),
         };
 
         let mut winsize = Self::real_winsize();
@@ -224,14 +217,14 @@ impl PseudoTerminalCtl {
         let process_str = process.to_string_lossy().into_owned();
         let (stdout_prefix, stderr_prefix) = Self::get_prefix(process.as_encoded_bytes());
 
-let mut out = 
-        // SAFETY: turning into Stdio
-        cmd.stdout(unsafe { std::process::Stdio::from_raw_fd(self.stdout.slave()) })
-        // SAFETY: turning into Stdio
-        .stderr(unsafe { std::process::Stdio::from_raw_fd(self.stderr.slave()) })
-        .spawn().context(eyre!("Cannot run {process_str}"))?;
+        let mut out = cmd
+            .stdout(self.stdout.slave_stdio())
+            .stderr(self.stderr.slave_stdio())
+            .spawn()
+            .context(eyre!("Cannot run {process_str}"))?;
 
-        let (stdout_stop, stderr_stop) = (Arc::clone(&self.stdout.stop), Arc::clone(&self.stderr.stop));
+        let (stdout_stop, stderr_stop) =
+            (Arc::clone(&self.stdout.stop), Arc::clone(&self.stderr.stop));
 
         tokio::join!(
             tokio::task::spawn_blocking(move || {
@@ -260,34 +253,24 @@ let mut out =
                 };
                 stdout_stop.store(true, std::sync::atomic::Ordering::Relaxed);
                 stderr_stop.store(true, std::sync::atomic::Ordering::Relaxed);
+                println!("");
                 res
             })
         ).2?
     }
 
-    
-
-    fn get_prefix(process: &[u8]) -> (Vec<u8>, Vec<u8>){
-        const CYAN: &[u8] = b"\x1b[38;5;14m";
-        const YELLOW: &[u8] = b"\x1b[38;5;10m";
+    fn get_prefix(process: &[u8]) -> (Vec<u8>, Vec<u8>) {
+        const CYAN: &[u8] = b"\x1b[36m";
+        const YELLOW: &[u8] = b"\x1b[33m";
+        const RESET: &[u8] = b"\x1b[0m";
 
         if std::env::var("NO_COLOR").is_ok() {
             return (process.to_owned(), process.to_owned());
         }
 
         (
-            Self::generate_prefix(process, CYAN),
-            Self::generate_prefix(process, YELLOW),
+            [CYAN, process, RESET, " │ ".as_bytes()].concat(),
+            [YELLOW, process, RESET, " │ ".as_bytes()].concat(),
         )
     }
-    fn generate_prefix(process: &[u8], color: &[u8]) -> Vec<u8> {
-        const RESET: &[u8] = b"\x1b[0m";
-        let mut v = Vec::with_capacity(color.len() + process.len() + RESET.len() + 5);
-        v.extend(color);
-        v.extend(process);
-        v.extend(RESET);
-        v.extend(" │ ".as_bytes());
-        v
-    }
 }
-
