@@ -36,6 +36,11 @@ print(ansible_galaxy("a10", "acos_axapi"));
 // print(forgejo_tag("forgejo.ellis.link", "continuwuation/continuwuity"));
 // print(forgejo_commit("forgejo.ellis.link", "continuwuation/continuwuity"));
 
+// print(tangled("tangled.org/core"));
+// print(tangled_tag("tangled.org/core"));
+// print(tangled_commit("tangled.org/core"));
+// print(tangled_rawfile("tangled.org/core", "master", "docs/DOCS.md"));
+
 let obj = #{
     "a": 1,
     "b": 2 ,
