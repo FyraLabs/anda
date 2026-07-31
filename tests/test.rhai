@@ -15,6 +15,7 @@ print(env("PATH"));
 // print(manifest);
 
 // print(opam("dune"));
+// print(cran("jsonlite"));
 
 // print(npm("discord.js"));
 

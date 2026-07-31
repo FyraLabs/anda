@@ -140,6 +140,13 @@ pub mod ar {
     }
 
     #[rhai_fn(return_raw, global)]
+    pub fn cran(ctx: NativeCallContext, name: &str) -> Res<String> {
+        let obj = get_json_value(ctx, &format!("https://crandb.r-pkg.org/{name}"))?;
+        let version = obj.get("Version").ok_or_else(|| E::from("No json[`Version`]?"))?;
+        version.as_str().map(str::to_owned).ok_or_else(|| "json not string?".into())
+    }
+
+    #[rhai_fn(return_raw, global)]
     pub fn pypi(ctx: NativeCallContext, name: &str) -> Res<String> {
         let obj = get_json_value(ctx, &format!("https://pypi.org/pypi/{name}/json"))?;
         let obj = obj.get("info").ok_or_else(|| E::from("No json[`info`]?"))?;
