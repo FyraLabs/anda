@@ -113,6 +113,33 @@ pub mod ar {
     }
 
     #[rhai_fn(return_raw, global)]
+    pub fn opam(ctx: NativeCallContext, name: &str) -> Res<String> {
+        let entries = get_json_value(
+            ctx,
+            &format!("https://api.github.com/repos/ocaml/opam-repository/contents/packages/{name}"),
+        )?;
+        let entries =
+            entries.as_array().ok_or_else(|| E::from("OPAM package listing is not an array"))?;
+        let prefix = format!("{name}.");
+        let mut latest: Option<(Version, String)> = None;
+
+        for entry in entries {
+            let Some(entry_name) = entry["name"].as_str() else { continue };
+            let Some(version) = entry_name.strip_prefix(&prefix) else { continue };
+            let normalized_version = version.trim_start_matches('v').replace('~', "-");
+            let Ok(parsed_version) = Version::parse(&normalized_version) else { continue };
+
+            if latest.as_ref().is_none_or(|(current, _)| parsed_version > *current) {
+                latest = Some((parsed_version, version.to_owned()));
+            }
+        }
+
+        latest
+            .map(|(_, version)| version)
+            .ok_or_else(|| E::from("No valid OPAM package versions could be found."))
+    }
+
+    #[rhai_fn(return_raw, global)]
     pub fn pypi(ctx: NativeCallContext, name: &str) -> Res<String> {
         let obj = get_json_value(ctx, &format!("https://pypi.org/pypi/{name}/json"))?;
         let obj = obj.get("info").ok_or_else(|| E::from("No json[`info`]?"))?;

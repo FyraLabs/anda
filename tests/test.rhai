@@ -14,6 +14,8 @@ print(env("PATH"));
 // let manifest = anda::cfg::load_file("/stuff/chubby/terra/anda.hcl");
 // print(manifest);
 
+// print(opam("dune"));
+
 // print(npm("discord.js"));
 
 // print(gems("ruby"));
