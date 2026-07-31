@@ -15,6 +15,8 @@ print(env("PATH"));
 // print(manifest);
 
 // print(hex("phoenix"));
+// print(opam("dune"));
+// print(cran("jsonlite"));
 // print(npm("discord.js"));
 
 // print(gems("ruby"));
