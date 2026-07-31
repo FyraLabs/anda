@@ -113,6 +113,15 @@ pub mod ar {
     }
 
     #[rhai_fn(return_raw, global)]
+    pub fn hex(ctx: NativeCallContext, name: &str) -> Res<String> {
+        let obj = get_json_value(ctx, &format!("https://hex.pm/api/packages/{name}"))?;
+        let version = obj
+            .get("latest_stable_version")
+            .ok_or_else(|| E::from("No json[`latest_stable_version`]?"))?;
+        version.as_str().map(str::to_owned).ok_or_else(|| "json not string?".into())
+    }
+
+    #[rhai_fn(return_raw, global)]
     pub fn opam(ctx: NativeCallContext, name: &str) -> Res<String> {
         let entries = get_json_value(
             ctx,
