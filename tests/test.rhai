@@ -14,6 +14,10 @@ print(env("PATH"));
 // let manifest = anda::cfg::load_file("/stuff/chubby/terra/anda.hcl");
 // print(manifest);
 
+// print(googlesource("go.googlesource.com/go"));
+// print(googlesource_tag("go.googlesource.com/go"));
+// print(googlesource_commit("go.googlesource.com/go"));
+// print(googlesource_rawfile("chromium.googlesource.com/chromium/src", "main", "tools/symsrc/source_index.py"));
 // print(npm("discord.js"));
 
 // print(gems("ruby"));

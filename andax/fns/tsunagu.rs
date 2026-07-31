@@ -1,4 +1,5 @@
 use crate::{error::AndaxRes, run::rf};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use git2::Remote;
 use rhai::{
     plugin::{export_module, Dynamic, EvalAltResult, NativeCallContext},
@@ -241,6 +242,90 @@ pub mod ar {
         let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
         trace!("Got json from {repo}:\n{v}");
         Ok(v[0]["sha"].as_str().unwrap_or("").to_owned())
+    }
+
+    #[rhai_fn(skip)]
+    fn googlesource_remote(ctx: &mut NativeCallContext, repo: &str) -> Result<Remote<'static>, E> {
+        let mut remote = Remote::create_detached(format!("https://{repo}")).ehdl(ctx)?;
+        remote.connect(git2::Direction::Fetch).ehdl(ctx)?;
+        Ok(remote)
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn googlesource(mut ctx: NativeCallContext, repo: &str) -> Res<String> {
+        let remote = googlesource_remote(&mut ctx, repo)?;
+        let mut latest = Version::new(0, 0, 0);
+
+        for head in remote.list().ehdl(&ctx)? {
+            if head.name().ends_with("^{}") {
+                continue;
+            }
+
+            let Some(tag_name) = head.name().strip_prefix("refs/tags/") else { continue };
+            let Some(version_start_index) = tag_name.find(char::is_numeric) else { continue };
+            let (_, version_str) = tag_name.split_at(version_start_index);
+            let Ok(parsed_version) = Version::parse(version_str) else { continue };
+
+            if parsed_version > latest {
+                latest = parsed_version;
+            }
+        }
+
+        if latest == Version::new(0, 0, 0) {
+            return Err(E::from("No valid version tags could be found."));
+        }
+
+        Ok(latest.to_string())
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn googlesource_tag(mut ctx: NativeCallContext, repo: &str) -> Res<String> {
+        let remote = googlesource_remote(&mut ctx, repo)?;
+        let mut latest: Option<(Version, String)> = None;
+
+        for head in remote.list().ehdl(&ctx)? {
+            if head.name().ends_with("^{}") {
+                continue;
+            }
+
+            let Some(tag_name) = head.name().strip_prefix("refs/tags/") else { continue };
+            let Some(version_start_index) = tag_name.find(char::is_numeric) else { continue };
+            let (_, version_str) = tag_name.split_at(version_start_index);
+            let Ok(version) = Version::parse(version_str) else { continue };
+
+            if latest.as_ref().is_none_or(|(current, _)| version > *current) {
+                latest = Some((version, tag_name.to_owned()));
+            }
+        }
+
+        latest.map(|(_, tag)| tag).ok_or_else(|| E::from("No valid version tags could be found."))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn googlesource_commit(mut ctx: NativeCallContext, repo: &str) -> Res<String> {
+        let remote = googlesource_remote(&mut ctx, repo)?;
+        for head in remote.list().ehdl(&ctx)? {
+            if head.name() == "HEAD" {
+                return Ok(head.oid().to_string());
+            }
+        }
+
+        Err(E::from("Could not find HEAD in repository's reference advertisement list."))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn googlesource_rawfile(
+        ctx: NativeCallContext,
+        repo: &str,
+        branch: &str,
+        file: &str,
+    ) -> Res<String> {
+        let encoded =
+            get(ctx, &format!("https://{repo}/+/refs/heads/{branch}/{file}?format=TEXT"))?;
+        STANDARD
+            .decode(encoded.trim())
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+            .map_err(|error| E::from(error.to_string()))
     }
 
     #[rhai_fn(skip)]

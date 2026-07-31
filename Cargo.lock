@@ -89,6 +89,7 @@ name = "andax"
 version = "0.7.8"
 dependencies = [
  "anda-config",
+ "base64",
  "chrono",
  "color-eyre",
  "directories",
