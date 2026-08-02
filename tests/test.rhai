@@ -14,6 +14,10 @@ print(env("PATH"));
 // let manifest = anda::cfg::load_file("/stuff/chubby/terra/anda.hcl");
 // print(manifest);
 
+// print(sourcearcade("flashprog"));
+// print(sourcearcade_tag("flashprog"));
+// print(sourcearcade_commit("flashprog"));
+// print(sourcearcade_rawfile("flashprog", "main", "README.md"));
 // print(hex("phoenix"));
 // print(opam("dune"));
 // print(cran("jsonlite"));
