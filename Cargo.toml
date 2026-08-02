@@ -75,8 +75,6 @@ hcl-rs = "0.19.7"
 git2 = { version = "0.21.0", features = ["https"] }
 
 [workspace.lints.clippy]
-cargo = { level = "warn", priority = -1 }
-multiple_crate_versions = "allow"
 complexity = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
@@ -96,11 +94,9 @@ format_push_string = "warn"
 get_unwrap = "warn"
 if_then_some_else_none = "warn"
 impl_trait_in_params = "warn"
-indexing_slicing = "warn"
 infinite_loop = "deny"
 let_underscore_must_use = "deny"
 let_underscore_untyped = "warn"
-multiple_inherent_impl = "warn"
 needless_raw_strings = "warn"
 rc_buffer = "warn"
 rc_mutex = "deny"
@@ -118,5 +114,5 @@ undocumented_unsafe_blocks = "deny"
 unimplemented = "warn"
 unneeded_field_pattern = "warn"
 unwrap_in_result = "warn"
-
-equatable_if_let = "allow"
+missing_errors_doc = "allow"
+needless_for_each = "allow"

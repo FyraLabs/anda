@@ -214,7 +214,7 @@ pub mod ar {
     #[rhai_fn(return_raw, global)]
     pub fn ls(ctx: NativeCallContext, dir: &str) -> Result<rhai::Array, Box<EvalAltResult>> {
         (std::fs::read_dir(dir).ehdl(&ctx)?)
-            .map(|dir| Ok(dir.ehdl(&ctx)?.path().to_string_lossy().to_string().into()))
+            .map(|dir| Ok(dir.ehdl(&ctx)?.path().to_string_lossy().into_owned().into()))
             .collect()
     }
     #[rhai_fn(return_raw, name = "ls", global)]
