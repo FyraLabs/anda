@@ -58,9 +58,9 @@ pub fn single_update(
 #[instrument(skip(cfg))]
 pub fn update(
     cfg: Manifest,
-    global_lbls: Vec<(String, String)>,
-    fls: Vec<Vec<(String, String)>>,
-    excls: Vec<Vec<(String, String)>>,
+    global_lbls: &[(String, String)],
+    fls: &[Vec<(String, String)>],
+    excls: &[Vec<(String, String)>],
 ) -> Result<()> {
     let mut handlers = vec![];
     let proj_len = cfg.project.len();
@@ -69,7 +69,7 @@ pub fn update(
         let Some(scr) = proj.update else { continue };
         scr_len += 1;
         let mut lbls = std::mem::take(&mut proj.labels);
-        lbls.extend(global_lbls.clone());
+        lbls.extend(global_lbls.to_owned());
         if !fls.is_empty() && fls.iter().all(|fls| fls.iter().any(filter_project(&lbls))) {
             continue;
         }
@@ -77,7 +77,7 @@ pub fn update(
             continue;
         }
         trace!(name, scr = scr.to_str(), "Th start");
-        let fls = fls.clone();
+        let fls = fls.to_owned();
         let alias = proj.alias.into_iter().flatten().next().clone().unwrap_or(name);
         handlers.push(Builder::new().name(alias).spawn(move || {
             let th = thread::current();
@@ -138,15 +138,14 @@ pub fn update(
         stdout,
         "\nFinished running {task_len}/{scr_len} scripts out of {proj_len} projects, {} failed fatally.",
         hdl_len - task_len
-    )
-    .unwrap();
-    writeln!(stdout, "Here is a list of unfiltered tasks:\n").unwrap();
-    writeln!(stdout, "No.    Time/ms Project/alias").unwrap();
-    writeln!(stdout, "═════╤════════╤═{}", "═".repeat(pname_len.max(13))).unwrap();
+    )?;
+    writeln!(stdout, "Here is a list of unfiltered tasks:\n")?;
+    writeln!(stdout, "No.    Time/ms Project/alias")?;
+    writeln!(stdout, "═════╤════════╤═{}", "═".repeat(pname_len.max(13)))?;
 
     for (n, (name, duration)) in tasks.enumerate() {
         let sep = if n % 2 == 0 { '┃' } else { '│' };
-        writeln!(stdout, "{:<5}{sep}{:>7} {sep} {name}", n + 1, duration).unwrap();
+        writeln!(stdout, "{:<5}{sep}{:>7} {sep} {name}", n + 1, duration)?;
     }
 
     if !panicked.is_empty() {
@@ -161,11 +160,11 @@ pub fn update(
 }
 
 #[instrument]
-pub fn run_scripts(scripts: &[String], labels: Vec<(String, String)>) -> Result<()> {
+pub fn run_scripts(scripts: &[String], labels: &[(String, String)]) -> Result<()> {
     let mut handlers = vec![];
     for scr in scripts {
         trace!(scr, "Th start");
-        let labels = labels.clone();
+        let labels = labels.to_owned();
         handlers.push(Builder::new().name(scr.to_owned()).spawn(move || {
             let th = thread::current();
             let name = th.name().expect("No name for andax thread??");

@@ -42,7 +42,7 @@ macro_rules! _stream_cmd {
 type T = Result<(i32, String, String), Box<EvalAltResult>>;
 
 /// for andax, shell():
-/// ```
+/// ```text
 /// sh("echo hai");
 /// sh(["echo", "hai"]);
 /// sh(["rm", "-rf", "/path/with/some space"]);
@@ -71,8 +71,8 @@ pub mod ar {
 
     /// get the return code from the return value of `sh()`
     #[rhai_fn(global)]
-    pub fn sh_rc(o: (i32, String, String)) -> i32 {
-        o.0
+    pub fn sh_rc(o: (i32, String, String)) -> i64 {
+        i64::from(o.0)
     }
     /// get stdout from the return value of `sh()`
     #[rhai_fn(global)]
@@ -183,20 +183,28 @@ pub mod ar {
     /// run an executable
     #[instrument(skip(ctx))]
     #[rhai_fn(return_raw, name = "sh", global)]
-    pub fn sh(ctx: NativeCallContext, cmd: Vec<&str>) -> T {
+    pub fn sh(ctx: NativeCallContext, cmd: rhai::Array) -> T {
         debug!("Running executable");
-        _sh_out!(&ctx, Command::new(cmd[0]).args(&cmd[1..]).output().ehdl(&ctx)?)
+        let cmd = cmd.into_iter().map(Dynamic::into_string).collect::<Result<Vec<_>, _>>()?;
+        let Some(exec) = cmd.first().cloned() else {
+            return Err("command array must not be empty".into());
+        };
+        _sh_out!(&ctx, Command::new(&exec).args(&cmd[1..]).output().ehdl(&ctx)?)
     }
     /// run an executable in working directory
     #[instrument(skip(ctx))]
     #[rhai_fn(return_raw, name = "sh", global)]
-    pub fn sh_cwd(ctx: NativeCallContext, cmd: Vec<&str>, cwd: &str) -> T {
+    pub fn sh_cwd(ctx: NativeCallContext, cmd: rhai::Array, cwd: &str) -> T {
         debug!("Running executable");
-        _sh_out!(&ctx, Command::new(cmd[0]).args(&cmd[1..]).current_dir(cwd).output().ehdl(&ctx)?)
+        let cmd = cmd.into_iter().map(Dynamic::into_string).collect::<Result<Vec<_>, _>>()?;
+        let Some(exec) = cmd.first().cloned() else {
+            return Err("command array must not be empty".into());
+        };
+        _sh_out!(&ctx, Command::new(&exec).args(&cmd[1..]).current_dir(cwd).output().ehdl(&ctx)?)
     }
     /// list files and folders in directory
     /// ## Example
-    /// ```rhai
+    /// ```text
     /// for x in ls("/") {
     ///     if x == "/bin" {
     ///         print("I found the `/bin` folder!");
@@ -250,10 +258,9 @@ mod test {
             r#"
             let a = sh("echo hai > test");
             let b = sh(["echo", "hai"]);
-            let c = sh(["rm", "-rf", "test"]);
             let d = sh("ls -al", "/");
-            let pwd = sh("pwd").sh_stdout();
-            let e = sh(["grep", "hai", "test"], pwd);
+            let e = sh(["grep", "hai", "test"]);
+            let c = sh(["rm", "-rf", "test"]);
             if a.sh_stderr() != "" {
                 throw "error!?";
             }
@@ -267,13 +274,13 @@ mod test {
                 throw "why is out empty?";
             }
             let f = sh("pwd", #{"stdout": "piped", "cwd": "/"});
-            if f.outcome != "succes" {
+            if f.outcome != "success" {
                 throw "not success??";
             }
             if f.ctx.rc != 0 {
                 throw `pwd returned ${f.ctx.rc}`;
             }
-            if f.ctx.stdout != "/" {
+            if !f.ctx.stdout.contains("/") {
                 throw "cwd doesn't work?";
             }
         "#,

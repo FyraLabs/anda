@@ -114,7 +114,7 @@ async fn main() -> Result<()> {
             if let Some(proj) = project {
                 update::single_update(&cfg, &proj, &labels, filters)?;
             } else {
-                update::update(cfg, labels, filters, excludes)?;
+                update::update(cfg, &labels, &filters, &excludes)?;
             }
         }
         Command::Run { scripts, labels } => {
@@ -123,7 +123,7 @@ async fn main() -> Result<()> {
             }
             let labels = parse_labels(labels.iter().map(std::ops::Deref::deref))
                 .ok_or_else(|| eyre!("Cannot parse --labels"))?;
-            update::run_scripts(&scripts, labels)?;
+            update::run_scripts(&scripts, &labels)?;
         }
     }
     Ok(())

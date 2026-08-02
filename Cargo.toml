@@ -8,6 +8,7 @@ license = "MIT"
 repository = "https://github.com/FyraLabs/anda"
 readme = "README.md"
 keywords = ["build", "toolchain", "rpm", "flatpak", "oci"]
+categories = ["development-tools"]
 exclude = [
     "anda-build",
     "anda-config",
@@ -75,6 +76,7 @@ git2 = { version = "0.21.0", features = ["https"] }
 
 [workspace.lints.clippy]
 cargo = { level = "warn", priority = -1 }
+multiple_crate_versions = "allow"
 complexity = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
@@ -108,7 +110,7 @@ rest_pat_in_fully_bound_structs = "warn"
 semicolon_outside_block = "warn"
 str_to_string = "warn"
 string_lit_chars_any = "warn"
-string_to_string = "warn"
+
 tests_outside_test_module = "warn"
 todo = "warn"
 try_err = "warn"

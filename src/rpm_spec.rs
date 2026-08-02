@@ -16,6 +16,7 @@ use std::{collections::BTreeMap, str::FromStr};
 use tokio::process::Command;
 use tracing::{debug, info};
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Default)]
 pub struct RPMOptions {
     /// Mock config, only used if backend is mock
@@ -249,6 +250,7 @@ pub trait RPMExtraOptions {
 }
 
 /// An RPM spec backend that uses Mock to build RPMs
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Default)]
 pub struct MockBackend {
     mock_config: Option<String>,
@@ -585,7 +587,7 @@ impl RPMSpecBackend for RPMBuildBackend {
             }
         }
 
-        todo!()
+        Err(eyre!("rpmbuild did not produce a source RPM"))
     }
 
     async fn build_rpm(&self, spec: &Path) -> Result<Vec<PathBuf>> {

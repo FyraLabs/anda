@@ -6,6 +6,8 @@ edition = "2021"
 license = "MIT"
 repository = "https://github.com/FyraLabs/anda"
 readme = "../README.md"
+keywords = ["configuration", "hcl"]
+categories = ["config"]
 
 [lib]
 path = "./lib.rs"

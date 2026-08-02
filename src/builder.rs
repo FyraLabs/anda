@@ -27,11 +27,7 @@ pub async fn build_rpm(
         let repo_path = repo_path.canonicalize()?;
 
         let repo_path = format!("file://{}", repo_path.display());
-        if opts.extra_repos.is_none() {
-            opts.extra_repos = Some(vec![repo_path]);
-        } else {
-            opts.extra_repos.as_mut().unwrap().push(repo_path);
-        }
+        opts.extra_repos.get_or_insert_default().push(repo_path);
     } else {
         debug!("No repodata found, skipping");
     }
@@ -39,11 +35,7 @@ pub async fn build_rpm(
     opts.set_target(rpmb_opts.rpm_target.clone());
 
     for repo in &rpmb_opts.extra_repos {
-        if opts.extra_repos.is_none() {
-            opts.extra_repos = Some(vec![repo.clone()]);
-        } else {
-            opts.extra_repos.as_mut().unwrap().push(repo.clone());
-        }
+        opts.extra_repos.get_or_insert_default().push(repo.clone());
     }
 
     for rpmmacro in &rpmb_opts.rpm_macro {
@@ -323,7 +315,7 @@ pub async fn build_project(
     }
     let mut arts = Artifacts::new();
 
-    _build_pkg(package, &mut proj, cli, rpm_opts, rbopts, &mut arts, fpopts).await?;
+    build_pkg(package, &mut proj, cli, rpm_opts, rbopts, &mut arts, fpopts).await?;
 
     for (path, arttype) in arts.packages {
         let type_string = match arttype {
@@ -348,7 +340,7 @@ pub async fn build_project(
     Ok(())
 }
 
-async fn _build_pkg(
+async fn build_pkg(
     package: PackageType,
     proj: &mut Project,
     cli: &Cli,
@@ -425,7 +417,7 @@ async fn build_all(
                 .map(|p| p.to_string_lossy().to_string())
                 .collect::<Vec<String>>()
                 .as_slice(),
-            project.labels.iter().map(|(a, b)| (a.clone(), b.clone())).collect(),
+            &project.labels.iter().map(|(a, b)| (a.clone(), b.clone())).collect::<Vec<_>>(),
         )?;
     }
     Ok(())

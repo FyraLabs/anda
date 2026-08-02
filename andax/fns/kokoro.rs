@@ -30,11 +30,11 @@ pub mod ar {
     pub fn find(ctx: NativeCallContext, r: &str, text: &str, group: i64) -> Res<String> {
         let captures = Regex::new(r).ehdl(&ctx)?.captures(text);
         let cap = captures.ok_or_else(|| format!("Can't match regex: {r}\nText: {text}"))?;
-        Ok((cap
-            .get(group.try_into().unwrap())
-            .ok_or_else(|| format!("Can't get group: {r}\nText: {text}"))?)
-        .as_str()
-        .into())
+        let group =
+            usize::try_from(group).map_err(|_| format!("Invalid group: {group}\nText: {text}"))?;
+        Ok((cap.get(group).ok_or_else(|| format!("Can't get group: {r}\nText: {text}"))?)
+            .as_str()
+            .into())
     }
     #[rhai_fn(return_raw, global)]
     pub fn find_all(ctx: NativeCallContext, r: &str, text: &str) -> Res<rhai::Array> {

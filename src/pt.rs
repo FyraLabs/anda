@@ -189,8 +189,8 @@ impl PseudoTerminalCtl {
         };
 
         let mut winsize = Self::real_winsize();
-        winsize.ws_col -= u16::try_from(process.len()).expect("process name too long");
-        winsize.ws_col -= 3; // ` │ ` ← 3 cols
+        let process_width = u16::try_from(process.len()).unwrap_or(u16::MAX);
+        winsize.ws_col = winsize.ws_col.saturating_sub(process_width).saturating_sub(3); // ` │ ` ← 3 cols
         ret.stdout.set_winsize(winsize);
         ret.stderr.set_winsize(winsize);
 
