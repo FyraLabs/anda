@@ -112,6 +112,78 @@ pub mod ar {
         gitlab_commit_domain(ctx, "gitlab.com", id, branch)
     }
 
+    #[rhai_fn(skip)]
+    fn sourcearcade_tags(ctx: NativeCallContext, repo: &str) -> Res<Vec<String>> {
+        let html =
+            get(ctx, &format!("https://review.sourcearcade.org/plugins/gitiles/{repo}/+refs"))?;
+        Ok(html
+            .split("/refs/tags/")
+            .skip(1)
+            .filter_map(|tag| tag.split('"').next())
+            .map(str::to_owned)
+            .collect())
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn sourcearcade(ctx: NativeCallContext, repo: &str) -> Res<String> {
+        let mut latest = Version::new(0, 0, 0);
+        for name in sourcearcade_tags(ctx, repo)? {
+            let Some(version_start_index) = name.find(char::is_numeric) else { continue };
+            let (_, version_str) = name.split_at(version_start_index);
+            let Ok(version) = Version::parse(version_str) else { continue };
+            if version > latest {
+                latest = version;
+            }
+        }
+
+        if latest == Version::new(0, 0, 0) {
+            return Err(E::from("No valid version tags could be found."));
+        }
+        Ok(latest.to_string())
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn sourcearcade_tag(ctx: NativeCallContext, repo: &str) -> Res<String> {
+        let mut latest: Option<(Version, String)> = None;
+        for name in sourcearcade_tags(ctx, repo)? {
+            let Some(version_start_index) = name.find(char::is_numeric) else { continue };
+            let (_, version_str) = name.split_at(version_start_index);
+            let Ok(version) = Version::parse(version_str) else { continue };
+            if latest.as_ref().is_none_or(|(current, _)| version > *current) {
+                latest = Some((version, name));
+            }
+        }
+
+        latest.map(|(_, tag)| tag).ok_or_else(|| E::from("No valid version tags could be found."))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn sourcearcade_commit(ctx: NativeCallContext, repo: &str) -> Res<String> {
+        let body = get(
+            ctx,
+            &format!("https://review.sourcearcade.org/plugins/gitiles/{repo}/+log/refs/heads/main?n=1&format=JSON"),
+        )?;
+        let log: Value = serde_json::from_str(body.trim_start_matches(")]}'\n"))
+            .map_err(|error| E::from(error.to_string()))?;
+        log["log"][0]["commit"]
+            .as_str()
+            .map(str::to_owned)
+            .ok_or_else(|| E::from("Could not find HEAD in repository log."))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn sourcearcade_rawfile(
+        ctx: NativeCallContext,
+        repo: &str,
+        branch: &str,
+        file: &str,
+    ) -> Res<String> {
+        get(
+            ctx,
+            &format!("https://review.sourcearcade.org/plugins/gitiles/{repo}/+/refs/heads/{branch}/{file}?format=TEXT"),
+        )
+    }
+
     #[rhai_fn(return_raw, global)]
     pub fn hex(ctx: NativeCallContext, name: &str) -> Res<String> {
         let obj = get_json_value(ctx, &format!("https://hex.pm/api/packages/{name}"))?;
