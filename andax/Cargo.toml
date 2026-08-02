@@ -6,6 +6,8 @@ license = "MIT"
 description = "Andaman scripting runtime"
 repository = "https://github.com/FyraLabs/anda"
 readme = "../README.md"
+keywords = ["scripting", "runtime"]
+categories = ["development-tools"]
 
 [lib]
 path = "./lib.rs"

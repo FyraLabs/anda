@@ -3,16 +3,20 @@ use std::{
     fs,
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 use tracing::{error, info};
 
-lazy_static::lazy_static! {
-    static ref RE_RELEASE: regex::Regex = regex::Regex::new(r"Release:([\t ]+)(.+?)\n").unwrap();
-    static ref RE_VERSION: regex::Regex = regex::Regex::new(r"Version:([\t ]+)(\S+)\n").unwrap();
-    static ref RE_DEFINE: regex::Regex = regex::Regex::new(r"(?m)%define([\t ]+)(\S+)([\t ]+)([^\n]+?)$").unwrap();
-    static ref RE_GLOBAL: regex::Regex = regex::Regex::new(r"(?m)%global([\t ]+)(\S+)([\t ]+)([^\n]+?)$").unwrap();
-    static ref RE_SOURCE: regex::Regex = regex::Regex::new(r"Source(\d+):([\t ]+)([^\n]+)\n").unwrap();
-}
+static RE_RELEASE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"Release:([\t ]+)(.+?)\n").unwrap());
+static RE_VERSION: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"Version:([\t ]+)(\S+)\n").unwrap());
+static RE_DEFINE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?m)%define([\t ]+)(\S+)([\t ]+)([^\n]+?)$").unwrap());
+static RE_GLOBAL: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?m)%global([\t ]+)(\S+)([\t ]+)([^\n]+?)$").unwrap());
+static RE_SOURCE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"Source(\d+):([\t ]+)([^\n]+)\n").unwrap());
 
 /// Update RPM spec files
 #[derive(Debug, Clone, PartialEq, Eq)]

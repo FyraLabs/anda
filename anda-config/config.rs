@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::ErrorKind;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::{debug, instrument, trace};
 
 use crate::error::ProjectError;
@@ -247,6 +247,9 @@ pub fn to_string(config: &Manifest) -> Result<String, hcl::Error> {
     Ok(config)
 }
 
+///
+/// # Errors
+/// Returns an error when the manifest or one of its nested configurations cannot be read or parsed.
 #[instrument]
 pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
     debug!("Reading hcl file: {path:?}");
@@ -261,31 +264,33 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
     // recursively merge configs
 
     // get parent path of config file
-    let parent = if path.parent().unwrap().as_os_str().is_empty() {
+    let parent = if path.parent().unwrap_or_else(|| Path::new(".")).as_os_str().is_empty() {
         PathBuf::from(".")
     } else {
-        path.parent().unwrap().to_path_buf()
+        path.parent().unwrap_or_else(|| Path::new(".")).to_path_buf()
     };
 
     let walk = ignore::Walk::new(parent);
 
-    let path = path.canonicalize().expect("Invalid path");
+    let path = path.canonicalize().map_err(|e| ProjectError::InvalidManifest(e.to_string()))?;
 
     for entry in walk {
         trace!("Found {entry:?}");
-        let entry = entry.unwrap();
+        let entry = entry.map_err(|e| ProjectError::InvalidManifest(e.to_string()))?;
 
         // assume entry.path() is canonicalised
         if entry.path() == path {
             continue;
         }
 
-        if entry.file_type().unwrap().is_file() && entry.path().file_name().unwrap() == "anda.hcl" {
+        if entry.file_type().is_some_and(|kind| kind.is_file())
+            && entry.path().file_name().is_some_and(|name| name == "anda.hcl")
+        {
             debug!("Loading: {entry:?}");
             let readfile = fs::read_to_string(entry.path())
                 .map_err(|e| ProjectError::InvalidManifest(e.to_string()))?;
 
-            let en = entry.path().parent().unwrap();
+            let en = entry.path().parent().unwrap_or_else(|| Path::new("."));
 
             let nested_config = prefix_config(
                 load_from_string(&readfile)?,
@@ -381,6 +386,9 @@ pub fn generate_alias(config: &mut Manifest) {
     }
 }
 
+///
+/// # Errors
+/// Returns an error when the HCL configuration cannot be parsed.
 #[instrument]
 pub fn load_from_string(config: &str) -> Result<Manifest, ProjectError> {
     trace!(config, "Dump config");

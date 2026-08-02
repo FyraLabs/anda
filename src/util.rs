@@ -2,17 +2,14 @@
 use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
 use clap_verbosity_flag::log::LevelFilter;
 use color_eyre::Result;
-use regex::Regex;
+
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::Path};
+use std::{collections::BTreeMap, path::Path, sync::LazyLock};
 use tokio::process::Command;
 use tracing::debug;
 
-lazy_static::lazy_static! {
-    static ref BUILDARCH_REGEX: Regex = Regex::new("BuildArch:\\s*(.+)").unwrap();
-    static ref EXCLUSIVEARCH_REGEX: Regex = Regex::new("ExclusiveArch:\\s*(.+)").unwrap();
-    static ref DEFAULT_ARCHES: [String; 2] = ["x86_64".to_owned(), "aarch64".to_owned()];
-}
+static DEFAULT_ARCHES: LazyLock<[String; 2]> =
+    LazyLock::new(|| ["x86_64".to_owned(), "aarch64".to_owned()]);
 
 // Build entry for GHA
 #[derive(Debug, Clone, Serialize, Deserialize, Ord, Eq, PartialEq, PartialOrd)]
@@ -148,7 +145,7 @@ pub fn init(path: &Path, yes: bool) -> Result<()> {
 
     for entry in walk {
         let entry = entry?;
-        let path = entry.path().strip_prefix("./").unwrap();
+        let path = entry.path().strip_prefix("./")?;
 
         if !path.is_file() {
             continue;
@@ -272,11 +269,11 @@ pub fn cmd<const N: usize>(
     Err(match (status, status.code()) {
         _ if status.success() => return Ok(()),
         (_, Some(rc)) => color_eyre::Report::msg("Command exited")
-            .warning(lazy_format::lazy_format!("Status code: {rc}"))
+            .warning(lazy_format::lazy_format!("Status code: {}", rc))
             .with_note(|| format!("Command: `{cmd_str}`"))
-            .note(lazy_format::lazy_format!("Status: {status}")),
+            .note(lazy_format::lazy_format!("Status: {}", status)),
         _ => color_eyre::Report::msg("Script terminated unexpectedly")
-            .note(lazy_format::lazy_format!("Status: {status}")),
+            .note(lazy_format::lazy_format!("Status: {}", status)),
     })
 }
 

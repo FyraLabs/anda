@@ -39,7 +39,7 @@ impl OCIBuilder {
     pub fn build(&self, dockerfile: &str, backend: OCIBackend, latest: bool) {
         let mut cmd = backend.command();
 
-        let real_tag = &format!("{}:{}", &self.tag, self.version);
+        let real_tag = &format!("{}:{}", self.tag, self.version);
 
         cmd.arg("build")
             .arg(&self.context)
@@ -50,7 +50,7 @@ impl OCIBuilder {
             .arg(real_tag);
 
         if latest {
-            cmd.arg("-t").arg(format!("{}:latest", &self.tag));
+            cmd.arg("-t").arg(format!("{}:latest", self.tag));
         }
 
         for label in &self.label {

@@ -228,11 +228,11 @@ pub fn run<
         let sc = sc.clone();
         move |k: &str| sc.get(k).cloned().unwrap_or(Dynamic::UNIT)
     });
-    exec(name, scr, sc, en)
+    exec(name, scr, sc, &en)
 }
 
 #[instrument(skip(sc, en))]
-fn exec<'a>(name: &'a str, scr: &'a Path, mut sc: Scope<'a>, en: Engine) -> Option<Scope<'a>> {
+fn exec<'a>(name: &'a str, scr: &'a Path, mut sc: Scope<'a>, en: &Engine) -> Option<Scope<'a>> {
     debug!("Running {name}");
     match en.run_file_with_scope(&mut sc, scr.to_path_buf()) {
         Ok(()) => Some(sc),
