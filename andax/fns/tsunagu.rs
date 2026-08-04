@@ -117,38 +117,44 @@ pub mod ar {
         let html =
             get(ctx, &format!("https://review.sourcearcade.org/plugins/gitiles/{repo}/+refs"))?;
         Ok(html
-            .split("/refs/tags/")
+            .split("/+/refs/tags/")
             .skip(1)
-            .filter_map(|tag| tag.split('"').next())
+            .filter_map(|tag| tag.split('\"').next())
             .map(str::to_owned)
             .collect())
     }
 
+    #[rhai_fn(skip)]
+    fn sourcearcade_version(name: &str) -> Option<Version> {
+        let version_start_index = name.find(char::is_numeric)?;
+        let (_, version_str) = name.split_at(version_start_index);
+        let (numeric, suffix) = version_str.split_once('-').unwrap_or((version_str, ""));
+        let normalized = if numeric.matches('.').count() == 1 {
+            format!("{numeric}.0{suffix}")
+        } else {
+            version_str.to_owned()
+        };
+        Version::parse(&normalized).ok()
+    }
+
     #[rhai_fn(return_raw, global)]
     pub fn sourcearcade(ctx: NativeCallContext, repo: &str) -> Res<String> {
-        let mut latest = Version::new(0, 0, 0);
+        let mut latest: Option<(Version, String)> = None;
         for name in sourcearcade_tags(ctx, repo)? {
-            let Some(version_start_index) = name.find(char::is_numeric) else { continue };
-            let (_, version_str) = name.split_at(version_start_index);
-            let Ok(version) = Version::parse(version_str) else { continue };
-            if version > latest {
-                latest = version;
+            let Some(version) = sourcearcade_version(&name) else { continue };
+            if latest.as_ref().is_none_or(|(current, _)| version > *current) {
+                latest = Some((version, name));
             }
         }
 
-        if latest == Version::new(0, 0, 0) {
-            return Err(E::from("No valid version tags could be found."));
-        }
-        Ok(latest.to_string())
+        latest.map(|(_, tag)| tag).ok_or_else(|| E::from("No valid version tags could be found."))
     }
 
     #[rhai_fn(return_raw, global)]
     pub fn sourcearcade_tag(ctx: NativeCallContext, repo: &str) -> Res<String> {
         let mut latest: Option<(Version, String)> = None;
         for name in sourcearcade_tags(ctx, repo)? {
-            let Some(version_start_index) = name.find(char::is_numeric) else { continue };
-            let (_, version_str) = name.split_at(version_start_index);
-            let Ok(version) = Version::parse(version_str) else { continue };
+            let Some(version) = sourcearcade_version(&name) else { continue };
             if latest.as_ref().is_none_or(|(current, _)| version > *current) {
                 latest = Some((version, name));
             }
@@ -178,10 +184,27 @@ pub mod ar {
         branch: &str,
         file: &str,
     ) -> Res<String> {
-        get(
+        let html = get(
             ctx,
-            &format!("https://review.sourcearcade.org/plugins/gitiles/{repo}/+/refs/heads/{branch}/{file}?format=TEXT"),
-        )
+            &format!("https://review.sourcearcade.org/plugins/gitiles/{repo}/+/refs/heads/{branch}/{file}"),
+        )?;
+        let Some(pre_start) = html.find("<pre") else {
+            return Err(E::from("Could not find file contents in SourceArcade response."));
+        };
+        let Some(content_offset) = html[pre_start..].find('>') else {
+            return Err(E::from("Could not find file contents in SourceArcade response."));
+        };
+        let start = pre_start + content_offset + 1;
+        let Some(end) = html[start..].find("</pre>") else {
+            return Err(E::from("Could not find file contents in SourceArcade response."));
+        };
+
+        Ok(html[start..start + end]
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&#39;", "'")
+            .replace("&quot;", "\""))
     }
 
     #[rhai_fn(return_raw, global)]
