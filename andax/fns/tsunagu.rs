@@ -613,6 +613,45 @@ pub mod ar {
         Ok(v[0]["sha"].as_str().unwrap_or("").to_owned())
     }
 
+    #[rhai_fn(return_raw, global)]
+    pub fn git_tag(ctx: NativeCallContext, url: &str) -> Res<String> {
+        const TAGS_PREFIX: &str = "refs/tags/";
+        const RESOLVED_SUFFIX: &str = "^{}";
+
+        let req = (AGENT.get(&format!("{url}/info/refs?service=git-upload-pack")))
+            .header("Content-Type", "application/x-git-upload-pack-request");
+
+        let resp = req.call().ehdl(&ctx)?;
+        let is_smart = resp.headers().iter().any(|(key, value)| { key == "Content-Type" && value == "application/x-git-upload-pack-advertisement" });
+        let body: String = resp.into_body().read_to_string().ehdl(&ctx)?;
+
+        let mut tag_name: Option<String> = None;
+
+        for line in body
+            .lines()
+            .map(str::trim)
+            .filter(|a| !a.is_empty() && !a.starts_with('#'))
+        {
+            let name = if is_smart {
+                let line_length = usize::from_str_radix(&line[..4], 16).unwrap_or(0);
+                if line_length <= 4 {
+                    continue;
+                }
+                line[4..line_length-1].split_once(' ').unwrap_or(("", "")).1
+            } else {
+                line.split_once('\t').unwrap_or(("", "")).1
+            };
+
+            if !name.starts_with(TAGS_PREFIX) || name.ends_with(RESOLVED_SUFFIX) {
+                continue;
+            }
+
+            tag_name = Some(name[TAGS_PREFIX.len()..].to_owned());
+        }
+
+        Ok(tag_name.as_deref().unwrap_or("").to_owned())
+    }
+
     #[rhai_fn(skip)]
     pub fn internal_env(key: &str) -> Res<String> {
         trace!("env(`{key}`) = {:?}", std::env::var(key));
