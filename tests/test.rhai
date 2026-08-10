@@ -48,6 +48,8 @@ print(env("PATH"));
 // print(tangled_commit("tangled.org/core"));
 // print(tangled_rawfile("tangled.org/core", "master", "docs/DOCS.md"));
 
+// print(git_tags("https://github.com/FyraLabs/anda"));
+
 let obj = #{
     "a": 1,
     "b": 2 ,
