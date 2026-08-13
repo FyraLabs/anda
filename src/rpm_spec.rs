@@ -52,6 +52,8 @@ pub struct RPMOptions {
     /// Cleanup Options (mock)
     pub no_cleanup_before: bool,
     pub no_cleanup_after: bool,
+    /// Disable networking (mock)
+    pub no_network: bool,
 }
 
 impl RPMOptions {
@@ -158,6 +160,7 @@ impl RPMBuilder {
             mock.plugin_opts(take(&mut options.plugin_opts));
             mock.enable_no_cleanup_before(options.no_cleanup_before);
             mock.enable_no_cleanup_after(options.no_cleanup_after);
+            mock.enable_no_network(options.no_network);
 
             mock.build(spec).await
         } else {
@@ -269,6 +272,7 @@ pub struct MockBackend {
     args: Vec<String>,
     no_cleanup_before: bool,
     no_cleanup_after: bool,
+    no_network: bool,
 }
 
 impl RPMExtraOptions for MockBackend {
@@ -343,6 +347,10 @@ impl MockBackend {
         self.no_cleanup_after = enable;
     }
 
+    pub const fn enable_no_network(&mut self, enable: bool) {
+        self.no_network = enable;
+    }
+
     pub fn target(&mut self, target: Option<String>) {
         self.target = target;
     }
@@ -402,6 +410,10 @@ impl MockBackend {
             cmd.arg("--no-cleanup-after");
         }
 
+        if !self.no_network {
+            cmd.arg("--enable-network");
+        }
+
         cmd
     }
 }
@@ -454,7 +466,7 @@ impl RPMSpecBackend for MockBackend {
     async fn build_rpm(&self, spec: &Path) -> Result<Vec<PathBuf>> {
         let mut cmd = self.mock();
         let tmp = tempfile::Builder::new().prefix("anda-rpm").tempdir()?;
-        cmd.arg("--rebuild").arg(spec).arg("--enable-network").arg("--resultdir").arg(tmp.path());
+        cmd.arg("--rebuild").arg(spec).arg("--resultdir").arg(tmp.path());
 
         cmd.log().await?;
 

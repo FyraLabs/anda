@@ -148,6 +148,10 @@ pub struct RpmOpts {
     /// RPM: Whether to clean up a mock chroot and when
     #[clap(long)]
     pub mock_no_cleanup: Option<NoMockCleanup>,
+
+    /// RPM: disable network access in the mock chroot
+    #[clap(long, action)]
+    pub no_network: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]

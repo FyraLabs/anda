@@ -312,6 +312,8 @@ pub async fn build_project(
                 }
             }
         }
+
+        rpm_opts.no_network = rbopts.no_network;
     }
     let mut arts = Artifacts::new();
 
