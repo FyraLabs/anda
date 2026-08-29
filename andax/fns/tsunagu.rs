@@ -14,10 +14,16 @@ type Res<T> = Result<T, Box<EvalAltResult>>;
 
 fn sort_git_tags(tags: &mut [String]) {
     tags.sort_by(|a, b| {
-        let a_version = Version::parse(a.strip_prefix('v').unwrap_or(a));
-        let b_version = Version::parse(b.strip_prefix('v').unwrap_or(b));
+        let parse = |tag: &str| {
+            tag.char_indices()
+                .rev()
+                .filter(|(_, character)| character.is_ascii_digit())
+                .find_map(|(index, _)| Version::parse(&tag[index..]).ok())
+        };
+        let a_version = parse(a);
+        let b_version = parse(b);
 
-        match (a_version.ok(), b_version.ok()) {
+        match (a_version, b_version) {
             (Some(a), Some(b)) => a.cmp(&b).then_with(|| a.to_string().cmp(&b.to_string())),
             (Some(_), None) => std::cmp::Ordering::Greater,
             (None, Some(_)) => std::cmp::Ordering::Less,
@@ -748,11 +754,26 @@ mod tests {
             "1.10.0".to_owned(),
             "v2.0.0".to_owned(),
             "nightly".to_owned(),
+            "ensu-v0.1.9".to_owned(),
+            "ensu-v0.1.19".to_owned(),
+            "ensu2-v0.1.19-beta".to_owned(),
         ];
 
         sort_git_tags(&mut tags);
 
-        assert_eq!(tags, ["nightly", "1.9.3", "1.10.0", "1.13.5", "v2.0.0"]);
+        assert_eq!(
+            tags,
+            [
+                "nightly",
+                "ensu-v0.1.9",
+                "ensu2-v0.1.19-beta",
+                "ensu-v0.1.19",
+                "1.9.3",
+                "1.10.0",
+                "1.13.5",
+                "v2.0.0"
+            ]
+        );
     }
 
     #[test]
