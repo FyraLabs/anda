@@ -12,7 +12,7 @@ use tracing::trace;
 
 type Res<T> = Result<T, Box<EvalAltResult>>;
 
-fn sort_git_tags(tags: &mut [String]) {
+fn sort_git_tags_impl(tags: &mut [String]) {
     tags.sort_by(|a, b| {
         let a_version = Version::parse(a.strip_prefix('v').unwrap_or(a));
         let b_version = Version::parse(b.strip_prefix('v').unwrap_or(b));
@@ -39,6 +39,19 @@ pub mod ar {
                 .build(),
         )
     });
+
+    #[rhai_fn(return_raw, global)]
+    pub fn sort_git_tags(tags: rhai::Array) -> Res<rhai::Array> {
+        let mut tags: Vec<String> = tags
+            .into_iter()
+            .map(|tag| {
+                tag.into_string().map_err(|_| E::from("sort_git_tags expects an array of strings"))
+            })
+            .collect::<Result<_, _>>()?;
+
+        sort_git_tags_impl(&mut tags);
+        Ok(tags.into_iter().map(rhai::Dynamic::from).collect())
+    }
 
     #[rhai_fn(return_raw, global)]
     pub fn get_json(ctx: NativeCallContext, url: &str) -> Res<Dynamic> {
@@ -674,7 +687,7 @@ pub mod ar {
             tags.push(name[TAGS_PREFIX.len()..].to_owned());
         }
 
-        sort_git_tags(&mut tags);
+        sort_git_tags_impl(&mut tags);
         Ok(tags.into_iter().map(rhai::Dynamic::from).collect())
     }
 
@@ -738,7 +751,7 @@ impl Req {
 
 #[cfg(test)]
 mod tests {
-    use super::sort_git_tags;
+    use super::sort_git_tags_impl;
 
     #[test]
     fn sorts_version_tags_semantically() {
@@ -750,7 +763,7 @@ mod tests {
             "nightly".to_owned(),
         ];
 
-        sort_git_tags(&mut tags);
+        sort_git_tags_impl(&mut tags);
 
         assert_eq!(tags, ["nightly", "1.9.3", "1.10.0", "1.13.5", "v2.0.0"]);
     }
@@ -759,7 +772,7 @@ mod tests {
     fn sorts_prereleases_before_releases() {
         let mut tags = vec!["1.13.5".to_owned(), "1.13.5-rc.1".to_owned(), "1.13.4".to_owned()];
 
-        sort_git_tags(&mut tags);
+        sort_git_tags_impl(&mut tags);
 
         assert_eq!(tags, ["1.13.4", "1.13.5-rc.1", "1.13.5"]);
     }
