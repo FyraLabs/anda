@@ -111,7 +111,7 @@ pub fn update(
         return Ok(());
     }
     debug!("Joining {hdl_len} threads");
-    let mut panicked = Vec::with_capacity(0);
+    let mut panicked = Vec::new();
 
     let tasks = handlers
         .into_iter()
