@@ -7,7 +7,7 @@ use std::{
 };
 use tracing::{error, info};
 
-use crate::fns::{kokoro::ar as kokoro, tsunagu::ar as tsunagu};
+use crate::fns::{kokoro::ar::{self as kokoro, quaterdaily_run}, tsunagu::ar as tsunagu};
 
 static RE_RELEASE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"Release:([\t ]+)(.+?)\n").unwrap());
@@ -174,6 +174,9 @@ impl RPMSpec {
             .unwrap_or_else(|| stable_ver.trim())
             .replace('-', ".");
         self.global("ver", &stable_ver);
+        if self.changed() {
+            self.reset_release();
+        }
 
         info!("{}: stable version updated to {stable_ver}", self.name);
     }
@@ -192,6 +195,50 @@ impl RPMSpec {
         };
         self.version_nightly(&stable_ver, &commit);
     }
+
+    /// Update quaterdaily package globals
+    pub fn version_quaterdaily(&mut self, stable_ver: &str, commit_hash: &str) {
+        let commit_hash = commit_hash.trim();
+        let current_commit = self.global_value("commit");
+        if current_commit == commit_hash {
+            return info!("{}: commit {commit_hash} [UNCHANGED]", self.name);
+        }
+
+        self.global("commit", commit_hash);
+        self.global("commitdate", &kokoro::date());
+        self.global("run", &quaterdaily_run().to_string());
+        self.version_quaterdaily_nocommit(stable_ver);
+    }
+
+    pub fn version_quaterdaily_nocommit(&mut self, stable_ver: &str) {
+        let stable_ver = stable_ver
+            .trim()
+            .strip_prefix('v')
+            .unwrap_or_else(|| stable_ver.trim())
+            .replace('-', ".");
+        self.global("ver", &stable_ver);
+        if self.changed() {
+            self.reset_release();
+        }
+
+        info!("{}: stable version updated to {stable_ver}", self.name);
+    }
+
+    /// Update quaterdaily globals from GitHub, fetching the stable version only when the commit changes.
+    pub fn gh_quaterdaily(&mut self, repo: &str) {
+        let Ok(commit) = tsunagu::github_head_commit(repo) else {
+            return error!("Cannot fetch GitHub commit for {repo}");
+        };
+        if self.global_value("commit") == commit.trim() {
+            return info!("{}: commit {} [UNCHANGED]", self.name, commit.trim());
+        }
+
+        let Ok(stable_ver) = tsunagu::github_latest_release(repo) else {
+            return error!("Cannot fetch GitHub release for {repo}");
+        };
+        self.version_quaterdaily(&stable_ver, &commit);
+    }
+
 }
 
 impl CustomType for RPMSpec {
