@@ -7,7 +7,10 @@ use std::{
 };
 use tracing::{error, info};
 
-use crate::fns::{kokoro::ar::{self as kokoro, quaterdaily_run}, tsunagu::ar as tsunagu};
+use crate::fns::{
+    kokoro::ar::{self as kokoro, quaterdaily_run},
+    tsunagu::ar as tsunagu,
+};
 
 static RE_RELEASE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"Release:([\t ]+)(.+?)\n").unwrap());
@@ -238,7 +241,6 @@ impl RPMSpec {
         };
         self.version_quaterdaily(&stable_ver, &commit);
     }
-
 }
 
 impl CustomType for RPMSpec {

@@ -62,6 +62,12 @@ pub mod ar {
     }
     #[rhai_fn(global)]
     pub fn quaterdaily_run() -> u32 {
-        self::hour() / 6 + 1
+        match self::hour() {
+            0..=5 => 1,
+            6..=11 => 2,
+            12..=17 => 3,
+            18..=23 => 4,
+            _ => 0,
+        }
     }
 }
