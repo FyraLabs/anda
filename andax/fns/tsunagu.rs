@@ -14,10 +14,16 @@ type Res<T> = Result<T, Box<EvalAltResult>>;
 
 fn sort_git_tags_impl(tags: &mut [String]) {
     tags.sort_by(|a, b| {
-        let a_version = Version::parse(a.strip_prefix('v').unwrap_or(a));
-        let b_version = Version::parse(b.strip_prefix('v').unwrap_or(b));
+        let parse = |tag: &str| {
+            tag.char_indices()
+                .rev()
+                .filter(|(_, character)| character.is_ascii_digit())
+                .find_map(|(index, _)| Version::parse(&tag[index..]).ok())
+        };
+        let a_version = parse(a);
+        let b_version = parse(b);
 
-        match (a_version.ok(), b_version.ok()) {
+        match (a_version, b_version) {
             (Some(a), Some(b)) => a.cmp(&b).then_with(|| a.to_string().cmp(&b.to_string())),
             (Some(_), None) => std::cmp::Ordering::Greater,
             (None, Some(_)) => std::cmp::Ordering::Less,
@@ -27,12 +33,17 @@ fn sort_git_tags_impl(tags: &mut [String]) {
 }
 
 pub const USER_AGENT: &str = "AndaX";
+
 #[export_module]
 pub mod ar {
     type E = Box<rhai::EvalAltResult>;
 
     static AGENT: std::sync::LazyLock<ureq::Agent> = std::sync::LazyLock::new(|| {
-        ureq::Agent::new_with_config(ureq::Agent::config_builder().build())
+        ureq::Agent::new_with_config(
+            ureq::Agent::config_builder()
+                .timeout_global(Some(std::time::Duration::from_secs(10)))
+                .build(),
+        )
     });
 
     #[rhai_fn(return_raw, global)]
@@ -74,6 +85,38 @@ pub mod ar {
         trace!("Got json from {repo}:\n{v}");
         Ok(v["tag_name"].as_str().unwrap_or("").to_owned())
     }
+    #[rhai_fn(return_raw, global)]
+    pub fn gh_releases(ctx: NativeCallContext, repo: &str) -> Res<rhai::Array> {
+        let req = (AGENT.get(&format!("https://api.github.com/repos/{repo}/releases")))
+            .header("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
+            .header("User-Agent", USER_AGENT);
+        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
+        trace!("Got json from {repo}:\n{v}");
+        let releases = v.as_array().ok_or_else(|| E::from("gh_releases received not array"))?;
+        let mut tags: Vec<String> = releases
+            .iter()
+            .filter_map(|release| release["tag_name"].as_str().map(ToOwned::to_owned))
+            .collect();
+
+        sort_git_tags(&mut tags);
+        Ok(tags.into_iter().map(rhai::Dynamic::from).collect())
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn gh_tags(ctx: NativeCallContext, repo: &str) -> Res<rhai::Array> {
+        let req = (AGENT.get(&format!("https://api.github.com/repos/{repo}/tags")))
+            .header("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
+            .header("User-Agent", USER_AGENT);
+        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
+        trace!("Got json from {repo}:\n{v}");
+        let tags = v.as_array().ok_or_else(|| E::from("gh_tags received not array"))?;
+        let mut names: Vec<String> =
+            tags.iter().filter_map(|tag| tag["name"].as_str().map(ToOwned::to_owned)).collect();
+
+        sort_git_tags(&mut names);
+        Ok(names.into_iter().map(rhai::Dynamic::from).collect())
+    }
+
     #[rhai_fn(return_raw, global)]
     pub fn gh_tag(ctx: NativeCallContext, repo: &str) -> Res<String> {
         let req = (AGENT.get(&format!("https://api.github.com/repos/{repo}/tags")))
@@ -222,12 +265,19 @@ pub mod ar {
         let Some(content_offset) = html[pre_start..].find('>') else {
             return Err(E::from("Could not find file contents in SourceArcade response."));
         };
-        let start = pre_start + content_offset + 1;
+        let Some(start) =
+            pre_start.checked_add(content_offset).and_then(|start| start.checked_add(1))
+        else {
+            return Err(E::from("Could not find file contents in SourceArcade response."));
+        };
         let Some(end) = html[start..].find("</pre>") else {
             return Err(E::from("Could not find file contents in SourceArcade response."));
         };
+        let Some(end) = start.checked_add(end) else {
+            return Err(E::from("Could not find file contents in SourceArcade response."));
+        };
 
-        Ok(html[start..start + end]
+        Ok(html[start..end]
             .replace("&amp;", "&")
             .replace("&lt;", "<")
             .replace("&gt;", ">")
@@ -716,35 +766,6 @@ impl CustomType for Req {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::sort_git_tags_impl;
-
-    #[test]
-    fn sorts_version_tags_semantically() {
-        let mut tags = vec![
-            "1.9.3".to_owned(),
-            "1.13.5".to_owned(),
-            "1.10.0".to_owned(),
-            "v2.0.0".to_owned(),
-            "nightly".to_owned(),
-        ];
-
-        sort_git_tags_impl(&mut tags);
-
-        assert_eq!(tags, ["nightly", "1.9.3", "1.10.0", "1.13.5", "v2.0.0"]);
-    }
-
-    #[test]
-    fn sorts_prereleases_before_releases() {
-        let mut tags = vec!["1.13.5".to_owned(), "1.13.5-rc.1".to_owned(), "1.13.4".to_owned()];
-
-        sort_git_tags_impl(&mut tags);
-
-        assert_eq!(tags, ["1.13.4", "1.13.5-rc.1", "1.13.5"]);
-    }
-}
-
 impl Req {
     pub const fn new(url: String) -> Self {
         Self { url, headers: vec![], redirects: 0 }
@@ -763,5 +784,49 @@ impl Req {
     }
     pub const fn redirects(&mut self, i: i64) {
         self.redirects = i;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sort_git_tags_impl;
+
+    #[test]
+    fn sorts_version_tags_semantically() {
+        let mut tags = vec![
+            "1.9.3".to_owned(),
+            "1.13.5".to_owned(),
+            "1.10.0".to_owned(),
+            "v2.0.0".to_owned(),
+            "nightly".to_owned(),
+            "ensu-v0.1.9".to_owned(),
+            "ensu-v0.1.19".to_owned(),
+            "ensu2-v0.1.19-beta".to_owned(),
+        ];
+
+        sort_git_tags_impl(&mut tags);
+
+        assert_eq!(
+            tags,
+            [
+                "nightly",
+                "ensu-v0.1.9",
+                "ensu2-v0.1.19-beta",
+                "ensu-v0.1.19",
+                "1.9.3",
+                "1.10.0",
+                "1.13.5",
+                "v2.0.0"
+            ]
+        );
+    }
+
+    #[test]
+    fn sorts_prereleases_before_releases() {
+        let mut tags = vec!["1.13.5".to_owned(), "1.13.5-rc.1".to_owned(), "1.13.4".to_owned()];
+
+        sort_git_tags_impl(&mut tags);
+
+        assert_eq!(tags, ["1.13.4", "1.13.5-rc.1", "1.13.5"]);
     }
 }

@@ -149,15 +149,23 @@ pub async fn build_rpm_call(
     artifact_store: &mut Artifacts,
     rpmb_opts: &RpmOpts,
 ) -> Result<()> {
-    // run pre-build script
+    // Run the RPM pre-build script with the same spec object exposed to update
+    // scripts. Changes must be written before the SRPM is generated.
     if let Some(pre_script) = &rpmbuild.pre_script {
         if pre_script.extension().unwrap_or_default() == "rhai" {
+            let mut rpm = andax::RPMSpec::new(
+                rpmbuild.spec.to_string_lossy().into_owned(),
+                pre_script,
+                &rpmbuild.spec,
+            );
             script!(
                 rpmbuild.spec.as_os_str().to_str().unwrap_or(""),
                 pre_script,
                 opts,
-                rpm_builder
+                rpm_builder,
+                rpm
             );
+            rpm.write()?;
         } else {
             cmd!(? "sh" "-c" {{ pre_script.display() }})?;
         }
@@ -165,15 +173,21 @@ pub async fn build_rpm_call(
 
     let art = build_rpm(&mut opts, &rpmbuild.spec, rpm_builder, &cli.target_dir, rpmb_opts).await?;
 
-    // `opts` is consumed in build_rpm()/build()
     if let Some(post_script) = &rpmbuild.post_script {
         if post_script.extension().unwrap_or_default() == "rhai" {
+            let mut rpm = andax::RPMSpec::new(
+                rpmbuild.spec.to_string_lossy().into_owned(),
+                post_script,
+                &rpmbuild.spec,
+            );
             script!(
                 rpmbuild.spec.as_os_str().to_str().unwrap_or(""),
                 post_script,
                 opts,
-                rpm_builder
+                rpm_builder,
+                rpm
             );
+            rpm.write()?;
         } else {
             cmd!(? "sh" "-c" {{ post_script.display() }})?;
         }
