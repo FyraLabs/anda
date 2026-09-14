@@ -7,7 +7,7 @@ use std::{
 };
 use tracing::{error, info};
 
-use crate::fns::kokoro::ar;
+use crate::fns::{kokoro::ar as kokoro, tsunagu::ar as tsunagu};
 
 static RE_RELEASE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"Release:([\t ]+)(.+?)\n").unwrap());
@@ -163,13 +163,31 @@ impl RPMSpec {
         }
 
         self.global("commit", commit_hash);
-        self.global("commitdate", &ar::date());
-        
+        self.global("commitdate", &kokoro::date());
+        self.version_nightly_nocommit(stable_ver);
+    }
+
+    pub fn version_nightly_nocommit(&mut self, stable_ver: &str) {
         let stable_ver =
             stable_ver.trim().strip_prefix('v').unwrap_or(stable_ver.trim()).replace('-', ".");
         self.global("ver", &stable_ver);
-        
-        info!("{}: nightly globals updated for commit {commit_hash}", self.name);
+
+        info!("{}: stable version updated to {stable_ver}", self.name);
+    }
+
+    /// Update nightly globals from GitHub, fetching the stable version only when the commit changes.
+    pub fn gh_nightly(&mut self, repo: &str) {
+        let Ok(commit) = tsunagu::github_head_commit(repo) else {
+            return error!("Cannot fetch GitHub commit for {repo}");
+        };
+        if self.global_value("commit") == commit.trim() {
+            return info!("{}: commit {} [UNCHANGED]", self.name, commit.trim());
+        }
+
+        let Ok(stable_ver) = tsunagu::github_latest_release(repo) else {
+            return error!("Cannot fetch GitHub release for {repo}");
+        };
+        self.version_nightly(&stable_ver, &commit);
     }
 }
 
@@ -187,6 +205,7 @@ impl CustomType for RPMSpec {
             .with_fn("release", Self::release_num)
             .with_fn("changed", Self::changed)
             .with_fn("version_nightly", Self::version_nightly)
+            .with_fn("gh_nightly", Self::gh_nightly)
             .with_get_set("f", Self::get, Self::set);
     }
 }

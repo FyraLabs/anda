@@ -57,6 +57,32 @@ pub mod ar {
         resp.into_body().read_json().ehdl(&ctx)
     }
 
+    #[rhai_fn(skip)]
+    pub fn github_latest_release(repo: &str) -> Result<String, String> {
+        let token = internal_env("GITHUB_TOKEN").map_err(|error| error.to_string())?;
+        let response = AGENT
+            .get(&format!("https://api.github.com/repos/{repo}/releases/latest"))
+            .header("Authorization", &format!("Bearer {token}"))
+            .header("User-Agent", USER_AGENT)
+            .call()
+            .map_err(|error| error.to_string())?;
+        let value: Value = response.into_body().read_json().map_err(|error| error.to_string())?;
+        Ok(value["tag_name"].as_str().unwrap_or("").to_owned())
+    }
+
+    #[rhai_fn(skip)]
+    pub fn github_head_commit(repo: &str) -> Result<String, String> {
+        let token = internal_env("GITHUB_TOKEN").map_err(|error| error.to_string())?;
+        let response = AGENT
+            .get(&format!("https://api.github.com/repos/{repo}/commits/HEAD"))
+            .header("Authorization", &format!("Bearer {token}"))
+            .header("User-Agent", USER_AGENT)
+            .call()
+            .map_err(|error| error.to_string())?;
+        let value: Value = response.into_body().read_json().map_err(|error| error.to_string())?;
+        Ok(value["sha"].as_str().unwrap_or("").to_owned())
+    }
+
     #[rhai_fn(return_raw, global)]
     pub fn get(ctx: NativeCallContext, url: &str) -> Res<String> {
         let resp = AGENT.get(url).header("User-Agent", USER_AGENT).call().ehdl(&ctx)?;
@@ -64,13 +90,8 @@ pub mod ar {
     }
 
     #[rhai_fn(return_raw, global)]
-    pub fn gh(ctx: NativeCallContext, repo: &str) -> Res<String> {
-        let req = (AGENT.get(&format!("https://api.github.com/repos/{repo}/releases/latest")))
-            .header("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
-            .header("User-Agent", USER_AGENT);
-        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
-        trace!("Got json from {repo}:\n{v}");
-        Ok(v["tag_name"].as_str().unwrap_or("").to_owned())
+    pub fn gh(repo: &str) -> Res<String> {
+        github_latest_release(repo).map_err(E::from)
     }
     #[rhai_fn(return_raw, global)]
     pub fn gh_releases(ctx: NativeCallContext, repo: &str) -> Res<rhai::Array> {
@@ -117,13 +138,8 @@ pub mod ar {
         Ok(v["name"].as_str().unwrap_or("").to_owned())
     }
     #[rhai_fn(return_raw, global)]
-    pub fn gh_commit(ctx: NativeCallContext, repo: &str) -> Res<String> {
-        let req = (AGENT.get(&format!("https://api.github.com/repos/{repo}/commits/HEAD")))
-            .header("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
-            .header("User-Agent", USER_AGENT);
-        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
-        trace!("Got json from {repo}:\n{v}");
-        Ok(v["sha"].as_str().unwrap_or("").to_owned())
+    pub fn gh_commit(repo: &str) -> Res<String> {
+        github_head_commit(repo).map_err(E::from)
     }
     #[rhai_fn(return_raw, global)]
     pub fn gh_rawfile(ctx: NativeCallContext, repo: &str, branch: &str, file: &str) -> Res<String> {
