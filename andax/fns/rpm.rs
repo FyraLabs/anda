@@ -169,7 +169,7 @@ impl RPMSpec {
 
     pub fn version_nightly_nocommit(&mut self, stable_ver: &str) {
         let stable_ver =
-            stable_ver.trim().strip_prefix('v').unwrap_or(stable_ver.trim()).replace('-', ".");
+            stable_ver.trim().strip_prefix('v').unwrap_or_else(|| stable_ver.trim()).replace('-', ".");
         self.global("ver", &stable_ver);
 
         info!("{}: stable version updated to {stable_ver}", self.name);
