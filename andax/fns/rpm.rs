@@ -7,6 +7,8 @@ use std::{
 };
 use tracing::{error, info};
 
+use crate::fns::kokoro::ar;
+
 static RE_RELEASE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"Release:([\t ]+)(.+?)\n").unwrap());
 static RE_VERSION: LazyLock<regex::Regex> =
@@ -108,6 +110,14 @@ impl RPMSpec {
         };
         self.f = self.f.replace(&cap[0], &format!("%global{}{name}{}{val}", &cap[1], &cap[3]));
     }
+    /// Read the value of a `%global` macro by the name.
+    pub fn global_value(&mut self, name: &str) -> String {
+        let name = name.trim();
+        RE_GLOBAL
+            .captures_iter(self.f.as_str())
+            .find(|cap| &cap[2] == name)
+            .map_or_else(String::new, |cap| cap[4].trim().to_owned())
+    }
     /// Change the `SourceN:` preamble value by `N`
     pub fn source(&mut self, i: i64, p: &str) {
         let p = p.trim();
@@ -143,6 +153,24 @@ impl RPMSpec {
         self.f.hash(&mut hasher);
         hasher.finish() != self.original
     }
+
+    /// Update nightly package globals
+    pub fn version_nightly(&mut self, stable_ver: &str, commit_hash: &str) {
+        let commit_hash = commit_hash.trim();
+        let current_commit = self.global_value("commit");
+        if current_commit == commit_hash {
+            return info!("{}: commit {commit_hash} [UNCHANGED]", self.name);
+        }
+
+        self.global("commit", commit_hash);
+        self.global("commitdate", &ar::date());
+        
+        let stable_ver =
+            stable_ver.trim().strip_prefix('v').unwrap_or(stable_ver.trim()).replace('-', ".");
+        self.global("ver", &stable_ver);
+        
+        info!("{}: nightly globals updated for commit {commit_hash}", self.name);
+    }
 }
 
 impl CustomType for RPMSpec {
@@ -153,10 +181,12 @@ impl CustomType for RPMSpec {
             .with_fn("source", Self::source)
             .with_fn("define", Self::define)
             .with_fn("global", Self::global)
+            .with_fn("global_value", Self::global_value)
             .with_fn("release", Self::reset_release)
             .with_fn("release", Self::release)
             .with_fn("release", Self::release_num)
             .with_fn("changed", Self::changed)
+            .with_fn("version_nightly", Self::version_nightly)
             .with_get_set("f", Self::get, Self::set);
     }
 }
