@@ -55,4 +55,18 @@ pub mod ar {
     pub fn date() -> String {
         chrono::offset::Utc::now().format("%Y%m%d").to_string()
     }
+    #[rhai_fn(global)]
+    pub fn hour() -> u32 {
+        chrono::offset::Utc::now().format("%H").to_string().parse().unwrap_or_default()
+    }
+    #[rhai_fn(global)]
+    pub fn quaterdaily_run() -> u32 {
+        match self::hour() {
+            0..=5 => 1,
+            6..=11 => 2,
+            12..=17 => 3,
+            18..=23 => 4,
+            _ => 0,
+        }
+    }
 }
