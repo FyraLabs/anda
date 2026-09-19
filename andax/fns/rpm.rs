@@ -108,6 +108,14 @@ impl RPMSpec {
         };
         self.f = self.f.replace(&cap[0], &format!("%global{}{name}{}{val}", &cap[1], &cap[3]));
     }
+    /// Read the value of a `%global` macro by the name.
+    pub fn global_value(&mut self, name: &str) -> String {
+        let name = name.trim();
+        RE_GLOBAL
+            .captures_iter(self.f.as_str())
+            .find(|cap| &cap[2] == name)
+            .map_or_else(String::new, |cap| cap[4].trim().to_owned())
+    }
     /// Change the `SourceN:` preamble value by `N`
     pub fn source(&mut self, i: i64, p: &str) {
         let p = p.trim();
@@ -153,6 +161,7 @@ impl CustomType for RPMSpec {
             .with_fn("source", Self::source)
             .with_fn("define", Self::define)
             .with_fn("global", Self::global)
+            .with_fn("global_value", Self::global_value)
             .with_fn("release", Self::reset_release)
             .with_fn("release", Self::release)
             .with_fn("release", Self::release_num)
