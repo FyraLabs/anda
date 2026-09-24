@@ -2,7 +2,7 @@
 name = "andax"
 version = "0.8.11"
 edition = "2021"
-license = "MIT"
+license = "AGPL-3.0-or-later"
 description = "Andaman scripting runtime"
 repository = "https://github.com/FyraLabs/anda"
 readme = "../README.md"
