@@ -3,7 +3,7 @@
 %global crate anda
 
 Name:           anda
-Version:        0.8.11
+Version:        0.8.12
 Release:        1%{?dist}
 Summary:        Andaman Build toolchain
 SourceLicense:  AGPL-3.0-or-later
