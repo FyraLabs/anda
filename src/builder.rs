@@ -278,7 +278,17 @@ pub async fn build_project(
 
     if let Some(pre_script) = &proj.pre_script {
         if pre_script.extension().unwrap_or_default() == "rhai" {
-            script!("pre_script", pre_script,);
+            if let Some(rpmbuild) = &proj.rpm {
+                let mut rpm = andax::RPMSpec::new(
+                    rpmbuild.spec.to_string_lossy().into_owned(),
+                    pre_script,
+                    &rpmbuild.spec,
+                );
+                script!("pre_script", pre_script, rpm);
+                rpm.write()?;
+            } else {
+                script!("pre_script", pre_script,);
+            }
         } else {
             cmd!(? "sh" "-c" {{ pre_script.display() }})?;
         }
@@ -347,7 +357,17 @@ pub async fn build_project(
 
     if let Some(post_script) = &proj.post_script {
         if post_script.extension().unwrap_or_default() == "rhai" {
-            script!("post_script", post_script,);
+            if let Some(rpmbuild) = &proj.rpm {
+                let mut rpm = andax::RPMSpec::new(
+                    rpmbuild.spec.to_string_lossy().into_owned(),
+                    post_script,
+                    &rpmbuild.spec,
+                );
+                script!("post_script", post_script, rpm);
+                rpm.write()?;
+            } else {
+                script!("post_script", post_script,);
+            }
         } else {
             cmd!(? "sh" "-c" {{ post_script.display() }})?;
         }
