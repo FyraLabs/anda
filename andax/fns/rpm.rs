@@ -161,6 +161,7 @@ impl CustomType for RPMSpec {
             .with_fn("source", Self::source)
             .with_fn("define", Self::define)
             .with_fn("global", Self::global)
+            .with_fn("global", Self::global_value)
             .with_fn("global_value", Self::global_value)
             .with_fn("release", Self::reset_release)
             .with_fn("release", Self::release)
