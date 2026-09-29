@@ -326,3 +326,29 @@ fn hint_ear(sl: &str, lns: &str, ear: &EvalAltResult, rhai_fn: &str) -> Option<S
     trace!("No hints");
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::run;
+    use crate::fns::rpm::RPMSpec;
+    use std::fs;
+
+    #[test]
+    fn exposes_rpm_spec_to_scripts() {
+        let dir = tempfile::tempdir().expect("create temporary directory");
+        let spec = dir.path().join("test.spec");
+        let script = dir.path().join("pre.rhai");
+        fs::write(&spec, "Name: test\nVersion: 1\nRelease: 1\n%global bootstrap 1\n")
+            .expect("write spec");
+        fs::write(&script, r#"rpm.global("bootstrap", "0");"#).expect("write script");
+
+        let rpm = RPMSpec::new("test".to_owned(), &script, &spec);
+        let scope = run("test", &script, std::iter::empty::<(String, String)>(), |scope| {
+            scope.push("rpm", rpm);
+        })
+        .expect("script should run");
+        let rpm: RPMSpec = scope.get_value("rpm").expect("rpm should remain in scope");
+
+        assert!(rpm.f.contains("%global bootstrap 0"));
+    }
+}
