@@ -123,7 +123,7 @@ impl PseudoTerminal {
     }
 
     fn flag_was_true_then_set_false(flag: &AtomicBool) -> bool {
-        flag.fetch_update(
+        flag.try_update(
             std::sync::atomic::Ordering::Relaxed,
             std::sync::atomic::Ordering::Relaxed,
             |b| b.then_some(false),
