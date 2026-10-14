@@ -500,3 +500,37 @@ pub async fn builder(
     }
     Ok(())
 }
+
+#[allow(clippy::too_many_arguments)]
+pub async fn build_group(
+    cli: &Cli,
+    rpm_opts: RpmOpts,
+    group: &str,
+    package: PackageType,
+    flatpak_opts: FlatpakOpts,
+    oci_opts: OciOpts,
+) -> Result<()> {
+    let config = anda_config::load_from_file(&cli.config)?;
+    let projects = config
+        .project
+        .iter()
+        .filter(|(_, project)| project.build_group() == Some(group))
+        .map(|(name, project)| (name.clone(), project.clone()))
+        .collect::<Vec<_>>();
+
+    if projects.is_empty() {
+        return Err(eyre!("No projects found in build group: {group}"));
+    }
+
+    std::env::set_var("ANDA_TARGET_DIR", &cli.target_dir);
+    std::env::set_var("ANDA_CONFIG_PATH", &cli.config);
+
+    for (name, project) in projects {
+        println!("Building project in group {group}: {name}");
+        build_project(cli, project, package, &rpm_opts, &flatpak_opts, &oci_opts)
+            .await
+            .with_context(|| format!("Failed to build {name} in group {group}"))?;
+    }
+
+    Ok(())
+}
