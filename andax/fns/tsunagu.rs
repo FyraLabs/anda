@@ -36,8 +36,7 @@ pub const USER_AGENT: &str = "AndaX";
 
 /// Lookups against OCI distribution registries (GHCR, Docker Hub, Quay, …).
 mod oci {
-    use super::{Res, USER_AGENT};
-    use semver::Version;
+    use super::USER_AGENT;
     use serde_json::Value;
     use sha2::{Digest, Sha256};
     use std::{
@@ -48,7 +47,31 @@ mod oci {
     use tracing::trace;
     use ureq::{http::Response, Body};
 
-    type E = Box<rhai::EvalAltResult>;
+    /// A failed OCI lookup; the Rhai functions wrap it with `ehdl` for script tracebacks.
+    #[derive(Debug)]
+    pub struct Error(String);
+
+    impl std::fmt::Display for Error {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(&self.0)
+        }
+    }
+
+    impl std::error::Error for Error {}
+
+    impl From<String> for Error {
+        fn from(message: String) -> Self {
+            Self(message)
+        }
+    }
+
+    impl From<&str> for Error {
+        fn from(message: &str) -> Self {
+            Self(message.to_owned())
+        }
+    }
+
+    pub type Res<T> = Result<T, Error>;
 
     /// Index/list types come first so multi-arch images resolve to the index digest
     /// rather than the digest of a single architecture's manifest.
@@ -82,19 +105,23 @@ mod oci {
     }
 
     impl ImageRef {
+        fn is_https(&self) -> bool {
+            self.api_base.starts_with("https://")
+        }
+
         /// Parses `ghcr.io/org/name`, `docker.io/library/name`, `org/name` or `name`.
         /// Bare names go to Docker Hub, like `docker pull` does.
         pub fn parse(image: &str) -> Res<Self> {
             if image.is_empty() {
-                return Err(E::from("OCI image reference is empty."));
+                return Err(Error::from("OCI image reference is empty."));
             }
             if image.contains("://") {
-                return Err(E::from(format!(
+                return Err(Error::from(format!(
                     "OCI image reference `{image}` must not include a URL scheme; use e.g. `ghcr.io/org/name`."
                 )));
             }
             if image.contains('@') {
-                return Err(E::from(format!(
+                return Err(Error::from(format!(
                     "OCI image reference `{image}` already contains a digest; pass only the image name."
                 )));
             }
@@ -106,20 +133,12 @@ mod oci {
                 _ => ("docker.io", image),
             };
             if path.rsplit('/').next().is_some_and(|name| name.contains(':')) {
-                return Err(E::from(format!(
+                return Err(Error::from(format!(
                     "OCI image reference `{image}` already contains a tag; pass only the image name."
                 )));
             }
-            let valid_component = |c: &str| {
-                !c.is_empty()
-                    && c.bytes().all(|b| {
-                        b.is_ascii_lowercase()
-                            || b.is_ascii_digit()
-                            || matches!(b, b'.' | b'_' | b'-')
-                    })
-            };
-            if !path.split('/').all(valid_component) {
-                return Err(E::from(format!(
+            if !path.split('/').all(valid_path_component) {
+                return Err(Error::from(format!(
                     "OCI image reference `{image}` has an invalid repository name `{path}`."
                 )));
             }
@@ -136,12 +155,44 @@ mod oci {
                 path.to_owned()
             };
 
+            // Like Docker, talk plain HTTP to registries on this machine (e.g. a local `registry:2`).
+            let scheme = if is_loopback(host) { "http" } else { "https" };
+
             Ok(Self {
                 registry: registry.to_owned(),
                 repository,
-                api_base: format!("https://{host}"),
+                api_base: format!("{scheme}://{host}"),
             })
         }
+    }
+
+    /// Whether `host[:port]` names this machine: `localhost` or a loopback IP address.
+    fn is_loopback(authority: &str) -> bool {
+        let host = match authority.rsplit_once(':') {
+            Some((host, port)) if !host.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) => {
+                host
+            }
+            _ => authority,
+        };
+        if let Some(ip) = host.strip_prefix('[').and_then(|h| h.strip_suffix(']')) {
+            return ip.parse::<std::net::Ipv6Addr>().is_ok_and(|ip| ip.is_loopback());
+        }
+        host.eq_ignore_ascii_case("localhost")
+            || host.parse::<std::net::Ipv4Addr>().is_ok_and(|ip| ip.is_loopback())
+    }
+
+    /// Checks one repository path component against the OCI distribution grammar:
+    /// `[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*`.
+    fn valid_path_component(component: &str) -> bool {
+        let alnum = |b: u8| b.is_ascii_lowercase() || b.is_ascii_digit();
+        let bytes = component.as_bytes();
+        if !bytes.first().is_some_and(|&b| alnum(b)) || !bytes.last().is_some_and(|&b| alnum(b)) {
+            return false;
+        }
+        bytes
+            .split(|&b| alnum(b))
+            .filter(|sep| !sep.is_empty())
+            .all(|sep| matches!(sep, b"." | b"_" | b"__") || sep.iter().all(|&b| b == b'-'))
     }
 
     #[derive(Debug, PartialEq, Eq)]
@@ -150,14 +201,48 @@ mod oci {
         pub service: Option<String>,
     }
 
-    /// Parses a `WWW-Authenticate: Bearer realm="…",service="…",scope="…"` header value.
+    /// Parses the Bearer challenge in a `WWW-Authenticate` header value such as
+    /// `Bearer realm="…",service="…",scope="…"`, which may also list other schemes.
     pub fn parse_bearer_challenge(header: &str) -> Option<BearerChallenge> {
-        let (scheme, params) = header.trim().split_once(char::is_whitespace)?;
-        if !scheme.eq_ignore_ascii_case("bearer") {
-            return None;
-        }
+        let params = bearer_params(header)?;
         let mut params = parse_auth_params(params);
         Some(BearerChallenge { realm: params.remove("realm")?, service: params.remove("service") })
+    }
+
+    /// Returns what follows the `Bearer` scheme token, skipping quoted strings and auth params.
+    fn bearer_params(header: &str) -> Option<&str> {
+        let mut in_quotes = false;
+        let mut escaped = false;
+        // A scheme token can only start at the beginning or after a comma.
+        let mut token_start = true;
+        for (index, c) in header.char_indices() {
+            if in_quotes {
+                match (escaped, c) {
+                    (true, _) => escaped = false,
+                    (false, '\\') => escaped = true,
+                    (false, '"') => in_quotes = false,
+                    _ => {}
+                }
+                continue;
+            }
+            match c {
+                '"' => in_quotes = true,
+                ',' => token_start = true,
+                c if c.is_whitespace() => {}
+                _ if token_start => {
+                    token_start = false;
+                    let rest = &header[index..];
+                    let end = rest.find(|c: char| c.is_whitespace() || matches!(c, '=' | ','));
+                    let (scheme, after) = rest.split_at(end.unwrap_or(rest.len()));
+                    let is_scheme = !after.trim_start().starts_with('=');
+                    if is_scheme && scheme.eq_ignore_ascii_case("bearer") {
+                        return Some(after);
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
     /// Parses `key=value, key="quoted, value"` pairs, stopping at the next challenge's scheme.
@@ -224,16 +309,28 @@ mod oci {
         None
     }
 
-    /// Picks the highest tag that is a release semver with an optional leading `v`.
-    pub fn newest_semver_tag(tags: &[String]) -> Option<&str> {
-        let mut latest: Option<(Version, &str)> = None;
+    /// Parses a release version tag: two or more dot-separated numbers with an optional
+    /// leading `v`, e.g. `1.2.3`, `v0.10.0`, `17.6` or CalVer like `2024.01.05`.
+    ///
+    /// Unlike `sort_git_tags`, any suffix disqualifies the tag: image registries carry variant
+    /// tags such as `10.0.0-alpine` and prereleases next to the plain releases, and those must
+    /// never win over the release itself. Bare numbers are skipped too, since they are often
+    /// build numbers or dates (`20240105`) that would outrank every real version.
+    fn release_version(tag: &str) -> Option<Vec<u64>> {
+        let parts: Vec<u64> = (tag.strip_prefix('v').unwrap_or(tag).split('.'))
+            .map(|part| {
+                let numeric = !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit());
+                numeric.then(|| part.parse().ok()).flatten()
+            })
+            .collect::<Option<_>>()?;
+        (parts.len() >= 2).then_some(parts)
+    }
+
+    /// Picks the tag with the highest release version (see `release_version`).
+    pub fn newest_version_tag(tags: &[String]) -> Option<&str> {
+        let mut latest: Option<(Vec<u64>, &str)> = None;
         for tag in tags {
-            let Ok(version) = Version::parse(tag.strip_prefix('v').unwrap_or(tag)) else {
-                continue;
-            };
-            if !version.pre.is_empty() {
-                continue;
-            }
+            let Some(version) = release_version(tag) else { continue };
             if latest
                 .as_ref()
                 .is_none_or(|current| (&version, tag.as_str()) > (&current.0, current.1))
@@ -269,6 +366,7 @@ mod oci {
         url: &str,
         accept: &str,
         token: Option<&str>,
+        image: &ImageRef,
     ) -> Res<Response<Body>> {
         let req = match method {
             Method::Get => agent.get(url),
@@ -278,8 +376,8 @@ mod oci {
         if let Some(token) = token {
             req = req.header("Authorization", format!("Bearer {token}"));
         }
-        (req.config().http_status_as_error(false).build().call())
-            .map_err(|err| E::from(format!("Request to `{url}` failed: {err}")))
+        (req.config().http_status_as_error(false).https_only(image.is_https()).build().call())
+            .map_err(|err| Error::from(format!("Request to `{url}` failed: {err}")))
     }
 
     /// Sends a request, answering a Bearer challenge with an anonymous pull token if needed.
@@ -290,14 +388,13 @@ mod oci {
         accept: &str,
         image: &ImageRef,
     ) -> Res<Response<Body>> {
-        let key = (image.api_base.clone(), image.repository.clone());
-        // Never hand the token to a different host (e.g. an absolute pagination link).
-        let same_registry = url.strip_prefix(&image.api_base).is_some_and(|p| p.starts_with('/'));
-        let cached =
-            if same_registry { TOKENS.with_borrow(|t| t.get(&key).cloned()) } else { None };
+        // Tokens are cached per origin so one host's token is never handed to another
+        // (e.g. an absolute pagination link); each host's own challenge gets its own token.
+        let key = (origin(url).to_owned(), image.repository.clone());
+        let cached = TOKENS.with_borrow(|t| t.get(&key).cloned());
 
-        let resp = send_once(agent, method, url, accept, cached.as_deref())?;
-        if resp.status() != 401 || !same_registry {
+        let resp = send_once(agent, method, url, accept, cached.as_deref(), image)?;
+        if resp.status() != 401 {
             return Ok(resp);
         }
         let challenge = (resp.headers().get_all("WWW-Authenticate").iter())
@@ -307,7 +404,26 @@ mod oci {
 
         let token = fetch_token(agent, &challenge, image)?;
         TOKENS.with_borrow_mut(|t| t.insert(key, token.clone()));
-        send_once(agent, method, url, accept, Some(&token))
+        send_once(agent, method, url, accept, Some(&token), image)
+    }
+
+    /// `scheme://host[:port]` of an absolute URL.
+    fn origin(url: &str) -> &str {
+        let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
+        let path = rest.find(['/', '?', '#']).map_or("", |i| &rest[i..]);
+        &url[..url.len().saturating_sub(path.len())]
+    }
+
+    /// Rejects plain-HTTP URLs a registry hands out, except loopback URLs from a loopback registry.
+    fn check_no_downgrade(url: &str, image: &ImageRef) -> Res<()> {
+        let local = (origin(url).strip_prefix("http://"))
+            .is_some_and(|authority| !image.is_https() && is_loopback(authority));
+        if !url.starts_with("https://") && !local {
+            return Err(Error::from(format!(
+                "OCI registry for `{image}` sent non-HTTPS URL `{url}`; refusing to use it."
+            )));
+        }
+        Ok(())
     }
 
     fn fetch_token(
@@ -316,17 +432,19 @@ mod oci {
         image: &ImageRef,
     ) -> Res<String> {
         let realm = &challenge.realm;
+        check_no_downgrade(realm, image)?;
         let mut req = agent.get(realm).header("User-Agent", USER_AGENT);
         if let Some(service) = &challenge.service {
             req = req.query("service", service);
         }
         let req = req.query("scope", format!("repository:{}:pull", image.repository));
-        let resp = (req.config().http_status_as_error(false).build().call())
-            .map_err(|err| E::from(format!("Request to `{realm}` failed: {err}")))?;
+        let resp =
+            (req.config().http_status_as_error(false).https_only(image.is_https()).build().call())
+                .map_err(|err| Error::from(format!("Request to `{realm}` failed: {err}")))?;
         match resp.status().as_u16() {
             200 => {}
             401 | 403 | 404 => {
-                return Err(E::from(format!(
+                return Err(Error::from(format!(
                     "Could not get an anonymous pull token for OCI image `{image}` (HTTP {}); it may not exist or may be private.",
                     resp.status().as_u16()
                 )))
@@ -334,27 +452,29 @@ mod oci {
             status => return unexpected_status(status, realm, image),
         }
         let v: Value = (resp.into_body().read_json())
-            .map_err(|err| E::from(format!("Invalid token response from `{realm}`: {err}")))?;
+            .map_err(|err| Error::from(format!("Invalid token response from `{realm}`: {err}")))?;
         (v["token"].as_str().or_else(|| v["access_token"].as_str()))
             .filter(|token| !token.is_empty())
             .map(ToOwned::to_owned)
-            .ok_or_else(|| E::from(format!("Token response from `{realm}` contains no token.")))
+            .ok_or_else(|| Error::from(format!("Token response from `{realm}` contains no token.")))
     }
 
     fn unexpected_status<T>(status: u16, url: &str, image: &ImageRef) -> Res<T> {
-        Err(E::from(format!(
+        Err(Error::from(format!(
             "Unexpected HTTP status {status} from `{url}` for OCI image `{image}`."
         )))
     }
 
     fn image_not_found<T>(status: u16, image: &ImageRef) -> Res<T> {
-        Err(E::from(format!("OCI image `{image}` was not found or is not public (HTTP {status}).")))
+        Err(Error::from(format!(
+            "OCI image `{image}` was not found or is not public (HTTP {status})."
+        )))
     }
 
     /// Lists all tags, following `Link: <…>; rel="next"` pagination.
     pub fn tags(agent: &ureq::Agent, image: &ImageRef) -> Res<Vec<String>> {
         let mut url = format!("{}/v2/{}/tags/list", image.api_base, image.repository);
-        let mut seen = HashSet::new();
+        let mut seen = HashSet::from([url.clone()]);
         let mut tags = vec![];
         for _ in 0..MAX_TAG_PAGES {
             let resp = send(agent, Method::Get, &url, "application/json", image)?;
@@ -367,37 +487,43 @@ mod oci {
                 .filter_map(|value| value.to_str().ok())
                 .find_map(parse_next_link);
             let v: Value = (resp.into_body().read_json())
-                .map_err(|err| E::from(format!("Invalid tag list from `{url}`: {err}")))?;
+                .map_err(|err| Error::from(format!("Invalid tag list from `{url}`: {err}")))?;
             trace!("Got json from {url}:\n{v}");
+            if !v.is_object() {
+                return Err(Error::from(format!("Tag list from `{url}` is not a JSON object.")));
+            }
             match &v["tags"] {
                 Value::Array(page) => {
                     tags.extend(page.iter().filter_map(Value::as_str).map(ToOwned::to_owned));
                 }
                 Value::Null => {}
-                _ => return Err(E::from(format!("Tag list from `{url}` is not an array."))),
+                _ => return Err(Error::from(format!("Tag list from `{url}` is not an array."))),
             }
 
             let Some(next) = next else { return Ok(tags) };
             url = if next.starts_with("https://") || next.starts_with("http://") {
+                check_no_downgrade(&next, image)?;
                 next
             } else if next.starts_with('/') {
                 format!("{}{next}", image.api_base)
             } else {
-                return Err(E::from(format!("Unsupported pagination link `{next}` from `{url}`.")));
+                return Err(Error::from(format!(
+                    "Unsupported pagination link `{next}` from `{url}`."
+                )));
             };
             if !seen.insert(url.clone()) {
-                return Err(E::from(format!(
+                return Err(Error::from(format!(
                     "Tag list pagination for `{image}` loops at `{url}`."
                 )));
             }
         }
-        Err(E::from(format!("Tag list for `{image}` has more than {MAX_TAG_PAGES} pages.")))
+        Err(Error::from(format!("Tag list for `{image}` has more than {MAX_TAG_PAGES} pages.")))
     }
 
     pub fn newest_tag(agent: &ureq::Agent, image: &ImageRef) -> Res<String> {
         let tags = tags(agent, image)?;
-        newest_semver_tag(&tags).map(ToOwned::to_owned).ok_or_else(|| {
-            E::from(format!("No semantic version tags could be found for OCI image `{image}`."))
+        newest_version_tag(&tags).map(ToOwned::to_owned).ok_or_else(|| {
+            Error::from(format!("No version tags could be found for OCI image `{image}`."))
         })
     }
 
@@ -407,13 +533,15 @@ mod oci {
             && tag.bytes().next().is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_')
             && tag.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'));
         if !valid_tag {
-            return Err(E::from(format!("`{tag}` is not a valid tag for OCI image `{image}`.")));
+            return Err(Error::from(format!(
+                "`{tag}` is not a valid tag for OCI image `{image}`."
+            )));
         }
 
         let url = format!("{}/v2/{}/manifests/{tag}", image.api_base, image.repository);
         let check = |resp: &Response<Body>| match resp.status().as_u16() {
             200 => Ok(()),
-            404 => Err(E::from(format!(
+            404 => Err(Error::from(format!(
                 "Tag `{tag}` was not found for OCI image `{image}` (HTTP 404)."
             ))),
             status @ (401 | 403) => image_not_found(status, image),
@@ -421,19 +549,28 @@ mod oci {
         };
 
         let resp = send(agent, Method::Head, &url, MANIFEST_ACCEPT, image)?;
-        check(&resp)?;
-        let header = (resp.headers().get("Docker-Content-Digest"))
-            .and_then(|value| value.to_str().ok())
-            .map(str::trim);
-        if let Some(digest) = header.filter(|digest| is_sha256_digest(digest)) {
-            return Ok(digest.to_owned());
+        match resp.status().as_u16() {
+            200 => {
+                let header = (resp.headers().get("Docker-Content-Digest"))
+                    .and_then(|value| value.to_str().ok())
+                    .map(str::trim);
+                if let Some(digest) = header.filter(|digest| is_sha256_digest(digest)) {
+                    return Ok(digest.to_owned());
+                }
+                trace!("No sha256 Docker-Content-Digest from HEAD {url}; hashing the manifest");
+            }
+            // Some registries and proxies reject HEAD on manifests; GET still works there.
+            status @ (400 | 405 | 501) => {
+                trace!("HEAD {url} returned HTTP {status}; hashing the manifest");
+            }
+            // Report rate limits and outages as-is: a GET would also count as a pull.
+            _ => check(&resp)?,
         }
 
-        trace!("No sha256 Docker-Content-Digest from HEAD {url}; hashing the manifest instead");
         let resp = send(agent, Method::Get, &url, MANIFEST_ACCEPT, image)?;
         check(&resp)?;
         let body = (resp.into_body().read_to_vec())
-            .map_err(|err| E::from(format!("Could not read manifest from `{url}`: {err}")))?;
+            .map_err(|err| Error::from(format!("Could not read manifest from `{url}`: {err}")))?;
         Ok(sha256_digest(&body))
     }
 
@@ -592,8 +729,24 @@ mod oci {
                 ("alpine", "docker.io", "library/alpine", "https://registry-1.docker.io"),
                 ("org/name", "docker.io", "org/name", "https://registry-1.docker.io"),
                 ("ghcr.io/org/group/name", "ghcr.io", "org/group/name", "https://ghcr.io"),
-                ("localhost:5000/name", "localhost:5000", "name", "https://localhost:5000"),
-                ("localhost/name", "localhost", "name", "https://localhost"),
+                ("localhost:5000/name", "localhost:5000", "name", "http://localhost:5000"),
+                ("localhost/name", "localhost", "name", "http://localhost"),
+                ("127.0.0.1:5000/org/name", "127.0.0.1:5000", "org/name", "http://127.0.0.1:5000"),
+                ("[::1]:5000/name", "[::1]:5000", "name", "http://[::1]:5000"),
+                (
+                    "[0:0:0:0:0:0:0:1]:5000/n",
+                    "[0:0:0:0:0:0:0:1]:5000",
+                    "n",
+                    "http://[0:0:0:0:0:0:0:1]:5000",
+                ),
+                ("[2001:db8::1]:5000/n", "[2001:db8::1]:5000", "n", "https://[2001:db8::1]:5000"),
+                (
+                    "registry.local:5000/name",
+                    "registry.local:5000",
+                    "name",
+                    "https://registry.local:5000",
+                ),
+                ("ghcr.io/a__b/c-d/e--f/g.h", "ghcr.io", "a__b/c-d/e--f/g.h", "https://ghcr.io"),
             ];
             for (input, registry, repository, api_base) in cases {
                 let image = ImageRef::parse(input).unwrap_or_else(|err| panic!("{input}: {err}"));
@@ -622,6 +775,12 @@ mod oci {
                 ("ghcr.io/Org/Name", "invalid repository name"),
                 ("ghcr.io//name", "invalid repository name"),
                 ("ghcr.io/", "invalid repository name"),
+                ("ghcr.io/-org/name", "invalid repository name"),
+                ("ghcr.io/org/.name", "invalid repository name"),
+                ("ghcr.io/org/name-", "invalid repository name"),
+                ("ghcr.io/org/a..b", "invalid repository name"),
+                ("ghcr.io/org/a___b", "invalid repository name"),
+                ("ghcr.io/org/a._b", "invalid repository name"),
             ];
             for (input, expected) in cases {
                 let message = error_message(ImageRef::parse(input));
@@ -630,7 +789,7 @@ mod oci {
         }
 
         #[test]
-        fn picks_newest_semver_tag() {
+        fn picks_newest_version_tag() {
             let tags: Vec<String> = [
                 "latest",
                 "main",
@@ -647,23 +806,36 @@ mod oci {
             ]
             .map(str::to_owned)
             .into();
-            assert_eq!(newest_semver_tag(&tags), Some("10.0.0"));
+            assert_eq!(newest_version_tag(&tags), Some("10.0.0"));
 
             let tags: Vec<String> = ["v0.9.0", "v0.10.0", "v0.10.0-rc.2"].map(str::to_owned).into();
-            assert_eq!(newest_semver_tag(&tags), Some("v0.10.0"));
+            assert_eq!(newest_version_tag(&tags), Some("v0.10.0"));
+
+            // Two-part and zero-padded CalVer tags count; bare numbers and suffixes don't.
+            let tags: Vec<String> = ["16", "17", "16.4", "17.0", "17.6", "17.6-alpine", "20240105"]
+                .map(str::to_owned)
+                .into();
+            assert_eq!(newest_version_tag(&tags), Some("17.6"));
+            let tags: Vec<String> =
+                ["2023.12.31", "2024.01.05", "2024.1.4", "2024.02.0-rc1"].map(str::to_owned).into();
+            assert_eq!(newest_version_tag(&tags), Some("2024.01.05"));
+            let tags: Vec<String> = ["1.2", "1.2.0"].map(str::to_owned).into();
+            assert_eq!(newest_version_tag(&tags), Some("1.2.0"));
 
             let tags: Vec<String> =
-                ["latest", "main", "1.2", "2.0.0-rc.1"].map(str::to_owned).into();
-            assert_eq!(newest_semver_tag(&tags), None);
-            assert_eq!(newest_semver_tag(&[]), None);
+                ["latest", "main", "1", "2.0.0-rc.1", "1..2", "v", "1.2.", "1.2.3+build"]
+                    .map(str::to_owned)
+                    .into();
+            assert_eq!(newest_version_tag(&tags), None);
+            assert_eq!(newest_version_tag(&[]), None);
         }
 
         #[test]
         fn picks_same_tag_for_equal_versions_regardless_of_order() {
             let tags: Vec<String> = ["1.2.3", "v1.2.3"].map(str::to_owned).into();
             let reversed: Vec<String> = tags.iter().rev().cloned().collect();
-            assert_eq!(newest_semver_tag(&tags), Some("v1.2.3"));
-            assert_eq!(newest_semver_tag(&reversed), Some("v1.2.3"));
+            assert_eq!(newest_version_tag(&tags), Some("v1.2.3"));
+            assert_eq!(newest_version_tag(&reversed), Some("v1.2.3"));
         }
 
         #[test]
@@ -692,6 +864,12 @@ mod oci {
                 ),
                 (r#"Bearer realm="a\"b""#, r#"a"b"#, None),
                 (r#"Bearer realm="r", Basic service="other""#, "r", None),
+                (
+                    r#"Basic realm="x", Bearer realm="https://r/token",service="r""#,
+                    "https://r/token",
+                    Some("r"),
+                ),
+                (r#"Basic realm="a, Bearer realm=fake", Bearer realm="real""#, "real", None),
             ];
             for (header, realm, service) in cases {
                 assert_eq!(
@@ -704,7 +882,13 @@ mod oci {
                 );
             }
 
-            for header in [r#"Basic realm="registry""#, r#"Bearer service="s""#, "Bearer", ""] {
+            for header in [
+                r#"Basic realm="registry""#,
+                r#"Bearer service="s""#,
+                "Bearer",
+                "",
+                r#"Basic bearer="x", realm="y""#,
+            ] {
                 assert_eq!(parse_bearer_challenge(header), None, "{header}");
             }
         }
@@ -832,6 +1016,95 @@ mod oci {
         }
 
         #[test]
+        fn gets_separate_token_for_other_pagination_host() {
+            let cdn = MockRegistry::start(|req, base| match req.url.as_str() {
+                url if url.starts_with("/token?") => respond(200, r#"{"token":"cdn"}"#, &[]),
+                "/v2/org/app/tags/list?last=a"
+                    if req.header("Authorization") == Some("Bearer cdn") =>
+                {
+                    respond(200, r#"{"name":"org/app","tags":["b"]}"#, &[])
+                }
+                _ => respond(401, "", &[("WWW-Authenticate", &challenge(base))]),
+            });
+            let next =
+                format!(r#"<{}/v2/org/app/tags/list?last=a>; rel="next""#, cdn.image.api_base);
+            let mock = MockRegistry::start(move |req, base| match req.url.as_str() {
+                url if url.starts_with("/token?") => respond(200, r#"{"token":"main"}"#, &[]),
+                "/v2/org/app/tags/list" if req.header("Authorization") == Some("Bearer main") => {
+                    respond(200, r#"{"name":"org/app","tags":["a"]}"#, &[("Link", &next)])
+                }
+                _ => respond(401, "", &[("WWW-Authenticate", &challenge(base))]),
+            });
+
+            assert_eq!(tags(&agent(), &mock.image).expect("tags"), ["a", "b"]);
+            // The main registry's token never reaches the other host.
+            assert!(cdn
+                .requests()
+                .iter()
+                .all(|r| r.header("Authorization") != Some("Bearer main")));
+        }
+
+        #[test]
+        fn rejects_downgraded_urls() {
+            let image = ImageRef::parse("ghcr.io/org/app").expect("reference");
+            check_no_downgrade("https://ghcr.io/v2/org/app/tags/list", &image).expect("https");
+            let message = error_message(check_no_downgrade("http://ghcr.io/v2/x", &image));
+            assert!(message.contains("non-HTTPS"), "{message}");
+
+            let local = ImageRef::parse("localhost:5000/app").expect("reference");
+            check_no_downgrade("http://localhost:5000/v2/x", &local).expect("loopback");
+            let message = error_message(check_no_downgrade("http://remote.example/v2/x", &local));
+            assert!(message.contains("non-HTTPS"), "{message}");
+        }
+
+        #[test]
+        fn hashes_manifest_when_head_is_rejected() {
+            let mock =
+                MockRegistry::start(|req, _| match (req.method.as_str(), req.url.as_str()) {
+                    ("HEAD", _) => respond(405, "", &[]),
+                    ("GET", "/v2/org/app/manifests/1.0.0") => respond(200, INDEX, &[]),
+                    _ => respond(404, "", &[]),
+                });
+            assert_eq!(
+                digest(&agent(), &mock.image, "1.0.0").expect("digest"),
+                "sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2"
+            );
+        }
+
+        #[test]
+        fn reports_rate_limited_head_without_get() {
+            let mock = MockRegistry::start(|_, _| respond(429, "", &[]));
+            let message = error_message(digest(&agent(), &mock.image, "1.0.0"));
+            assert!(message.contains("Unexpected HTTP status 429"), "{message}");
+            let methods: Vec<_> = mock.requests().into_iter().map(|r| r.method).collect();
+            assert_eq!(methods, ["HEAD"]);
+        }
+
+        #[test]
+        fn rejects_non_object_tag_list() {
+            let mock = MockRegistry::start(|_, _| respond(200, "[]", &[]));
+            assert!(error_message(tags(&agent(), &mock.image)).contains("not a JSON object"));
+        }
+
+        #[test]
+        fn rejects_pagination_back_to_first_page() {
+            let mock = MockRegistry::start(|req, _| match req.url.as_str() {
+                "/v2/org/app/tags/list" => respond(
+                    200,
+                    r#"{"tags":["a"]}"#,
+                    &[("Link", r#"</v2/org/app/tags/list?last=a>; rel="next""#)],
+                ),
+                _ => respond(
+                    200,
+                    r#"{"tags":["b"]}"#,
+                    &[("Link", r#"</v2/org/app/tags/list>; rel="next""#)],
+                ),
+            });
+            assert!(error_message(tags(&agent(), &mock.image)).contains("loops"));
+            assert_eq!(mock.requests().len(), 2);
+        }
+
+        #[test]
         fn rejects_looping_pagination() {
             let mock = MockRegistry::start(|_, _| {
                 respond(
@@ -932,7 +1205,7 @@ mod oci {
                     error_message(tags(&agent, &image("private/app"))),
                     "Could not get an anonymous pull token",
                 ),
-                (error_message(newest_tag(&agent, &mock.image)), "No semantic version tags"),
+                (error_message(newest_tag(&agent, &mock.image)), "No version tags"),
                 (error_message(digest(&agent, &mock.image, "9.9.9")), "Tag `9.9.9` was not found"),
                 (error_message(digest(&agent, &mock.image, "sha256:abc")), "is not a valid tag"),
             ];
@@ -944,17 +1217,28 @@ mod oci {
         #[test]
         fn registers_rhai_functions() {
             let (engine, _) = crate::run::gen_en();
-            let message =
-                engine.eval::<String>(r#"oci_tag("alpine:3")"#).expect_err("tag").to_string();
-            assert!(message.contains("already contains a tag"), "{message}");
-            let message =
-                engine.eval::<rhai::Array>(r#"oci_tags("")"#).expect_err("empty").to_string();
-            assert!(message.contains("is empty"), "{message}");
-            let message = engine
-                .eval::<String>(r#"oci_digest("a@sha256:0", "1")"#)
-                .expect_err("digest")
-                .to_string();
-            assert!(message.contains("already contains a digest"), "{message}");
+            let cases = [
+                ("let x = 1;\noci_tag(\"alpine:3\")", "oci_tag", "already contains a tag"),
+                ("let x = 1;\noci_tags(\"\")", "oci_tags", "is empty"),
+                (
+                    "let x = 1;\noci_digest(\"a@sha256:0\", \"1\")",
+                    "oci_digest",
+                    "already contains a digest",
+                ),
+            ];
+            for (script, function, expected) in cases {
+                let err = engine.eval::<rhai::Dynamic>(script).expect_err(function);
+                let rhai::EvalAltResult::ErrorRuntime(value, position) = *err else {
+                    panic!("{function}: not a runtime error");
+                };
+                assert_eq!(position.line(), Some(2), "{function}");
+                let Some(crate::error::AndaxError::RustError(name, _, source)) = value.try_cast()
+                else {
+                    panic!("{function}: not an AndaxError::RustError");
+                };
+                assert_eq!(name, function);
+                assert!(source.to_string().contains(expected), "{function}: {source}");
+            }
         }
 
         /// The tag's digest must be the multi-arch index, i.e. the hash of what a
@@ -1646,21 +1930,24 @@ pub mod ar {
 
     /// All tags of an OCI image, e.g. `oci_tags("ghcr.io/org/name")`.
     #[rhai_fn(return_raw, global)]
-    pub fn oci_tags(image: &str) -> Res<rhai::Array> {
-        let image = oci::ImageRef::parse(image)?;
-        Ok(oci::tags(&AGENT, &image)?.into_iter().map(rhai::Dynamic::from).collect())
+    pub fn oci_tags(ctx: NativeCallContext, image: &str) -> Res<rhai::Array> {
+        let image = oci::ImageRef::parse(image).ehdl(&ctx)?;
+        let tags = oci::tags(&AGENT, &image).ehdl(&ctx)?;
+        Ok(tags.into_iter().map(rhai::Dynamic::from).collect())
     }
 
-    /// Newest release tag of an OCI image that is a semantic version (optionally `v`-prefixed).
+    /// Newest release tag of an OCI image, e.g. `1.2.3`, `v0.10.0`, `17.6` or `2024.01.05`.
     #[rhai_fn(return_raw, global)]
-    pub fn oci_tag(image: &str) -> Res<String> {
-        oci::newest_tag(&AGENT, &oci::ImageRef::parse(image)?)
+    pub fn oci_tag(ctx: NativeCallContext, image: &str) -> Res<String> {
+        let image = oci::ImageRef::parse(image).ehdl(&ctx)?;
+        oci::newest_tag(&AGENT, &image).ehdl(&ctx)
     }
 
     /// `sha256:…` digest of an OCI image tag; the index digest for multi-arch images.
     #[rhai_fn(return_raw, global)]
-    pub fn oci_digest(image: &str, tag: &str) -> Res<String> {
-        oci::digest(&AGENT, &oci::ImageRef::parse(image)?, tag)
+    pub fn oci_digest(ctx: NativeCallContext, image: &str, tag: &str) -> Res<String> {
+        let image = oci::ImageRef::parse(image).ehdl(&ctx)?;
+        oci::digest(&AGENT, &image, tag).ehdl(&ctx)
     }
 
     #[rhai_fn(return_raw, global)]
