@@ -50,6 +50,16 @@ print(env("PATH"));
 
 // print(git_tags("https://github.com/FyraLabs/anda"));
 
+// OCI registries (GHCR, Docker Hub, Quay, …); bare names like "alpine" go to Docker Hub.
+// oci_tags(image) lists all tags, oci_tag(image) picks the newest semver tag (optionally
+// `v`-prefixed; latest/main/sha-…/prereleases are ignored), and oci_digest(image, tag) gives
+// the "sha256:…" digest, which for multi-arch images is the digest of the index.
+// print(oci_tags("quay.io/prometheus/node-exporter"));
+// let image = "ghcr.io/ultramarine-linux/dashboard";
+// let tag = oci_tag(image);
+// rpm.version(tag);  // strip a leading "v" if the spec's Version shouldn't have it
+// rpm.global("dashboard_digest", oci_digest(image, tag));
+
 let obj = #{
     "a": 1,
     "b": 2 ,
