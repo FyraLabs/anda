@@ -18,20 +18,17 @@ BuildRequires:  gcc
 BuildRequires:  rust-packaging >= 21
 BuildRequires:  anda-srpm-macros
 BuildRequires:  openssl-devel
-%if %{defined fedora}
-BuildRequires:  openssl-devel-engine
-%endif
 BuildRequires:  git-core
-BuildRequires:  libgit2-devel
+BuildRequires:  pkgconfig(libgit2)
 BuildRequires:  libssh2-devel
 BuildRequires:  mold
 Requires:       mock
 Requires:       rpm-build
 Requires:       createrepo_c
 Requires:       git-core
-Requires:       libgit2
 %if 0%{?fedora} >= 42
 Requires:       mock-filesystem
+Requires:       util-linux-script
 %endif
 Packager:       Terra Packaging Team <terra@fyralabs.com>
 
@@ -43,10 +40,9 @@ Andaman Build toolchain.
 %prep
 %autosetup -n %{crate}-%{version}
 %cargo_prep_online
-%{__cargo} fetch --locked
 
 %build
-%{cargo_build} --frozen
+%cargo_build
 %{cargo_license_online} > LICENSE.dependencies
 %{__cargo} run --release -p xtask -- manpage
 %{__cargo} run --release -p xtask -- completion
@@ -71,4 +67,6 @@ install -Dm644 target/assets/man_pages/* -t %{buildroot}%{_mandir}/man1
 %{_mandir}/man1/anda*.1.*
 
 %changelog
-%autochangelog
+* Sun May 3 2026 Gilver E. <roachy@fyralabs.com> - 0.5.4-2
+- Fix build on Fedora 43
+- Add shell completions subpackages
