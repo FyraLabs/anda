@@ -24,6 +24,52 @@ cargo install --path .
 ## How it works
 Andaman is simply a meta-build system that calls upon other build systems to build and distribute packages. It works by reading a project manifest in `anda.hcl` and then calling the appropriate build system to build the package.
 
+## Experimental single-process Mock builds
+
+`anda build PROJECT --mock-single-process` asks Mock to create the SRPM and
+rebuild it in the same process (`--rebuild --spec ... --sources ...`). This avoids
+Anda's separate SRPM/RPM Mock startups and keeps the same tmpfs environment
+between those phases. It still starts from a clean root unless you explicitly
+request `--mock-no-cleanup before` or `all`, and cleans afterward unless `after`
+or `all` was requested. A short separate `mock --clean` invocation handles the
+final cleanup; it does not initialize another buildroot.
+
+The flag is opt-in while it is benchmarked against the existing two-process path.
+SCM builds are not supported in this mode yet. Both source and binary artifacts
+are written to the usual output directories. `--no-network` disables build-time
+networking in both phases and takes precedence over forwarded `-A --enable-network`;
+package-manager downloads are still allowed.
+
+Cancellation first interrupts the command's process group, then escalates through
+SIGTERM/SIGKILL with bounded waits and reaps the leader before attempting cleanup.
+The combined build owns cleanup even if its awaiting future is dropped. Cleanup
+gets a 60-second attempt (plus bounded termination), without replaying build-only
+arguments. If processes cannot be stopped, results are retained and unsafe root
+cleanup is skipped with an error. This does not protect against killing Anda
+itself or helpers that escape its process group.
+
+The full source/binary result set is validated and staged before publication;
+later publication errors roll back earlier replacements. Inode-preserving staging
+is used only when ownership, group, and SELinux label match destination-copy
+semantics. Publication is not a crash-atomic transaction across multiple files,
+and output directories must not be concurrently modified by another publisher.
+
+For a fair comparison, use the same package, Mock configs, and warmed caches with
+and without the flag. This does not replace persistent CI caches or prebuilt
+buildroot images, and no speedup is assumed until actual builds are measured.
+
+## RPM output without a local repository
+
+`anda build PROJECT --no-repodata` skips the `createrepo_c` process and does not
+implicitly add an existing output repository to Mock's dependency sources. Source
+and binary RPMs are still produced normally. Use it for independent builds whose
+artifacts are uploaded elsewhere; do not use it when subsequent packages rely on
+this build's local repository. Explicit `--extra-repos` remain honored.
+
+Existing repodata is not deleted, but becomes stale after building with this flag.
+Before serving or explicitly reusing that directory, regenerate it with
+`createrepo_c --update OUTPUT/rpm`. Normal builds retain metadata generation.
+
 ## Features
 - Building RPMs
 - Building Docker/Podman/OCI images
