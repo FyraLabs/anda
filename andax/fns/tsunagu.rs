@@ -1341,17 +1341,49 @@ pub mod ar {
 
     #[rhai_fn(return_raw, global)]
     pub fn gh_tags(ctx: NativeCallContext, repo: &str) -> Res<rhai::Array> {
-        let req = (AGENT.get(&format!("https://api.github.com/repos/{repo}/tags")))
-            .header("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
-            .header("User-Agent", USER_AGENT);
-        let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
-        trace!("Got json from {repo}:\n{v}");
-        let tags = v.as_array().ok_or_else(|| E::from("gh_tags received not array"))?;
-        let mut names: Vec<String> =
-            tags.iter().filter_map(|tag| tag["name"].as_str().map(ToOwned::to_owned)).collect();
+        let mut all_names: Vec<String> = Vec::new();
 
-        sort_git_tags(&mut names);
-        Ok(names.into_iter().map(rhai::Dynamic::from).collect())
+        let mut req_url_opt: Option<String> =
+            Some(format!("https://api.github.com/repos/{repo}/tags"));
+
+        while let Some(req_url) = req_url_opt {
+            let req = (AGENT.get(&req_url))
+                .header("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
+                .header("User-Agent", USER_AGENT);
+            let resp = req.call().ehdl(&ctx)?;
+            req_url_opt = None;
+
+            if let Some(link_header) = resp.headers().get("link") {
+                // format:
+                // <URL>; param="value"; other_param="other_value", ...
+                let link = link_header.to_str().unwrap_or("");
+                for part in link.split(',') {
+                    let Some((url, params)) = part.split_once(">;") else { continue };
+                    let Some(url) = url.trim().strip_prefix('<') else { continue };
+
+                    if params
+                        .split(',')
+                        .find_map(|param| param.trim().strip_prefix("rel=\""))
+                        .and_then(|rel| rel.strip_suffix('"'))
+                        .is_some_and(|rel| rel == "next")
+                    {
+                        req_url_opt = Some(url.to_owned());
+                        break;
+                    }
+                }
+            }
+
+            let v: Value = resp.into_body().read_json().ehdl(&ctx)?;
+            trace!("Got json from {repo}:\n{v}");
+            let tags = v.as_array().ok_or_else(|| E::from("gh_tags received not array"))?;
+            let names: Vec<String> =
+                tags.iter().filter_map(|tag| tag["name"].as_str().map(ToOwned::to_owned)).collect();
+
+            all_names.extend(names);
+        }
+
+        sort_git_tags(&mut all_names);
+        Ok(all_names.into_iter().map(rhai::Dynamic::from).collect())
     }
 
     #[rhai_fn(return_raw, global)]
