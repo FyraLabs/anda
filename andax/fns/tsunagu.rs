@@ -1388,7 +1388,7 @@ pub mod ar {
 
     #[rhai_fn(return_raw, global)]
     pub fn gh_tag(ctx: NativeCallContext, repo: &str) -> Res<String> {
-        let req = (AGENT.get(&format!("https://api.github.com/repos/{repo}/tags")))
+        let req = (AGENT.get(&format!("https://api.github.com/repos/{repo}/tags?per_page=1")))
             .header("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
             .header("User-Agent", USER_AGENT);
         let v: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
