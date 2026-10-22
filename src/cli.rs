@@ -187,6 +187,28 @@ pub enum Command {
         #[clap(flatten)]
         oci_opts: OciOpts,
     },
+    /// Build all projects with the selected build group label, one at a time
+    #[clap(name = "buildgroup")]
+    BuildGroup {
+        /// Build group name (the `group` project label)
+        group: String,
+
+        /// Builds a specific artifact format
+        #[clap(short, long, value_enum, default_value = "all")]
+        package: PackageType,
+
+        /// Options for RPM builds
+        #[clap(flatten)]
+        rpm_opts: RpmOpts,
+
+        /// Options for Flatpak builds
+        #[clap(flatten)]
+        flatpak_opts: FlatpakOpts,
+
+        /// Options for OCI builds
+        #[clap(flatten)]
+        oci_opts: OciOpts,
+    },
     /// Cleans up the build directory
     Clean,
 
@@ -209,8 +231,16 @@ pub enum Command {
         #[clap(value_enum)]
         shell: Shell,
     },
-    /// Get CI output for Github Actions
-    CI,
+    /// Get CI build matrices for GitHub Actions
+    CI {
+        /// Override the architectures emitted for each package (repeatable)
+        #[clap(long = "arch", value_name = "ARCH")]
+        arches: Vec<String>,
+
+        /// Emit only one matrix entry per package, useful with a custom builder
+        #[clap(long, action)]
+        unique_packages: bool,
+    },
 
     /// Update all projects
     Update {

@@ -69,6 +69,14 @@ pub struct Project {
     pub arches: Option<Vec<String>>,
 }
 
+impl Project {
+    /// Return the build group for this project, if its `group` label is set.
+    #[must_use]
+    pub fn build_group(&self) -> Option<&str> {
+        self.labels.get("group").map(String::as_str).filter(|group| !group.is_empty())
+    }
+}
+
 /// Deserialize the value of the BTreeMap into a String even if they are some other types.
 ///
 /// # Errors
@@ -428,6 +436,7 @@ mod test_parser {
             }
             labels {
                 nightly = 1
+                group = "nvidia"
             }
         }
         "#;
@@ -441,6 +450,7 @@ mod test_parser {
         println!("{config:#?}");
 
         assert_eq!(config.project["anda"].labels.get("nightly"), Some(&"1".to_owned()));
+        assert_eq!(config.project["anda"].build_group(), Some("nvidia"));
     }
 
     #[test]
