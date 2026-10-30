@@ -23,7 +23,9 @@ pub async fn build_rpm(
     println!("Building RPMs in {}", repo_path.display());
     let repodata_path = repo_path.join("repodata");
 
-    if repodata_path.exists() {
+    // Opting out also excludes existing metadata, which would otherwise become
+    // stale after this build and silently feed later dependency resolution.
+    if !rpmb_opts.no_repodata && repodata_path.exists() {
         let repo_path = repo_path.canonicalize()?;
 
         let repo_path = format!("file://{}", repo_path.display());
@@ -72,7 +74,9 @@ pub async fn build_rpm(
 
     let builder = builder.build(spec, opts).await?;
 
-    cmd!(? "createrepo_c" "--quiet" "--update" {{repo_path.display()}})?;
+    if !rpmb_opts.no_repodata {
+        cmd!(? "createrepo_c" "--quiet" "--update" {{repo_path.display()}})?;
+    }
 
     Ok(builder)
 }
@@ -325,6 +329,8 @@ pub async fn build_project(
             }
             // TODO: Implement global settings
         }
+
+        rpm_opts.mock_single_process = rbopts.mock_single_process;
 
         if let Some(mock_no_cleanup) = &rbopts.mock_no_cleanup {
             match mock_no_cleanup {
