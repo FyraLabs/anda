@@ -61,11 +61,23 @@ pub async fn build_rpm(
 
         // limit to 16 chars
 
-        opts.def_macro("autogitversion", autogitversion);
+        if opts.macros.get("autogitversion").is_some() {
+            trace!("Not redefining autogitversion")
+        } else {
+            opts.def_macro("autogitversion", autogitversion)
+        };
 
-        opts.def_macro("autogitcommit", &commit_id.unwrap_or_else(|| "unknown".into()));
+        if opts.macros.get("autogitcommit").is_some() {
+            trace!("Not redefining autogitcommit")
+        } else {
+            opts.def_macro("autogitcommit", &commit_id.unwrap_or_else(|| "unknown".into()))
+        };
 
-        opts.def_macro("autogitdate", &date);
+        if opts.macros.get("autogitdate").is_some() {
+            trace!("Not redefining autogitdate")
+        } else {
+            opts.def_macro("autogitdate", &date)
+        };
     };
 
     trace!("Building RPMs with {opts:?}");
