@@ -1,10 +1,15 @@
 //! Utility functions and types
 use anda_config::{Docker, DockerImage, Manifest, Project, RpmBuild};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use clap_verbosity_flag::log::LevelFilter;
 use color_eyre::Result;
 
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::Path, sync::LazyLock};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    path::{Path, PathBuf},
+    sync::LazyLock,
+};
 use tokio::process::Command;
 use tracing::debug;
 
@@ -19,34 +24,152 @@ pub struct BuildEntry {
     pub labels: BTreeMap<String, String>,
 }
 
-pub fn fetch_build_entries(config: Manifest) -> Vec<BuildEntry> {
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BuildUnit {
+    pub name: String,
+    pub packages: Vec<BuildEntry>,
+}
+
+pub fn configure_build_entries(
+    entries: Vec<BuildEntry>,
+    arches: &[String],
+    unique_packages: bool,
+) -> Vec<BuildEntry> {
+    if arches.is_empty() && !unique_packages {
+        return entries;
+    }
+
+    let mut by_package = BTreeMap::new();
+    for entry in entries {
+        by_package.entry(entry.pkg.clone()).or_insert(entry);
+    }
+
+    if arches.is_empty() {
+        return by_package.into_values().collect();
+    }
+
+    by_package
+        .into_values()
+        .flat_map(|entry| {
+            arches.iter().map(move |arch| BuildEntry {
+                pkg: entry.pkg.clone(),
+                arch: arch.clone(),
+                labels: entry.labels.clone(),
+            })
+        })
+        .collect()
+}
+
+pub fn group_build_entries(entries: Vec<BuildEntry>) -> Vec<BuildUnit> {
+    let mut units: BTreeMap<String, Vec<BuildEntry>> = BTreeMap::new();
+    for entry in entries {
+        let (kind, value) = entry
+            .labels
+            .get("group")
+            .filter(|group| !group.is_empty())
+            .map_or(("package", entry.pkg.as_str()), |group| ("group", group.as_str()));
+        let name = format!("{kind}-{}", URL_SAFE_NO_PAD.encode(value.as_bytes()));
+        units.entry(name).or_default().push(entry);
+    }
+
+    units.into_iter().map(|(name, packages)| BuildUnit { name, packages }).collect()
+}
+
+pub fn fetch_build_entries(config: &Manifest, config_path: &Path) -> Vec<BuildEntry> {
     let changed_files = get_changed_files(Path::new(".")).unwrap_or_default();
-    let changed_dirs: std::collections::HashSet<_> = changed_files
-        .iter()
-        .map(|f| f.trim_end_matches(|x| x != '/').trim_end_matches('/'))
-        .collect();
+    build_entries_for_changes(config, &changed_files, config_path)
+}
+
+fn build_entries_for_changes(
+    config: &Manifest,
+    changed_files: &[String],
+    config_path: &Path,
+) -> Vec<BuildEntry> {
     let suffix = config.config.strip_suffix.clone().unwrap_or_default();
+    // A change to the root manifest can change project membership, groups, or architecture
+    // settings globally. Nested manifests are mapped to their own packages below.
+    let root_config_path = config_path
+        .strip_prefix(std::env::current_dir().unwrap_or_default())
+        .unwrap_or(config_path)
+        .components()
+        .collect::<PathBuf>()
+        .to_string_lossy()
+        .replace('\\', "/");
+    let manifest_changed = changed_files.iter().any(|file| file == &root_config_path);
+
+    // Manifest loading recursively merges nested anda.hcl files into this project map. Index
+    // package paths and group memberships once, avoiding a full project scan for every changed
+    // package. Ordered sets keep the emitted matrix deterministic while deduplicating group members.
+    let mut projects_by_dir: HashMap<String, Vec<String>> =
+        HashMap::with_capacity(config.project.len());
+    let mut projects_by_group: HashMap<String, Vec<String>> =
+        HashMap::with_capacity(config.project.len());
+    let mut group_by_project: HashMap<String, String> =
+        HashMap::with_capacity(config.project.len());
+
+    for (name, project) in &config.project {
+        let dir = name.trim_end_matches(&suffix).to_owned();
+        projects_by_dir.entry(dir).or_default().push(name.clone());
+
+        if let Some(group) = project.build_group() {
+            let group = group.to_owned();
+            projects_by_group.entry(group.clone()).or_default().push(name.clone());
+            group_by_project.insert(name.clone(), group);
+        }
+    }
+
+    let mut changed_projects = BTreeSet::new();
+    if manifest_changed {
+        changed_projects.extend(config.project.keys().cloned());
+    } else {
+        for file in changed_files {
+            let mut dir = String::new();
+            for component in file.split('/') {
+                if !dir.is_empty() {
+                    dir.push('/');
+                }
+                dir.push_str(component);
+                if let Some(projects) = projects_by_dir.get(&dir) {
+                    changed_projects.extend(projects.iter().cloned());
+                }
+            }
+        }
+    }
+
+    // A change to any package in a build group invalidates all packages in that group. Keep
+    // emitting one matrix entry per package/architecture; the CI workflow coordinates publishing.
+    let mut included_projects = changed_projects.clone();
+    if !manifest_changed {
+        let changed_groups: BTreeSet<String> = changed_projects
+            .iter()
+            .filter_map(|name| group_by_project.get(name).cloned())
+            .collect();
+        for group in changed_groups {
+            if let Some(members) = projects_by_group.get(&group) {
+                included_projects.extend(members.iter().cloned());
+            }
+        }
+    }
 
     let mut entries = Vec::new();
-    for (mut name, project) in config.project {
-        let dir = name.trim_end_matches(&suffix);
-        if !changed_dirs.contains(dir) {
+    for name in included_projects {
+        let Some(project) = config.project.get(&name) else {
+            continue;
+        };
+
+        if project.rpm.as_ref().is_some_and(|rpm| rpm.enable_scm.unwrap_or(false)) {
+            entries.extend(DEFAULT_ARCHES.iter().map(|arch| BuildEntry {
+                pkg: name.clone(),
+                arch: arch.clone(),
+                labels: project.labels.clone(),
+            }));
             continue;
         }
 
-        if let Some(rpm) = project.rpm {
-            if rpm.enable_scm.unwrap_or(false) {
-                entries.extend(DEFAULT_ARCHES.iter().map(|arch| BuildEntry {
-                    pkg: std::mem::take(&mut name),
-                    arch: arch.clone(),
-                    labels: project.labels.clone(),
-                }));
-                continue;
-            }
-        }
         entries.extend(
             project
                 .arches
+                .clone()
                 .unwrap_or_else(|| DEFAULT_ARCHES.to_vec())
                 .into_iter()
                 .map(|arch| BuildEntry { pkg: name.clone(), arch, labels: project.labels.clone() }),
@@ -280,16 +403,180 @@ pub fn cmd<const N: usize>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
-    fn test_head() {
-        println!("{:?}", get_changed_files(Path::new(".")));
+    fn changed_package_expands_to_every_package_in_its_group() {
+        let grouped = |label: &str, group: &str, arches: &[&str]| Project {
+            labels: [(label.to_owned(), group.to_owned())].into(),
+            arches: Some(arches.iter().map(|arch| (*arch).to_owned()).collect()),
+            ..Default::default()
+        };
+        let config = Manifest {
+            project: [
+                ("nvidia/driver".to_owned(), grouped("group", "nvidia", &["x86_64"])),
+                ("nvidia/utils".to_owned(), grouped("subrepo", "nvidia", &["aarch64"])),
+                ("intel/driver".to_owned(), grouped("group", "intel", &["x86_64"])),
+            ]
+            .into(),
+            config: anda_config::Config::default(),
+        };
+
+        let entries = build_entries_for_changes(
+            &config,
+            &["nvidia/driver/anda.hcl".to_owned(), "nvidia/utils/utils.spec".to_owned()],
+            Path::new("anda.hcl"),
+        );
+
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].pkg, "nvidia/driver");
+        assert_eq!(entries[0].arch, "x86_64");
+        assert_eq!(entries[1].pkg, "nvidia/utils");
+        assert_eq!(entries[1].arch, "aarch64");
     }
-    #[test]
-    fn test_entries() {
-        let config = anda_config::load_from_file(&PathBuf::from("anda.hcl"));
 
-        fetch_build_entries(config.unwrap());
+    #[test]
+    fn packages_without_group_label_remain_standalone() {
+        let standalone = |subrepo: &str| Project {
+            labels: [("subrepo".to_owned(), subrepo.to_owned())].into(),
+            arches: Some(vec!["x86_64".to_owned()]),
+            ..Default::default()
+        };
+        let config = Manifest {
+            project: [
+                ("pkg-a".to_owned(), standalone("nvidia")),
+                ("pkg-b".to_owned(), standalone("nvidia")),
+            ]
+            .into(),
+            config: anda_config::Config::default(),
+        };
+
+        let entries = build_entries_for_changes(
+            &config,
+            &["pkg-a/pkg-a.spec".to_owned()],
+            Path::new("anda.hcl"),
+        );
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].pkg, "pkg-a");
+    }
+
+    #[test]
+    fn only_group_label_defines_build_group() {
+        let group_only = Project {
+            labels: [("group".to_owned(), "explicit".to_owned())].into(),
+            ..Default::default()
+        };
+        let group_and_subrepo = Project {
+            labels: [
+                ("group".to_owned(), "explicit".to_owned()),
+                ("subrepo".to_owned(), "fallback".to_owned()),
+            ]
+            .into(),
+            ..Default::default()
+        };
+        let subrepo_only = Project {
+            labels: [("subrepo".to_owned(), "fallback".to_owned())].into(),
+            ..Default::default()
+        };
+        let empty_group =
+            Project { labels: [("group".to_owned(), String::new())].into(), ..Default::default() };
+
+        assert_eq!(group_only.build_group(), Some("explicit"));
+        assert_eq!(group_and_subrepo.build_group(), Some("explicit"));
+        assert_eq!(subrepo_only.build_group(), None);
+        assert_eq!(empty_group.build_group(), None);
+    }
+
+    #[test]
+    fn manifest_change_includes_all_projects() {
+        let config = Manifest {
+            project: [
+                ("pkg-a".to_owned(), Project::default()),
+                ("pkg-b".to_owned(), Project::default()),
+            ]
+            .into(),
+            config: anda_config::Config::default(),
+        };
+
+        let entries =
+            build_entries_for_changes(&config, &["anda.hcl".to_owned()], Path::new("anda.hcl"));
+
+        assert_eq!(entries.len(), 4);
+        assert_eq!(
+            entries.iter().map(|entry| entry.pkg.as_str()).collect::<Vec<_>>(),
+            ["pkg-a", "pkg-a", "pkg-b", "pkg-b"]
+        );
+    }
+
+    #[test]
+    fn build_units_group_label_members_but_keep_standalone_arches_together() {
+        let entry = |pkg: &str, arch: &str, group: Option<&str>| BuildEntry {
+            pkg: pkg.to_owned(),
+            arch: arch.to_owned(),
+            labels: group.map_or_else(BTreeMap::new, |group| {
+                [("group".to_owned(), group.to_owned())].into()
+            }),
+        };
+        let units = group_build_entries(vec![
+            entry("nvidia/a", "x86_64", Some("nvidia")),
+            entry("nvidia/b", "aarch64", Some("nvidia")),
+            entry("discord", "x86_64", None),
+            entry("discord", "aarch64", None),
+        ]);
+
+        assert_eq!(units.len(), 2);
+        assert_eq!(units[0].name, format!("group-{}", URL_SAFE_NO_PAD.encode("nvidia")));
+        assert_eq!(units[0].packages.len(), 2);
+        assert_eq!(units[1].name, format!("package-{}", URL_SAFE_NO_PAD.encode("discord")));
+        assert_eq!(units[1].packages.len(), 2);
+    }
+
+    #[test]
+    fn ci_architecture_overrides_and_unique_package_option() {
+        let entries = vec![
+            BuildEntry {
+                pkg: "pkg".to_owned(),
+                arch: "x86_64".to_owned(),
+                labels: [("group".to_owned(), "g".to_owned())].into(),
+            },
+            BuildEntry {
+                pkg: "pkg".to_owned(),
+                arch: "aarch64".to_owned(),
+                labels: [("group".to_owned(), "g".to_owned())].into(),
+            },
+        ];
+
+        let arches = ["x86_64".to_owned(), "aarch64".to_owned()];
+        let overridden = configure_build_entries(entries.clone(), &arches, false);
+        assert_eq!(
+            overridden.iter().map(|entry| entry.arch.as_str()).collect::<Vec<_>>(),
+            ["x86_64", "aarch64"]
+        );
+
+        let unique = configure_build_entries(entries, &[], true);
+        assert_eq!(unique.len(), 1);
+        assert_eq!(unique[0].arch, "x86_64");
+    }
+
+    #[test]
+    fn scm_entries_preserve_package_name() {
+        let project = Project {
+            labels: [("group".to_owned(), "scm".to_owned())].into(),
+            rpm: Some(RpmBuild { enable_scm: Some(true), ..Default::default() }),
+            ..Default::default()
+        };
+        let config = Manifest {
+            project: [("pkg".to_owned(), project)].into(),
+            config: anda_config::Config::default(),
+        };
+
+        let entries = build_entries_for_changes(
+            &config,
+            &["pkg/SPECS/pkg.spec".to_owned()],
+            Path::new("anda.hcl"),
+        );
+
+        assert_eq!(entries.len(), DEFAULT_ARCHES.len());
+        assert!(entries.iter().all(|entry| entry.pkg == "pkg"));
     }
 }
