@@ -37,6 +37,8 @@ tokio = { version = "1.52.3", features = [
     "io-util",
     "macros",
     "signal",
+    "sync",
+    "time",
     "rt-multi-thread",
 ] }
 async-trait = "0.1.89"

@@ -42,7 +42,7 @@ impl Manifest {
             || {
                 self.project.iter().find_map(|(_k, v)| {
                     let alias = v.alias.as_ref()?;
-                    alias.contains(&key.to_owned()).then_some(v)
+                    alias.iter().any(|alias| alias == key).then_some(v)
                 })
             },
             Some,
@@ -278,14 +278,19 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
         trace!("Found {entry:?}");
         let entry = entry.map_err(|e| ProjectError::InvalidManifest(e.to_string()))?;
 
-        // assume entry.path() is canonicalised
-        if entry.path() == path {
-            continue;
-        }
-
         if entry.file_type().is_some_and(|kind| kind.is_file())
             && entry.path().file_name().is_some_and(|name| name == "anda.hcl")
         {
+            // Walk paths may be relative, unlike the canonical root path. Only
+            // canonicalize manifest candidates, and never parse the root twice.
+            if entry
+                .path()
+                .canonicalize()
+                .map_err(|e| ProjectError::InvalidManifest(e.to_string()))?
+                == path
+            {
+                continue;
+            }
             debug!("Loading: {entry:?}");
             let readfile = fs::read_to_string(entry.path())
                 .map_err(|e| ProjectError::InvalidManifest(e.to_string()))?;
@@ -309,14 +314,11 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
 
 #[must_use]
 pub fn prefix_config(mut config: Manifest, prefix: &str) -> Manifest {
-    let mut new_config = config.clone();
+    let projects = std::mem::take(&mut config.project);
 
-    for (project_name, project) in &mut config.project {
+    for (project_name, mut new_project) in projects {
         // set project name to prefix
         let new_project_name = format!("{prefix}/{project_name}");
-        // modify project data
-        let mut new_project = std::mem::take(project);
-
         macro_rules! default {
             ($o:expr, $attr:ident, $d:expr) => {
                 if let Some($attr) = &mut $o.$attr {
@@ -348,11 +350,10 @@ pub fn prefix_config(mut config: Manifest, prefix: &str) -> Manifest {
             }
         }
 
-        new_config.project.remove(project_name);
-        new_config.project.insert(new_project_name, new_project);
+        config.project.insert(new_project_name, new_project);
     }
-    generate_alias(&mut new_config);
-    new_config
+    generate_alias(&mut config);
+    config
 }
 
 pub fn generate_alias(config: &mut Manifest) {
@@ -392,7 +393,7 @@ pub fn generate_alias(config: &mut Manifest) {
 #[instrument]
 pub fn load_from_string(config: &str) -> Result<Manifest, ProjectError> {
     trace!(config, "Dump config");
-    let mut config: Manifest = hcl::eval::from_str(config, &crate::context::hcl_context())?;
+    let mut config: Manifest = hcl::eval::from_str(config, crate::context::shared_hcl_context())?;
 
     generate_alias(&mut config);
 
@@ -415,15 +416,12 @@ mod test_parser {
 
     #[test]
     fn test_parse() {
-        // set env var
-        std::env::set_var("RUST_LOG", "trace");
-        env_logger::init();
         let config = r#"
         hello = "world"
         project "anda" {
             pre_script {
                 commands = [
-                    "echo '${env.RUST_LOG}'",
+                    "echo 'parser test'",
                 ]
             }
             labels {
@@ -441,6 +439,66 @@ mod test_parser {
         println!("{config:#?}");
 
         assert_eq!(config.project["anda"].labels.get("nightly"), Some(&"1".to_owned()));
+    }
+
+    #[test]
+    fn prefix_moves_projects_without_losing_configuration() {
+        let config = load_from_string(
+            r#"
+            config { strip_prefix = "anda/" }
+            project "pkg" {
+                rpm {
+                    spec = "example.spec"
+                    sources = "sources"
+                }
+                labels { example = 1 }
+            }
+        "#,
+        )
+        .unwrap();
+        let prefixed = prefix_config(config, "anda/example");
+        assert_eq!(prefixed.project.len(), 1);
+        assert_eq!(prefixed.config.strip_prefix.as_deref(), Some("anda/"));
+        let project = &prefixed.project["anda/example/pkg"];
+        assert_eq!(project.labels.get("example").map(String::as_str), Some("1"));
+        let rpm = project.rpm.as_ref().unwrap();
+        assert_eq!(rpm.spec, PathBuf::from("anda/example/example.spec"));
+        assert_eq!(rpm.sources, Some(PathBuf::from("anda/example/sources")));
+    }
+
+    #[test]
+    fn root_manifest_is_not_loaded_again_as_a_nested_project() {
+        let directory = std::env::temp_dir().join(format!(
+            "anda-root-manifest-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("anda.hcl");
+        fs::write(&path, "project root {}\n").unwrap();
+        let loaded = load_from_file(&path).unwrap();
+        fs::remove_dir_all(directory).unwrap();
+        assert_eq!(loaded.project.len(), 1);
+        assert!(loaded.project.contains_key("root"));
+    }
+
+    #[test]
+    fn relative_root_manifest_is_not_loaded_twice() {
+        // Create under the existing cwd, then pass a relative path. Never
+        // mutate process-global cwd while the test suite runs concurrently.
+        let directory = PathBuf::from(format!(
+            ".anda-relative-root-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("anda.hcl");
+        fs::write(&path, "project root {}\n").unwrap();
+        let loaded = load_from_file(&path);
+        fs::remove_dir_all(directory).unwrap();
+        let loaded = loaded.unwrap();
+        assert_eq!(loaded.project.len(), 1);
+        assert!(loaded.project.contains_key("root"));
     }
 
     #[test]

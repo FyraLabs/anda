@@ -16,6 +16,188 @@ use std::{collections::BTreeMap, str::FromStr};
 use tokio::process::Command;
 use tracing::{debug, info};
 
+/// Read the label that a destination-copy would preserve. Unknown metadata
+/// must not silently enable the inode-preserving fast path.
+fn file_label(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
+    use std::os::unix::ffi::OsStrExt;
+    let path = std::ffi::CString::new(path.as_os_str().as_bytes())?;
+    let mut label = vec![0u8; 4096];
+    // SAFETY: valid NUL-terminated path/name and a writable buffer of this size.
+    let size = unsafe {
+        nix::libc::getxattr(
+            path.as_ptr(),
+            c"security.selinux".as_ptr(),
+            label.as_mut_ptr().cast(),
+            label.len(),
+        )
+    };
+    if size >= 0 {
+        label.truncate(usize::try_from(size).map_err(std::io::Error::other)?);
+        Ok(Some(label))
+    } else {
+        let error = std::io::Error::last_os_error();
+        if matches!(error.raw_os_error(), Some(nix::libc::ENODATA | nix::libc::ENOTSUP)) {
+            Ok(None)
+        } else {
+            Err(error)
+        }
+    }
+}
+
+fn stage_artifact(source: &Path, destination: &Path) -> Result<tempfile::NamedTempFile> {
+    use std::os::{fd::AsRawFd, unix::fs::MetadataExt};
+    let parent = destination.parent().ok_or_else(|| eyre!("Invalid artifact destination"))?;
+    let staged = tempfile::NamedTempFile::new_in(parent)?;
+    let old = match std::fs::symlink_metadata(destination) {
+        Ok(metadata) if metadata.file_type().is_file() => Some(metadata),
+        Ok(_) => {
+            return Err(eyre!(
+                "Artifact destination is not a regular file: {}",
+                destination.display()
+            ))
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error.into()),
+    };
+    let expected = old
+        .as_ref()
+        .map_or_else(|| staged.as_file().metadata(), |metadata| Ok(metadata.clone()))?;
+    let expected_label = file_label(if old.is_some() { destination } else { staged.path() })?;
+    let source_metadata = std::fs::metadata(source)?;
+    if !source_metadata.is_file() {
+        return Err(eyre!("Artifact source is not a regular file"));
+    }
+    // Hard-link staging leaves the original in place until the whole set is
+    // published. This retains the no-byte-copy benefit and makes rollback safe.
+    if source_metadata.uid() == expected.uid()
+        && source_metadata.gid() == expected.gid()
+        && file_label(source)? == expected_label
+    {
+        let link = tempfile::NamedTempFile::new_in(parent)?;
+        std::fs::remove_file(link.path())?;
+        match std::fs::hard_link(source, link.path()) {
+            Ok(()) => return Ok(link),
+            Err(error)
+                if matches!(
+                    error.raw_os_error(),
+                    Some(nix::libc::EXDEV | nix::libc::EPERM | nix::libc::EOPNOTSUPP)
+                ) => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    std::fs::copy(source, staged.path())?;
+    let metadata = staged.as_file().metadata()?;
+    if metadata.uid() != expected.uid() || metadata.gid() != expected.gid() {
+        // SAFETY: owned open descriptor and UID/GID from destination metadata.
+        if unsafe {
+            nix::libc::fchown(staged.as_file().as_raw_fd(), expected.uid(), expected.gid())
+        } != 0
+        {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        // chown can clear set-id bits; restore std::fs::copy's permissions.
+        std::fs::set_permissions(staged.path(), source_metadata.permissions())?;
+    }
+    if file_label(staged.path())? != expected_label {
+        if let Some(label) = expected_label {
+            // SAFETY: owned descriptor, valid attribute name and buffer/size.
+            if unsafe {
+                nix::libc::fsetxattr(
+                    staged.as_file().as_raw_fd(),
+                    c"security.selinux".as_ptr(),
+                    label.as_ptr().cast(),
+                    label.len(),
+                    0,
+                )
+            } != 0
+            {
+                return Err(std::io::Error::last_os_error().into());
+            }
+        } else {
+            // SAFETY: owned descriptor and valid attribute name.
+            if unsafe {
+                nix::libc::fremovexattr(staged.as_file().as_raw_fd(), c"security.selinux".as_ptr())
+            } != 0
+            {
+                return Err(std::io::Error::last_os_error().into());
+            }
+        }
+    }
+    Ok(staged)
+}
+
+fn publish_artifacts_with<F>(artifacts: &[(PathBuf, PathBuf)], mut publish: F) -> Result<()>
+where
+    F: FnMut(&Path, &Path) -> std::io::Result<()>,
+{
+    // Prepare the full set before changing any public output. Backups are hard
+    // links, so all old destination metadata and bytes survive a later failure.
+    let mut prepared = Vec::with_capacity(artifacts.len());
+    for (source, destination) in artifacts {
+        let staged = stage_artifact(source, destination)?;
+        let backup = if destination.exists() {
+            let parent =
+                destination.parent().ok_or_else(|| eyre!("Invalid artifact destination"))?;
+            let backup = tempfile::NamedTempFile::new_in(parent)?;
+            std::fs::remove_file(backup.path())?;
+            std::fs::hard_link(destination, backup.path())?;
+            Some(backup)
+        } else {
+            None
+        };
+        prepared.push((staged, backup));
+    }
+    for (index, ((_, destination), (staged, _))) in artifacts.iter().zip(&prepared).enumerate() {
+        if let Err(error) = publish(staged.path(), destination) {
+            let mut rollback_errors = Vec::new();
+            for ((_, destination), (_, backup)) in artifacts.iter().zip(&prepared).take(index).rev()
+            {
+                let rollback = backup.as_ref().map_or_else(
+                    || std::fs::remove_file(destination),
+                    |backup| std::fs::rename(backup.path(), destination),
+                );
+                if let Err(error) = rollback {
+                    rollback_errors.push(format!("{}: {error}", destination.display()));
+                }
+            }
+            if !rollback_errors.is_empty() {
+                // Keep backups for manual recovery rather than unlinking them.
+                retain_backups(prepared.into_iter().filter_map(|(_, backup)| backup));
+                return Err(eyre!(
+                    "{error}; artifact rollback failed: {}",
+                    rollback_errors.join(", ")
+                ));
+            }
+            return Err(error.into());
+        }
+    }
+    for (source, _) in artifacts {
+        // Publication already succeeded; a leftover temporary source must not
+        // turn success into failure after overwriting the user's output.
+        if let Err(error) = std::fs::remove_file(source) {
+            tracing::warn!(%error, path = %source.display(), "Cannot remove published artifact source");
+        }
+    }
+    Ok(())
+}
+
+fn retain_backups(backups: impl Iterator<Item = tempfile::NamedTempFile>) {
+    for backup in backups {
+        match backup.keep() {
+            Ok((_, path)) => {
+                tracing::error!(path = %path.display(), "Artifact backup retained for recovery");
+            }
+            Err(error) => tracing::error!(%error, "Cannot retain artifact backup"),
+        }
+    }
+}
+
+fn move_artifact(source: &Path, destination: &Path) -> Result<()> {
+    publish_artifacts_with(&[(source.to_path_buf(), destination.to_path_buf())], |from, to| {
+        std::fs::rename(from, to)
+    })
+}
+
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Default)]
 pub struct RPMOptions {
@@ -49,6 +231,8 @@ pub struct RPMOptions {
     pub plugin_opts: Vec<String>,
     /// Extra Arguments to the respective builder
     pub args: Vec<String>,
+    /// Build the SRPM and RPMs in one Mock process (experimental)
+    pub mock_single_process: bool,
     /// Cleanup Options (mock)
     pub no_cleanup_before: bool,
     pub no_cleanup_after: bool,
@@ -162,7 +346,11 @@ impl RPMBuilder {
             mock.enable_no_cleanup_after(options.no_cleanup_after);
             mock.enable_no_network(options.no_network);
 
-            mock.build(spec).await
+            if options.mock_single_process {
+                mock.build_single_process(spec).await
+            } else {
+                mock.build(spec).await
+            }
         } else {
             let mut rpmbuild = RPMBuildBackend::new(
                 take(&mut options.sources),
@@ -400,7 +588,16 @@ impl MockBackend {
             cmd.arg("--scm-option").arg(scm);
         });
 
-        cmd.args(&self.args);
+        self.plugin_opts.iter().for_each(|option| {
+            cmd.arg("--plugin-option").arg(option);
+        });
+
+        // Mock applies --enable-network after config overrides, irrespective
+        // of their order. --no-network takes precedence over forwarded flags.
+        cmd.args(self.args.iter().filter(|arg| {
+            !self.no_network
+                || !(arg.as_str() == "--enable-network" || arg.starts_with("--enable-network="))
+        }));
 
         if self.no_cleanup_before {
             cmd.arg("--no-clean");
@@ -410,11 +607,219 @@ impl MockBackend {
             cmd.arg("--no-cleanup-after");
         }
 
-        if !self.no_network {
+        if self.no_network {
+            cmd.arg("--config-opts=rpmbuild_networking=False");
+        } else {
             cmd.arg("--enable-network");
         }
 
         cmd
+    }
+
+    fn single_process_command(&self, spec: &Path, resultdir: &Path) -> Command {
+        let mut cmd = self.mock();
+        // Mock's combined mode internally runs buildsrpm, then rebuild without
+        // cleaning in between. Prevent buildsrpm's success cleanup from deleting
+        // that environment. Explicit --no-clean/--no-cleanup-after are preserved.
+        cmd.arg("--no-cleanup-after")
+            .arg("--plugin-option=tmpfs:keep_mounted=True")
+            .arg("--rebuild")
+            .arg("--spec")
+            .arg(spec)
+            .arg("--sources")
+            .arg(&self.sources)
+            .arg("--resultdir")
+            .arg(resultdir);
+        cmd
+    }
+
+    fn cleanup_command(&self) -> Command {
+        let mut cmd = Command::new("mock");
+        if let Some(config) = &self.mock_config {
+            cmd.arg("-r").arg(config);
+        }
+        if let Some(target) = &self.target {
+            cmd.arg("--target").arg(target);
+        }
+        // Config overrides may determine the root through templates as well as
+        // root/basedir/rootdir directly. They are valid for --clean too.
+        for opt in &self.config_opts {
+            cmd.arg("--config-opts").arg(opt);
+        }
+        for opt in &self.plugin_opts {
+            cmd.arg("--plugin-option").arg(opt);
+        }
+        // Do not replay build-only -A options such as --additional-package,
+        // --with, or --rebuild. Only forward root/config/plugin selectors.
+        let mut args = self.args.iter();
+        while let Some(arg) = args.next() {
+            let flag = arg.split('=').next().unwrap_or(arg);
+            if matches!(
+                flag,
+                "-r" | "--root"
+                    | "--rootdir"
+                    | "--uniqueext"
+                    | "--configdir"
+                    | "--config-opts"
+                    | "--plugin-option"
+                    | "--enable-plugin"
+                    | "--disable-plugin"
+                    | "--isolation"
+                    | "--arch"
+                    | "--target"
+                    | "--forcearch"
+                    | "--buildroot-image"
+            ) {
+                cmd.arg(arg);
+                if !arg.contains('=') {
+                    cmd.args(args.next());
+                }
+            } else if matches!(
+                flag,
+                "--old-chroot"
+                    | "--new-chroot"
+                    | "--bootstrap-chroot"
+                    | "--no-bootstrap-chroot"
+                    | "--use-bootstrap-image"
+                    | "--no-bootstrap-image"
+            ) || (arg.starts_with("-r") && !arg.starts_with("--") && arg.len() > 2)
+            {
+                cmd.arg(arg);
+            }
+        }
+        cmd.arg("--clean");
+        cmd
+    }
+
+    async fn build_single_process(&self, spec: &Path) -> Result<Vec<PathBuf>> {
+        // SCM's combined mode prepares its own sources; retain its existing path.
+        if self.scm_enable {
+            return Err(eyre!("--mock-single-process is not supported with SCM builds yet"));
+        }
+        let tmp = tempfile::Builder::new().prefix("anda-mock").tempdir()?;
+        self.run_single_process(
+            self.single_process_command(spec, tmp.path()),
+            (!self.no_cleanup_after).then(|| self.cleanup_command()),
+            tmp,
+        )
+        .await
+    }
+
+    async fn run_single_process(
+        &self,
+        mut build: Command,
+        cleanup: Option<Command>,
+        tmp: TempDir,
+    ) -> Result<Vec<PathBuf>> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let mut guard = crate::pt::CancelOnDrop {
+            sender: Some(sender),
+            cancelled: std::sync::Arc::clone(&cancelled),
+        };
+        let resultdir = self.resultdir.clone();
+        let (interrupt_sender, interrupt_receiver) = tokio::sync::oneshot::channel();
+        // Observe Ctrl-C for the *whole* lifecycle, including cleanup. The clean
+        // command itself must finish, but cancellation must suppress publication.
+        let interrupt_flag = std::sync::Arc::clone(&cancelled);
+        let interrupt = crate::pt::AbortOnDrop(tokio::spawn(async move {
+            if tokio::signal::ctrl_c().await.is_ok() {
+                interrupt_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                interrupt_sender.send(()).ok();
+            }
+        }));
+        // This task owns the entire lifecycle and the temporary artifacts. A
+        // dropped caller cannot skip cleanup or delete results under live Mock.
+        let lifecycle = tokio::spawn(async move {
+            let _interrupt = interrupt;
+            let outcome = crate::pt::PseudoTerminalCtl::new(build.as_std().get_program())
+                .run_with_cancellation(
+                    &mut build,
+                    async {
+                        tokio::select! {
+                            _ = receiver => {},
+                            _ = interrupt_receiver => {},
+                        }
+                    },
+                    false,
+                )
+                .await;
+            if outcome.as_ref().is_err_and(Report::is::<crate::pt::TeardownFailed>) {
+                let retained = tmp.keep();
+                tracing::error!(path = %retained.display(), "Retaining Mock results: build processes could not be stopped; root cleanup skipped");
+                return outcome.map(|()| Vec::new());
+            }
+            if let Some(mut cleanup) = cleanup {
+                // A second Ctrl-C must not race teardown. Still bound the clean
+                // attempt, then terminate/reap it before releasing the tempdir.
+                let clean = crate::pt::PseudoTerminalCtl::new(cleanup.as_std().get_program())
+                    .run_with_cancellation(
+                        &mut cleanup,
+                        async {
+                            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                        },
+                        false,
+                    )
+                    .await;
+                match clean {
+                    Err(error) if error.is::<crate::pt::TeardownFailed>() => {
+                        let retained = tmp.keep();
+                        tracing::error!(path = %retained.display(), "Retaining Mock results: cleanup processes could not be stopped");
+                        return Err(error);
+                    }
+                    Err(error) if outcome.is_ok() => return Err(error),
+                    Err(error) => tracing::warn!(%error, "Mock cleanup failed after build failure"),
+                    Ok(()) => {}
+                }
+            }
+            outcome?;
+            if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                return Err(eyre!("Mock build cancelled"));
+            }
+            Self { resultdir, ..Self::default() }.collect_results(tmp.path())
+        });
+        let result = lifecycle.await?;
+        guard.sender.take();
+        result
+    }
+
+    fn collect_results(&self, resultdir: &Path) -> Result<Vec<PathBuf>> {
+        let mut rpms = Vec::new();
+        let mut found_srpm = false;
+        let source_dir = self.resultdir.join("rpm/srpm");
+        let binary_dir = self.resultdir.join("rpm/rpms");
+        let mut artifacts = Vec::new();
+        let mut destinations = std::collections::HashSet::new();
+        for entry in walkdir::WalkDir::new(resultdir) {
+            let entry = entry?;
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy();
+            let directory = if name.ends_with(".src.rpm") {
+                found_srpm = true;
+                &source_dir
+            } else if name.ends_with(".rpm") {
+                &binary_dir
+            } else {
+                continue;
+            };
+            let destination = directory.join(entry.file_name());
+            if !destinations.insert(destination.clone()) {
+                return Err(eyre!("Duplicate artifact destination: {}", destination.display()));
+            }
+            artifacts.push((entry.path().to_path_buf(), destination.clone()));
+            if directory == &binary_dir {
+                rpms.push(destination);
+            }
+        }
+        if !found_srpm || rpms.is_empty() {
+            return Err(eyre!("Mock did not produce both source and binary RPMs"));
+        }
+        std::fs::create_dir_all(&source_dir)?;
+        std::fs::create_dir_all(&binary_dir)?;
+        publish_artifacts_with(&artifacts, |from, to| std::fs::rename(from, to))?;
+        Ok(rpms)
     }
 }
 
@@ -433,8 +838,7 @@ impl RPMSpecBackend for MockBackend {
             .arg("--sources")
             .arg(&self.sources)
             .arg("--resultdir")
-            .arg(tmp.path())
-            .arg("--enable-network");
+            .arg(tmp.path());
 
         // cmd.status()?;
 
@@ -456,7 +860,7 @@ impl RPMSpecBackend for MockBackend {
                 let srpm_dir = self.resultdir.join("rpm/srpm");
                 std::fs::create_dir_all(&srpm_dir)?;
                 let dest = srpm_dir.join(entry.file_name());
-                std::fs::copy(entry.path(), &dest)?;
+                move_artifact(entry.path(), &dest)?;
                 return Ok(dest);
             }
         }
@@ -486,12 +890,497 @@ impl RPMSpecBackend for MockBackend {
                 let rpms_dir = self.resultdir.join("rpm/rpms");
                 std::fs::create_dir_all(&rpms_dir)?;
                 let dest = rpms_dir.join(entry.file_name());
-                std::fs::copy(entry.path(), &dest)?;
+                move_artifact(entry.path(), &dest)?;
                 rpms.push(dest);
             }
         }
         //println!("rpms: {:?}", rpms);
         Ok(rpms)
+    }
+}
+
+#[cfg(test)]
+mod mock_tests {
+    use super::{move_artifact, publish_artifacts_with, MockBackend, RPMExtraOptions};
+    use std::{ffi::OsStr, path::Path};
+
+    fn arguments(command: &tokio::process::Command) -> Vec<String> {
+        command.as_std().get_args().map(|arg| arg.to_string_lossy().into_owned()).collect()
+    }
+
+    #[test]
+    fn combined_build_keeps_clean_start_and_one_environment() {
+        let backend = MockBackend::new(
+            Some("terra-44-x86_64".into()),
+            "sources with spaces".into(),
+            "output".into(),
+            vec![],
+        );
+        let cmd = backend.single_process_command(Path::new("package.spec"), Path::new("results"));
+        assert_eq!(cmd.as_std().get_program(), OsStr::new("mock"));
+        let args = arguments(&cmd);
+        assert!(!args.contains(&"--no-clean".to_owned()));
+        for required in [
+            "--rebuild",
+            "--spec",
+            "package.spec",
+            "--sources",
+            "sources with spaces",
+            "--no-cleanup-after",
+            "--plugin-option=tmpfs:keep_mounted=True",
+        ] {
+            assert!(args.contains(&required.to_owned()), "Missing {required}");
+        }
+        assert!(!args.contains(&"--buildsrpm".to_owned()));
+    }
+
+    #[test]
+    fn combined_build_preserves_custom_options_and_offline_build() {
+        let mut backend = MockBackend::default();
+        backend.enable_no_network(true);
+        backend.enable_no_cleanup_before(true);
+        backend.enable_no_cleanup_after(true);
+        backend.def_macro("vendor", "Terra");
+        backend.add_extra_repo("file:///packages".into());
+        backend.plugin_opts(vec!["ccache:max_cache_size=10G".into()]);
+        let args =
+            arguments(&backend.single_process_command(Path::new("test.spec"), Path::new("out")));
+        assert!(!args.contains(&"--enable-network".to_owned()));
+        assert!(args.contains(&"--config-opts=rpmbuild_networking=False".to_owned()));
+        assert!(args.contains(&"--no-clean".to_owned()));
+        assert!(args.contains(&"vendor Terra".to_owned()));
+        assert!(args.contains(&"file:///packages".to_owned()));
+        assert!(args.contains(&"ccache:max_cache_size=10G".to_owned()));
+    }
+
+    #[test]
+    fn legacy_command_also_honors_network_and_plugin_options() {
+        let mut backend = MockBackend::default();
+        backend.enable_no_network(true);
+        backend.plugin_opts(vec!["tmpfs:max_fs_size=50%".into()]);
+        let args = arguments(&backend.mock());
+        assert!(!args.contains(&"--enable-network".to_owned()));
+        assert!(args.contains(&"--config-opts=rpmbuild_networking=False".to_owned()));
+        assert!(args.contains(&"tmpfs:max_fs_size=50%".to_owned()));
+    }
+
+    #[test]
+    fn combined_results_preserve_source_and_binary_artifacts() {
+        let input = tempfile::tempdir().unwrap();
+        let output = tempfile::tempdir().unwrap();
+        for name in ["test.src.rpm", "test.noarch.rpm", "test-debuginfo.x86_64.rpm", "state.log"] {
+            std::fs::write(input.path().join(name), name).unwrap();
+        }
+        let backend = MockBackend::new(None, "sources".into(), output.path().into(), vec![]);
+        let rpms = backend.collect_results(input.path()).unwrap();
+        assert_eq!(rpms.len(), 2);
+        assert!(output.path().join("rpm/srpm/test.src.rpm").is_file());
+        assert!(output.path().join("rpm/rpms/test.noarch.rpm").is_file());
+        assert!(output.path().join("rpm/rpms/test-debuginfo.x86_64.rpm").is_file());
+        assert!(!output.path().join("rpm/rpms/state.log").exists());
+    }
+
+    #[test]
+    fn artifact_move_replaces_old_output_without_copying() {
+        use std::os::unix::fs::MetadataExt;
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("source.rpm");
+        let destination = directory.path().join("output.rpm");
+        std::fs::write(&source, "new artifact").unwrap();
+        std::fs::write(&destination, "old artifact").unwrap();
+        let inode = std::fs::metadata(&source).unwrap().ino();
+        move_artifact(&source, &destination).unwrap();
+        assert!(!source.exists());
+        assert_eq!(std::fs::metadata(&destination).unwrap().ino(), inode);
+        assert_eq!(std::fs::read_to_string(destination).unwrap(), "new artifact");
+    }
+
+    #[test]
+    fn missing_binary_artifacts_are_an_error() {
+        let input = tempfile::tempdir().unwrap();
+        let output = tempfile::tempdir().unwrap();
+        std::fs::write(input.path().join("test.src.rpm"), "source").unwrap();
+        let old = output.path().join("rpm/srpm/test.src.rpm");
+        std::fs::create_dir_all(old.parent().unwrap()).unwrap();
+        std::fs::write(&old, "old source").unwrap();
+        let backend = MockBackend::new(None, "sources".into(), output.path().into(), vec![]);
+        let error = backend.collect_results(input.path()).unwrap_err();
+        assert!(error.to_string().contains("source and binary RPMs"));
+        assert_eq!(std::fs::read_to_string(old).unwrap(), "old source");
+        assert!(input.path().join("test.src.rpm").exists());
+        assert!(!output.path().join("rpm/rpms").exists());
+    }
+
+    #[test]
+    fn offline_precedence_filters_forwarded_enable_network_in_any_order() {
+        for forwarded in [
+            vec!["--enable-network", "--config-opts=rpmbuild_networking=True"],
+            vec!["--config-opts=rpmbuild_networking=True", "--enable-network"],
+        ] {
+            let mut backend = MockBackend::new(
+                None,
+                "sources".into(),
+                "out".into(),
+                forwarded.into_iter().map(str::to_owned).collect(),
+            );
+            backend.enable_no_network(true);
+            for cmd in [
+                backend.mock(),
+                backend.single_process_command(Path::new("test.spec"), Path::new("results")),
+            ] {
+                let args = arguments(&cmd);
+                assert!(!args.iter().any(|arg| arg.starts_with("--enable-network")));
+                let overrides: Vec<_> =
+                    args.iter().filter(|arg| arg.contains("rpmbuild_networking=")).collect();
+                assert_eq!(
+                    overrides.last().unwrap().as_str(),
+                    "--config-opts=rpmbuild_networking=False"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cleanup_forwards_selectors_not_build_only_arguments() {
+        let mut backend = MockBackend::new(
+            Some("initial".into()),
+            "src".into(),
+            "out".into(),
+            [
+                "--additional-package",
+                "gcc",
+                "--with=feature",
+                "-a",
+                "file:///repo",
+                "--configdir",
+                "/configs",
+                "--root=chosen",
+                "--uniqueext",
+                "ci-123",
+                "--rootdir=/roots/chosen",
+                "--enable-plugin=tmpfs",
+                "--disable-plugin",
+                "ccache",
+                "--plugin-option=tmpfs:max_fs_size=50%",
+                "--config-opts=basedir=/roots",
+                "--isolation=simple",
+                "--no-clean",
+                "--no-cleanup-after",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+        );
+        backend.plugin_opts(vec!["root_cache:dir=/cache".into()]);
+        backend.add_config_opt("root=custom".into());
+        let args = arguments(&backend.cleanup_command());
+        for value in [
+            "--clean",
+            "initial",
+            "root=custom",
+            "--root=chosen",
+            "--configdir",
+            "/configs",
+            "--uniqueext",
+            "ci-123",
+            "--rootdir=/roots/chosen",
+            "--enable-plugin=tmpfs",
+            "--disable-plugin",
+            "ccache",
+            "--plugin-option=tmpfs:max_fs_size=50%",
+            "--config-opts=basedir=/roots",
+            "root_cache:dir=/cache",
+            "--isolation=simple",
+        ] {
+            assert!(args.contains(&value.to_owned()), "Missing {value}");
+        }
+        for value in [
+            "--additional-package",
+            "gcc",
+            "--with=feature",
+            "-a",
+            "file:///repo",
+            "--no-clean",
+            "--no-cleanup-after",
+            "--enable-network",
+        ] {
+            assert!(!args.contains(&value.to_owned()), "Unexpected {value}");
+        }
+    }
+
+    #[test]
+    fn later_publication_failure_rolls_back_the_whole_set() {
+        let input = tempfile::tempdir().unwrap();
+        let output = tempfile::tempdir().unwrap();
+        let artifacts: Vec<_> = ["test.src.rpm", "test.noarch.rpm", "extra.rpm"]
+            .into_iter()
+            .map(|name| {
+                let source = input.path().join(name);
+                let destination = output.path().join(name);
+                std::fs::write(&source, "new").unwrap();
+                std::fs::write(&destination, "old").unwrap();
+                (source, destination)
+            })
+            .collect();
+        let mut calls = 0;
+        let result = publish_artifacts_with(&artifacts, |source, destination| {
+            calls += 1;
+            if calls == 3 {
+                Err(std::io::Error::from_raw_os_error(nix::libc::EIO))
+            } else {
+                std::fs::rename(source, destination)
+            }
+        });
+        assert!(result.is_err());
+        for (source, destination) in artifacts {
+            assert_eq!(std::fs::read_to_string(destination).unwrap(), "old");
+            assert_eq!(std::fs::read_to_string(source).unwrap(), "new");
+        }
+    }
+
+    #[test]
+    fn staging_failure_does_not_replace_earlier_output() {
+        let input = tempfile::tempdir().unwrap();
+        let output = tempfile::tempdir().unwrap();
+        for name in ["test.src.rpm", "test.noarch.rpm"] {
+            std::fs::write(input.path().join(name), "new").unwrap();
+        }
+        std::fs::create_dir_all(output.path().join("rpm/srpm")).unwrap();
+        std::fs::create_dir_all(output.path().join("rpm/rpms/test.noarch.rpm")).unwrap();
+        let old = output.path().join("rpm/srpm/test.src.rpm");
+        std::fs::write(&old, "old").unwrap();
+        let backend = MockBackend::new(None, "sources".into(), output.path().into(), vec![]);
+        let error = backend.collect_results(input.path()).unwrap_err();
+        assert!(error.to_string().contains("not a regular file"));
+        assert_eq!(std::fs::read_to_string(old).unwrap(), "old");
+        assert!(input.path().join("test.src.rpm").exists());
+    }
+
+    #[test]
+    fn copy_fallback_preserves_destination_owner_and_group() {
+        use std::os::{
+            fd::AsRawFd,
+            unix::fs::{MetadataExt, PermissionsExt},
+        };
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("source.rpm");
+        let destination = directory.path().join("output.rpm");
+        let file = std::fs::File::create(&source).unwrap();
+        // Pick another supplementary group when available to exercise the copy
+        // path as an ordinary user; the metadata-compatible path is tested above.
+        // SAFETY: first call asks for count, second writes into an allocated array.
+        let count = unsafe { nix::libc::getgroups(0, std::ptr::null_mut()) };
+        let mut groups = vec![0; usize::try_from(count).unwrap()];
+        // SAFETY: buffer is allocated for count gids.
+        assert_eq!(unsafe { nix::libc::getgroups(count, groups.as_mut_ptr()) }, count);
+        let original_gid = file.metadata().unwrap().gid();
+        let group = groups.into_iter().find(|group| *group != original_gid);
+        let Some(group) = group else {
+            return;
+        };
+        // SAFETY: valid fd, -1 keeps uid, group is a supplementary group.
+        assert_eq!(unsafe { nix::libc::fchown(file.as_raw_fd(), u32::MAX, group) }, 0);
+        std::fs::write(&source, "new").unwrap();
+        std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o644)).unwrap();
+        std::fs::write(&destination, "old").unwrap();
+        let old = std::fs::metadata(&destination).unwrap();
+        let source_inode = file.metadata().unwrap().ino();
+        move_artifact(&source, &destination).unwrap();
+        let new = std::fs::metadata(destination).unwrap();
+        assert_eq!((new.uid(), new.gid()), (old.uid(), old.gid()));
+        assert_ne!(new.ino(), source_inode);
+    }
+
+    #[test]
+    fn copy_fallback_inherits_setgid_output_group() {
+        use std::os::{
+            fd::AsRawFd,
+            unix::fs::{MetadataExt, PermissionsExt},
+        };
+        let directory = tempfile::tempdir().unwrap();
+        let input = tempfile::tempdir().unwrap();
+        let parent = std::fs::File::open(directory.path()).unwrap();
+        // SAFETY: query count, then fill a buffer allocated for that many gids.
+        let count = unsafe { nix::libc::getgroups(0, std::ptr::null_mut()) };
+        let mut groups = vec![0; usize::try_from(count).unwrap()];
+        // SAFETY: writable buffer holds count gids.
+        assert_eq!(unsafe { nix::libc::getgroups(count, groups.as_mut_ptr()) }, count);
+        let gid = parent.metadata().unwrap().gid();
+        let Some(group) = groups.into_iter().find(|group| *group != gid) else {
+            return;
+        };
+        // SAFETY: valid directory fd, -1 preserves uid, group is supplementary.
+        assert_eq!(unsafe { nix::libc::fchown(parent.as_raw_fd(), u32::MAX, group) }, 0);
+        std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o2775))
+            .unwrap();
+        let source = input.path().join("test.rpm");
+        let destination = directory.path().join("test.rpm");
+        std::fs::write(&source, "new").unwrap();
+        let metadata = std::fs::metadata(&source).unwrap();
+        assert_ne!(metadata.gid(), group);
+        move_artifact(&source, &destination).unwrap();
+        let copied = std::fs::metadata(destination).unwrap();
+        assert_eq!(copied.uid(), metadata.uid());
+        assert_eq!(copied.gid(), group);
+        assert_ne!(copied.ino(), metadata.ino());
+    }
+
+    #[test]
+    fn cross_filesystem_publication_copies_and_removes_source() {
+        use std::os::unix::fs::MetadataExt;
+        let output = tempfile::tempdir().unwrap();
+        let Ok(input) = tempfile::tempdir_in("/dev/shm") else {
+            return;
+        };
+        if std::fs::metadata(input.path()).unwrap().dev()
+            == std::fs::metadata(output.path()).unwrap().dev()
+        {
+            return;
+        }
+        let source = input.path().join("test.rpm");
+        let destination = output.path().join("test.rpm");
+        std::fs::write(&source, "new").unwrap();
+        move_artifact(&source, &destination).unwrap();
+        assert_eq!(std::fs::read_to_string(destination).unwrap(), "new");
+        assert!(!source.exists());
+    }
+
+    #[test]
+    fn source_unlink_failure_after_publication_is_not_artifact_failure() {
+        use std::os::unix::fs::PermissionsExt;
+        // SAFETY: geteuid has no arguments or pointer requirements.
+        if unsafe { nix::libc::geteuid() } == 0 {
+            return;
+        }
+        let input = tempfile::tempdir().unwrap();
+        let output = tempfile::tempdir().unwrap();
+        let source = input.path().join("test.rpm");
+        let destination = output.path().join("test.rpm");
+        std::fs::write(&source, "new").unwrap();
+        std::fs::set_permissions(input.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+        let result = move_artifact(&source, &destination);
+        std::fs::set_permissions(input.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+        result.unwrap();
+        assert_eq!(std::fs::read_to_string(destination).unwrap(), "new");
+        assert!(source.exists());
+    }
+
+    fn python(script: &str, paths: &[&Path]) -> tokio::process::Command {
+        let mut command = tokio::process::Command::new("python3");
+        command.arg("-c").arg(script).args(paths);
+        command
+    }
+
+    async fn wait_for(path: &Path) {
+        tokio::time::timeout(std::time::Duration::from_secs(8), async {
+            while !path.exists() {
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("synthetic tool did not finish in time");
+    }
+
+    #[tokio::test]
+    async fn cancelled_build_is_reaped_before_cleanup_and_tempdir_drop() {
+        let control = tempfile::tempdir().unwrap();
+        let output = tempfile::tempdir().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let results = tmp.path().to_path_buf();
+        let ready = control.path().join("ready");
+        let stopped = control.path().join("stopped");
+        let cleaned = control.path().join("cleaned");
+        let build = python(
+            "
+import os, signal, sys, time
+from pathlib import Path
+ready, stopped, results = map(Path, sys.argv[1:])
+def stop(*_):
+    assert results.is_dir()
+    stopped.write_text('stopped')
+    sys.exit(0)
+signal.signal(signal.SIGINT, stop)
+ready.write_text(str(os.getpid()))
+while True: time.sleep(.05)
+",
+            &[&ready, &stopped, &results],
+        );
+        let cleanup = python(
+            "
+import sys
+from pathlib import Path
+ready, stopped, results, cleaned = map(Path, sys.argv[1:])
+assert stopped.is_file()
+assert not Path('/proc/' + ready.read_text()).exists()
+assert results.is_dir()
+cleaned.write_text('cleaned')
+",
+            &[&ready, &stopped, &results, &cleaned],
+        );
+        let backend = MockBackend::new(None, "src".into(), output.path().into(), vec![]);
+        let caller =
+            tokio::spawn(
+                async move { backend.run_single_process(build, Some(cleanup), tmp).await },
+            );
+        wait_for(&ready).await;
+        caller.abort();
+        assert!(caller.await.unwrap_err().is_cancelled());
+        wait_for(&cleaned).await;
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while results.exists() {
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(!output.path().join("rpm").exists());
+    }
+
+    #[tokio::test]
+    async fn failed_build_still_cleans_and_returns_original_error() {
+        let control = tempfile::tempdir().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let cleaned = control.path().join("cleaned");
+        let build = python("import sys; sys.exit(23)", &[]);
+        let cleanup = python("import sys; from pathlib import Path; Path(sys.argv[1]).write_text('cleaned'); sys.exit(24)", &[&cleaned]);
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(8),
+            MockBackend::default().run_single_process(build, Some(cleanup), tmp),
+        )
+        .await
+        .unwrap();
+        assert!(result.unwrap_err().to_string().contains("23"));
+        assert!(cleaned.exists());
+    }
+
+    #[tokio::test]
+    async fn cancellation_during_cleanup_does_not_publish_results() {
+        let control = tempfile::tempdir().unwrap();
+        let output = tempfile::tempdir().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let ready = control.path().join("clean-ready");
+        let cleaned = control.path().join("cleaned");
+        let build = python("import sys; from pathlib import Path; p=Path(sys.argv[1]); (p/'test.src.rpm').write_text('src'); (p/'test.rpm').write_text('rpm')", &[tmp.path()]);
+        let cleanup = python("import sys, time; from pathlib import Path; Path(sys.argv[1]).write_text('ready'); time.sleep(.3); Path(sys.argv[2]).write_text('done')", &[&ready, &cleaned]);
+        let backend = MockBackend::new(None, "src".into(), output.path().into(), vec![]);
+        let caller =
+            tokio::spawn(
+                async move { backend.run_single_process(build, Some(cleanup), tmp).await },
+            );
+        wait_for(&ready).await;
+        caller.abort();
+        assert!(caller.await.unwrap_err().is_cancelled());
+        wait_for(&cleaned).await;
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        assert!(!output.path().join("rpm").exists());
+    }
+
+    #[tokio::test]
+    async fn combined_scm_is_rejected_before_spawning_mock() {
+        let mut backend = MockBackend::default();
+        backend.enable_scm(true);
+        let error = backend.build_single_process(Path::new("test.spec")).await.unwrap_err();
+        assert!(error.to_string().contains("SCM"));
     }
 }
 
@@ -594,7 +1483,7 @@ impl RPMSpecBackend for RPMBuildBackend {
                 let srpm_dir = self.resultdir.join("rpm/srpm");
                 std::fs::create_dir_all(&srpm_dir)?;
                 let dest = srpm_dir.join(entry.file_name());
-                std::fs::copy(entry.path(), &dest)?;
+                move_artifact(entry.path(), &dest)?;
                 return Ok(dest);
             }
         }
@@ -629,7 +1518,7 @@ impl RPMSpecBackend for RPMBuildBackend {
                 let rpms_dir = self.resultdir.join("rpm/rpms");
                 std::fs::create_dir_all(&rpms_dir)?;
                 let dest = rpms_dir.join(entry.file_name());
-                std::fs::copy(entry.path(), dest)?;
+                move_artifact(entry.path(), &dest)?;
                 rpms.push(rpms_dir.join(entry.file_name()));
             }
         }
@@ -671,7 +1560,7 @@ impl RPMSpecBackend for RPMBuildBackend {
             let target_dir = self.resultdir.join(subdir);
             std::fs::create_dir_all(&target_dir)?;
             let dest = target_dir.join(entry.file_name());
-            std::fs::copy(entry.path(), &dest)?;
+            move_artifact(entry.path(), &dest)?;
 
             if is_rpm {
                 rpms.push(dest);

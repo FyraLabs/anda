@@ -106,6 +106,8 @@ pub struct OciOpts {
     pub compress: bool,
 }
 
+// Independent CLI switches, not mutually exclusive states.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Args, Debug, Clone, Default)]
 pub struct RpmOpts {
     /// RPM: Do not mirror repositories.
@@ -144,6 +146,14 @@ pub struct RpmOpts {
     /// RPM: Extra arguments to the respective builder
     #[clap(long, short = 'A')]
     pub args: Vec<String>,
+
+    /// RPM: Skip local repository metadata generation and automatic reuse
+    #[clap(long)]
+    pub no_repodata: bool,
+
+    /// RPM: Build the SRPM and RPMs in one Mock process (experimental)
+    #[clap(long)]
+    pub mock_single_process: bool,
 
     /// RPM: Whether to clean up a mock chroot and when
     #[clap(long)]
