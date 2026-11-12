@@ -22,6 +22,7 @@ use tracing::{debug, trace};
 #[allow(clippy::unwrap_in_result)]
 #[allow(clippy::missing_errors_doc)]
 #[allow(clippy::missing_panics_doc)]
+#[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
@@ -41,27 +42,27 @@ async fn main() -> Result<()> {
         Command::Build {
             all,
             ref mut project,
-            ref mut package,
-            ref mut rpm_opts,
-            ref mut flatpak_opts,
-            ref mut oci_opts,
+            ref label_filters,
+            package,
+            ref rpm_opts,
+            ref flatpak_opts,
+            ref oci_opts,
         } => {
-            if project.is_none() && !all {
-                // print help
+            if !all && !label_filters.is_empty() {
+                return Err(eyre!("--filters and --excludes require --all"));
+            }
+            let target = if all {
+                builder::BuildTarget::All(parse_label_filter(label_filters)?)
+            } else if let Some(project) = take(project) {
+                builder::BuildTarget::Project(project)
+            } else {
                 let mut app = Cli::command();
                 let a = app.find_subcommand_mut("build").unwrap();
                 let mut a = take(a).display_name("anda-build").name("anda-build");
                 a.print_help()?;
                 return Err(eyre!("No project specified, and --all not specified."));
-            }
-
-            let project = take(project);
-            let package = std::mem::replace(package, cli::PackageType::Rpm);
-            let flatpak_opts = take(flatpak_opts);
-            let oci_opts = take(oci_opts);
-            let rpm_opts = take(rpm_opts);
-            debug!("{all:?}");
-            builder::builder(&cli, rpm_opts, all, project, package, flatpak_opts, oci_opts).await?;
+            };
+            builder::builder(&cli, target, package, rpm_opts, flatpak_opts, oci_opts).await?;
         }
         Command::Clean => {
             println!("Cleaning up build directory");
@@ -97,24 +98,25 @@ async fn main() -> Result<()> {
         Command::Completion { shell } => {
             generate(shell, &mut cli::Cli::command(), "anda", &mut io::stdout());
         }
-        Command::CI => {
+        Command::CI { arches, unique_packages } => {
             let config = anda_config::load_from_file(&cli.config)?;
-            let entries = util::fetch_build_entries(config);
-
+            let entries = util::configure_build_entries(
+                util::fetch_build_entries(&config, &cli.config),
+                &arches,
+                unique_packages,
+            );
             println!("build_matrix={}", serde_json::to_string(&entries)?);
+            println!("build_units={}", serde_json::to_string(&util::group_build_entries(entries))?);
         }
-        Command::Update { labels, filters, excludes, project } => {
+        Command::Update { labels, label_filters, project } => {
             let labels = parse_labels(labels.iter().map(std::ops::Deref::deref))
                 .ok_or_else(|| eyre!("Cannot parse --labels"))?;
-            let filters = anda_config::parse_filters(&filters)
-                .ok_or_else(|| eyre!("Cannot parse --filters"))?;
-            let excludes = anda_config::parse_filters(&excludes)
-                .ok_or_else(|| eyre!("Cannot parse --excludes"))?;
+            let filter = parse_label_filter(&label_filters)?;
             let cfg = anda_config::load_from_file(&cli.config)?;
             if let Some(proj) = project {
-                update::single_update(&cfg, &proj, &labels, filters)?;
+                update::single_update(&cfg, &proj, &labels, filter.filters)?;
             } else {
-                update::update(cfg, &labels, &filters, &excludes)?;
+                update::update(cfg, &labels, &filter)?;
             }
         }
         Command::Run { scripts, labels } => {
@@ -127,4 +129,13 @@ async fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn parse_label_filter(args: &cli::LabelFilters) -> Result<anda_config::LabelFilter> {
+    Ok(anda_config::LabelFilter {
+        filters: anda_config::parse_filters(&args.filters)
+            .ok_or_else(|| eyre!("Cannot parse --filters"))?,
+        excludes: anda_config::parse_filters(&args.excludes)
+            .ok_or_else(|| eyre!("Cannot parse --excludes"))?,
+    })
 }

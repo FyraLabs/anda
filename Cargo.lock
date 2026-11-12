@@ -47,6 +47,7 @@ dependencies = [
  "anda-config",
  "andax",
  "async-trait",
+ "base64",
  "chrono",
  "clap",
  "clap-verbosity-flag",

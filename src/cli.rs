@@ -13,6 +13,42 @@ pub enum RPMBuilder {
     Rpmbuild,
 }
 
+#[derive(Args, Debug, Clone, Default)]
+pub struct LabelFilters {
+    /// Only include projects with the specified labels
+    ///
+    /// This should be a comma-separated list of filters.
+    /// Each time `--filters=...` is specified, the comma-separated list of key-values will be
+    /// checked against a project. If missing or different, the project will be ignored.
+    /// However, specifying `--filters` multiple times will create an "or" effect --- the
+    /// project will not be ignored if it satisfies one of the list of `--filters`. For
+    /// example, `-f a=1,b=2 -f c=3` means the project needs to satisfy either "a=1" and "b=2",
+    /// or only "c=3".
+    #[clap(short, long)]
+    pub filters: Vec<String>,
+
+    /// Exclude projects with the specified labels
+    ///
+    /// This should be a comma-separated list of excludes.
+    /// Each time `--exclude=...` is specified, the comma-separated list of key-values will be
+    /// checked against the labels of a project, and it will be ignored if all the key-values
+    /// are present. In addition, specifying `--exclude` multiple times will create an "or"
+    /// effect --- a project will be excluded if it satisfies one of the list of `--filters`.
+    /// For example, `-e a=1,b=2 -e c=3` means projects with "a=1" and "b=2" at the same time,
+    /// or "c=3", are excluded. Projects with only "a=1" or "b=2" are not excluded.
+    ///
+    /// This will always override `--filters`.
+    #[clap(short, long)]
+    pub excludes: Vec<String>,
+}
+
+impl LabelFilters {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.filters.is_empty() && self.excludes.is_empty()
+    }
+}
+
 #[derive(ValueEnum, Debug, Clone, Copy)]
 pub enum NoMockCleanup {
     Before,
@@ -171,6 +207,9 @@ pub enum Command {
         #[clap()]
         project: Option<String>,
 
+        #[clap(flatten)]
+        label_filters: LabelFilters,
+
         /// Builds a specific artifact format
         #[clap(short, long, value_enum, default_value = "all")]
         package: PackageType,
@@ -209,38 +248,24 @@ pub enum Command {
         #[clap(value_enum)]
         shell: Shell,
     },
-    /// Get CI output for Github Actions
-    CI,
+    /// Get CI build matrices for GitHub Actions
+    CI {
+        /// Override the architectures emitted for each package (repeatable)
+        #[clap(long = "arch", value_name = "ARCH")]
+        arches: Vec<String>,
+
+        /// Emit only one matrix entry per package, useful with a custom builder
+        #[clap(long, action)]
+        unique_packages: bool,
+    },
 
     /// Update all projects
     Update {
         /// Labels to pass to the scripts
         #[clap(short, long)]
         labels: Vec<String>,
-        /// Only run update scripts in project with the specified labels
-        ///
-        /// This should be a comma-separated list of filters.
-        /// Each time `--filters=...` is specified, the comma-separated list of key-values will be
-        /// checked against a project. If missing or different, the project will be ignored.
-        /// However, specifying `--filters` multiple times will create an "or" effect --- the
-        /// project will not be ignored if it satisfies one of the list of `--filters`. For
-        /// example, `-f a=1,b=2 -f c=3` means the project needs to satisfy either "a=1" and "b=2",
-        /// or only "c=3".
-        #[clap(short, long)]
-        filters: Vec<String>,
-        /// Exclude update scripts in project with the specified labels
-        ///
-        /// This should be a comma-separated list of excludes.
-        /// Each time `--exclude=...` is specified, the comma-separated list of key-values will be
-        /// checked against the labels of a project, and it will be ignored if all the key-values
-        /// are present. In addition, specifying `--exclude` multiple times will create an "or"
-        /// effect --- a project will be excluded if it satisfies one of the list of `--filters`.
-        /// For example, `-e a=1,b=2 -e c=3` means projects with "a=1" and "b=2" at the same time,
-        /// or "c=3", are excluded. Projects with only "a=1" or "b=2" are not excluded.
-        ///
-        /// This will always override `--filters`.
-        #[clap(short, long)]
-        excludes: Vec<String>,
+        #[clap(flatten)]
+        label_filters: LabelFilters,
 
         #[clap()]
         project: Option<String>,

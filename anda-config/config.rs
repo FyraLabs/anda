@@ -69,6 +69,13 @@ pub struct Project {
     pub arches: Option<Vec<String>>,
 }
 
+impl Project {
+    #[must_use]
+    pub fn build_group(&self) -> Option<&str> {
+        self.labels.get("group").map(String::as_str).filter(|group| !group.is_empty())
+    }
+}
+
 /// Deserialize the value of the BTreeMap into a String even if they are some other types.
 ///
 /// # Errors
@@ -213,6 +220,22 @@ pub fn parse_kv(input: &str) -> impl Iterator<Item = Option<(String, String)>> +
 
 pub fn parse_filters(filters: &[String]) -> Option<Vec<Vec<(String, String)>>> {
     filters.iter().map(std::ops::Deref::deref).map(crate::parse_kv).map(Iterator::collect).collect()
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct LabelFilter {
+    pub filters: Vec<Vec<(String, String)>>,
+    pub excludes: Vec<Vec<(String, String)>>,
+}
+
+impl LabelFilter {
+    #[must_use]
+    pub fn matches(&self, labels: &BTreeMap<String, String>) -> bool {
+        let has_all =
+            |set: &Vec<(String, String)>| set.iter().all(|(k, v)| labels.get(k) == Some(v));
+        (self.filters.is_empty() || self.filters.iter().any(has_all))
+            && !self.excludes.iter().any(has_all)
+    }
 }
 
 /// Turn a string into a BTreeMap<String, String>
@@ -428,6 +451,7 @@ mod test_parser {
             }
             labels {
                 nightly = 1
+                group = "nvidia"
             }
         }
         "#;
@@ -441,6 +465,36 @@ mod test_parser {
         println!("{config:#?}");
 
         assert_eq!(config.project["anda"].labels.get("nightly"), Some(&"1".to_owned()));
+        assert_eq!(config.project["anda"].build_group(), Some("nvidia"));
+    }
+
+    #[test]
+    fn label_filter_ors_filters_and_lets_excludes_win() {
+        let labels = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
+            pairs.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect()
+        };
+        let sets = |sets: &[&str]| {
+            parse_filters(&sets.iter().map(|&s| s.to_owned()).collect::<Vec<_>>()).unwrap()
+        };
+        let filter = LabelFilter { filters: sets(&["a=1,b=2", "c=3"]), excludes: sets(&["d=4"]) };
+
+        assert!(filter.matches(&labels(&[("a", "1"), ("b", "2")])));
+        assert!(filter.matches(&labels(&[("c", "3")])));
+        assert!(!filter.matches(&labels(&[("a", "1")])));
+        assert!(!filter.matches(&labels(&[("c", "3"), ("d", "4")])));
+        assert!(LabelFilter::default().matches(&labels(&[])));
+    }
+
+    #[test]
+    fn build_group_ignores_empty_and_subrepo_labels() {
+        let with_labels = |labels: &[(&str, &str)]| Project {
+            labels: labels.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect(),
+            ..Default::default()
+        };
+
+        assert_eq!(with_labels(&[("group", "explicit")]).build_group(), Some("explicit"));
+        assert_eq!(with_labels(&[("subrepo", "fallback")]).build_group(), None);
+        assert_eq!(with_labels(&[("group", "")]).build_group(), None);
     }
 
     #[test]

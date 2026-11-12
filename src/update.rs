@@ -1,24 +1,11 @@
-use anda_config::Manifest;
+use anda_config::{LabelFilter, Manifest};
 use andax::{run, RPMSpec};
 use color_eyre::eyre::eyre;
 use color_eyre::{Result, Section};
 use itertools::Itertools;
 use std::io::Write;
-use std::{
-    collections::BTreeMap,
-    thread::{self, Builder},
-};
+use std::thread::{self, Builder};
 use tracing::{debug, error, instrument, trace};
-
-/// Return true only if the project `lbls` does not have the key or the value does not match.
-fn filter_project(lbls: &BTreeMap<String, String>) -> impl Fn(&(String, String)) -> bool + '_ {
-    |(k, v)| lbls.get(k) != Some(v)
-}
-
-/// Return true only if `lbls` have the key and the value matches.
-fn exclude_project(lbls: &BTreeMap<String, String>) -> impl Fn(&(String, String)) -> bool + '_ {
-    |(k, v)| lbls.get(k) == Some(v)
-}
 
 #[instrument(skip(cfg))]
 pub fn single_update(
@@ -56,12 +43,7 @@ pub fn single_update(
 
 #[allow(clippy::arithmetic_side_effects)]
 #[instrument(skip(cfg))]
-pub fn update(
-    cfg: Manifest,
-    global_lbls: &[(String, String)],
-    fls: &[Vec<(String, String)>],
-    excls: &[Vec<(String, String)>],
-) -> Result<()> {
+pub fn update(cfg: Manifest, global_lbls: &[(String, String)], filter: &LabelFilter) -> Result<()> {
     let mut handlers = vec![];
     let proj_len = cfg.project.len();
     let mut scr_len = 0;
@@ -70,14 +52,11 @@ pub fn update(
         scr_len += 1;
         let mut lbls = std::mem::take(&mut proj.labels);
         lbls.extend(global_lbls.to_owned());
-        if !fls.is_empty() && fls.iter().all(|fls| fls.iter().any(filter_project(&lbls))) {
-            continue;
-        }
-        if excls.iter().any(|excls| excls.iter().all(exclude_project(&lbls))) {
+        if !filter.matches(&lbls) {
             continue;
         }
         trace!(name, scr = scr.to_str(), "Th start");
-        let fls = fls.to_owned();
+        let fls = filter.filters.clone();
         let alias = proj.alias.into_iter().flatten().next().clone().unwrap_or(name);
         handlers.push(Builder::new().name(alias).spawn(move || {
             let th = thread::current();
@@ -183,26 +162,4 @@ pub fn run_scripts(scripts: &[String], labels: &[(String, String)]) -> Result<()
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_filter() {
-        let transform = |arr: &[(&str, &str)]| {
-            arr.iter()
-                .map(|(l, r)| ((*l).to_owned(), (*r).to_owned()))
-                .collect::<BTreeMap<String, String>>()
-        };
-        // update only nightly packages
-        let lbls = std::iter::once(("nightly", "1")).map(|(l, r)| (l.into(), r.into())).collect();
-        let test1 = filter_project(&lbls);
-        for (k, v) in transform(&[("nightly", "0"), ("hai", "bai"), ("large", "1")]) {
-            assert!(test1(&(k, v)));
-        }
-        for (k, v) in transform(&[("nightly", "1")]) {
-            assert!(!test1(&(k, v)));
-        }
-    }
 }
