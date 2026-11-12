@@ -106,7 +106,6 @@ pub struct OciOpts {
     pub compress: bool,
 }
 
-// Independent CLI switches, not mutually exclusive states.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Args, Debug, Clone, Default)]
 pub struct RpmOpts {

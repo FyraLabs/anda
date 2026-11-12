@@ -1,137 +1,13 @@
 use std::{
+    future::Future,
     io::Write,
     os::fd::FromRawFd,
     sync::{atomic::AtomicBool, Arc},
 };
 
 use color_eyre::eyre::{eyre, Context};
-use nix::sys::signal;
-use tokio::{
-    process::Child,
-    sync::oneshot,
-    time::{timeout, Duration, Instant},
-};
 
-/// Dropping a command future asks its owner to terminate and reap it. The
-/// supervisor remains alive until that work (and PTY reader shutdown) finishes.
-pub struct CancelOnDrop {
-    pub sender: Option<oneshot::Sender<()>>,
-    pub cancelled: Arc<AtomicBool>,
-}
-
-impl Drop for CancelOnDrop {
-    fn drop(&mut self) {
-        if let Some(sender) = self.sender.take() {
-            self.cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
-            sender.send(()).ok();
-        }
-    }
-}
-
-pub struct AbortOnDrop(pub tokio::task::JoinHandle<()>);
-
-impl Drop for AbortOnDrop {
-    fn drop(&mut self) {
-        self.0.abort();
-    }
-}
-
-fn signal_group(group: nix::unistd::Pid, sig: signal::Signal) {
-    if let Err(error) = signal::killpg(group, sig) {
-        if error != nix::errno::Errno::ESRCH {
-            tracing::warn!(%error, ?sig, "Cannot signal command process group");
-        }
-    }
-}
-
-/// Teardown could not establish that it is safe to reuse/remove the root.
-#[derive(Debug)]
-pub struct TeardownFailed(pub String);
-
-impl std::fmt::Display for TeardownFailed {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Command teardown failed: {}", self.0)
-    }
-}
-
-impl std::error::Error for TeardownFailed {}
-
-fn group_has_live_members(group: nix::unistd::Pid) -> std::io::Result<bool> {
-    match signal::killpg(group, None) {
-        Err(nix::errno::Errno::ESRCH) => return Ok(false),
-        // A hidden privileged process group is not proof of quiescence. Never
-        // let visibility-filtered /proc enumeration override a denied probe.
-        Err(error) => return Err(std::io::Error::from_raw_os_error(error as i32)),
-        Ok(()) => {}
-    }
-    // killpg(0) also sees zombies, which cannot mutate the root. After SIGKILL
-    // wait for all *live* group members, not just the leader, before cleanup.
-    for entry in std::fs::read_dir("/proc")? {
-        let entry = entry?;
-        if entry.file_name().to_string_lossy().parse::<u32>().is_err() {
-            continue;
-        }
-        let stat = match std::fs::read_to_string(entry.path().join("stat")) {
-            Ok(stat) => stat,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(error) => return Err(error),
-        };
-        let fields =
-            stat.rsplit_once(')').ok_or_else(|| std::io::Error::other("Invalid proc stat"))?.1;
-        let mut fields = fields.split_whitespace();
-        let state = fields.next();
-        fields.next(); // ppid
-        let process_group = fields.next().and_then(|field| field.parse::<i32>().ok());
-        if process_group == Some(group.as_raw()) && !matches!(state, Some("Z" | "X")) {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-async fn terminate_and_reap(
-    child: &mut Child,
-    group: nix::unistd::Pid,
-    grace: Duration,
-) -> color_eyre::Result<()> {
-    // Give Mock a chance to unmount/finish its own teardown before escalating.
-    // Signal the entire group, including helpers, not just the Python leader.
-    for sig in [signal::Signal::SIGINT, signal::Signal::SIGTERM] {
-        signal_group(group, sig);
-        let started = Instant::now();
-        loop {
-            child.try_wait().context("Cannot reap command")?;
-            if signal::killpg(group, None) == Err(nix::errno::Errno::ESRCH) {
-                child.wait().await.context("Cannot reap command")?;
-                return Ok(());
-            }
-            if started.elapsed() >= grace {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-    }
-    signal_group(group, signal::Signal::SIGKILL);
-    timeout(grace, child.wait())
-        .await
-        .context("Timed out reaping killed command")?
-        .context("Cannot reap killed command")?;
-    timeout(grace, async {
-        while group_has_live_members(group)? {
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-        Ok::<(), std::io::Error>(())
-    })
-    .await
-    .context("Timed out waiting for killed command descendants")??;
-    Ok(())
-}
-
-async fn teardown(child: &mut Child, group: nix::unistd::Pid) -> color_eyre::Result<()> {
-    terminate_and_reap(child, group, Duration::from_secs(2))
-        .await
-        .map_err(|error| eyre!(TeardownFailed(error.to_string())))
-}
+use crate::process_group::{CancelOnDrop, ProcessGroupChild};
 
 type PeekBuf<'a> = std::iter::Peekable<std::slice::Iter<'a, u8>>;
 const PRINT_LOG_TIMEOUT: i32 = 50;
@@ -206,17 +82,11 @@ impl PseudoTerminal {
     // bytes, or in specific terminal modes that absolutely ignore them (e.g. sixel)
     #[tracing::instrument(skip(self))]
     pub fn print_log(&self, prefix: &[u8]) {
-        // Amortize PTY reads, stdout locking, and writes for verbose compilers.
-        // Reads still return immediately when less data is available.
         let mut buf = [0u8; 16 * 1024];
         let mut newbuf = Vec::with_capacity(buf.len());
-        while let Ok(Some(len @ 1..)) = self.read(&mut buf).transpose().inspect_err(|e| {
-            // Linux PTY masters report EIO when the last slave closes.
-            // This is normal end-of-stream, not a failed build/log reader.
-            if *e != nix::errno::Errno::EIO {
-                tracing::error!("read(): {e:?}");
-            }
-        }) {
+        while let Ok(Some(len @ 1..)) =
+            self.read(&mut buf).transpose().inspect_err(|error| Self::report_read_error(*error))
+        {
             newbuf.clear();
             newbuf.reserve(len.saturating_add(prefix.len()));
 
@@ -226,17 +96,22 @@ impl PseudoTerminal {
                 prefix,
             );
 
-            // A closed output pipe must not panic a reader and hide process
-            // teardown state. Stop forwarding, but keep draining the child.
             if std::io::stdout().write_all(&newbuf).is_err() {
-                while let Some(Ok(len)) = self.read(&mut buf) {
-                    if len == 0 {
-                        break;
-                    }
-                }
+                self.discard_remaining_output(&mut buf);
                 return;
             }
         }
+    }
+
+    fn report_read_error(error: nix::errno::Errno) {
+        // the PTY master reports EIO once the last slave closes, which is a normal end of stream
+        if error != nix::errno::Errno::EIO {
+            tracing::error!("read(): {error:?}");
+        }
+    }
+
+    fn discard_remaining_output(&self, buf: &mut [u8]) {
+        while let Some(Ok(1..)) = self.read(buf) {}
     }
 
     fn transform_log(&self, buf: &[u8], newbuf: &mut Vec<u8>, prefix: &[u8]) {
@@ -365,77 +240,58 @@ impl PseudoTerminalCtl {
         handle_ctrl_c: bool,
     ) -> color_eyre::Result<()>
     where
-        F: std::future::Future<Output = ()> + Send + 'static,
+        F: Future<Output = ()> + Send + 'static,
     {
-        let process = cmd.as_std().get_program();
-        let process_str = process.to_string_lossy().into_owned();
-        let (stdout_prefix, stderr_prefix) = Self::get_prefix(process.as_encoded_bytes());
+        let child = self.spawn(cmd)?;
+        let (mut guard, dropped) = CancelOnDrop::new(Arc::default());
+        let cancelled = async move {
+            tokio::select! {
+                _ = dropped => {},
+                () = cancellation => {},
+                _ = tokio::signal::ctrl_c(), if handle_ctrl_c => {},
+            }
+        };
+        let process = cmd.as_std().get_program().as_encoded_bytes().to_owned();
+        let result = tokio::spawn(self.supervise(child, cancelled, process)).await?;
+        guard.disarm();
+        result
+    }
 
+    fn spawn(&self, cmd: &mut tokio::process::Command) -> color_eyre::Result<ProcessGroupChild> {
+        let program = cmd.as_std().get_program().to_string_lossy().into_owned();
         cmd.process_group(0)
             .kill_on_drop(true)
             .stdout(self.stdout.slave_stdio())
             .stderr(self.stderr.slave_stdio());
-        let spawned = cmd.spawn().context(eyre!("Cannot run {process_str}"));
-        // Command retains its configured Stdio; don't leave slave FDs open in
-        // the caller after spawn (or a failed spawn).
+        let spawned = cmd.spawn();
+        Self::release_slave_fds(cmd);
+        ProcessGroupChild::new(spawned.context(eyre!("Cannot run {program}"))?)
+    }
+
+    fn release_slave_fds(cmd: &mut tokio::process::Command) {
         cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
-        let mut out = spawned?;
-        let group =
-            nix::unistd::Pid::from_raw(i32::try_from(out.id().expect("newly spawned child"))?);
-        let (sender, receiver) = oneshot::channel();
-        let mut guard =
-            CancelOnDrop { sender: Some(sender), cancelled: Arc::new(AtomicBool::new(false)) };
-        let supervisor = tokio::spawn(async move {
-            let (stdout_stop, stderr_stop) =
-                (Arc::clone(&self.stdout.stop), Arc::clone(&self.stderr.stop));
-            let stdout = tokio::task::spawn_blocking(move || self.stdout.print_log(&stdout_prefix));
-            let stderr = tokio::task::spawn_blocking(move || self.stderr.print_log(&stderr_prefix));
-            let res = tokio::select! {
-                () = async {
-                    tokio::select! {
-                        _ = receiver => {},
-                        () = cancellation => {},
-                        _ = tokio::signal::ctrl_c(), if handle_ctrl_c => {},
-                    }
-                } => {
-                    tracing::info!("Command cancelled; terminating process group");
-                    teardown(&mut out, group).await
-                        .and_then(|()| Err(eyre!("Command cancelled")))
-                }
-                status = out.wait() => {
-                    let status = status.context("Cannot wait for command");
-                    // Failed tools can leave helpers alive too. Quiesce them
-                    // before returning to a root cleanup or dropping tempdirs.
-                    let teardown = if signal::killpg(group, None) == Err(nix::errno::Errno::ESRCH) {
-                        Ok(())
-                    } else {
-                        teardown(&mut out, group).await
-                    };
-                    teardown.and(status).and_then(|status| {
-                        if status.success() {
-                            Ok(())
-                        } else {
-                            Err(eyre!("Command exited with status: {status}"))
-                        }
-                    })
-                }
-            };
-            stdout_stop.store(true, std::sync::atomic::Ordering::Relaxed);
-            stderr_stop.store(true, std::sync::atomic::Ordering::Relaxed);
-            let (stdout, stderr) = tokio::join!(stdout, stderr);
-            // Teardown safety takes precedence over secondary logging errors:
-            // callers must still recognize TeardownFailed and retain the root.
-            res?;
-            stdout?;
-            stderr?;
-            // The command is already complete; a closed output pipe cannot
-            // change its result or process-teardown status.
-            drop(std::io::stdout().write_all(b"\n"));
-            Ok(())
-        });
-        let result = supervisor.await?;
-        guard.sender.take();
-        result
+    }
+
+    async fn supervise(
+        self,
+        mut child: ProcessGroupChild,
+        cancelled: impl Future<Output = ()>,
+        process: Vec<u8>,
+    ) -> color_eyre::Result<()> {
+        let (stdout_prefix, stderr_prefix) = Self::get_prefix(&process);
+        let (stdout_stop, stderr_stop) =
+            (Arc::clone(&self.stdout.stop), Arc::clone(&self.stderr.stop));
+        let stdout = tokio::task::spawn_blocking(move || self.stdout.print_log(&stdout_prefix));
+        let stderr = tokio::task::spawn_blocking(move || self.stderr.print_log(&stderr_prefix));
+        let result = child.run_until(cancelled).await;
+        stdout_stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        stderr_stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        let (stdout, stderr) = tokio::join!(stdout, stderr);
+        result?;
+        stdout?;
+        stderr?;
+        drop(std::io::stdout().write_all(b"\n"));
+        Ok(())
     }
 
     fn get_prefix(process: &[u8]) -> (Vec<u8>, Vec<u8>) {
@@ -457,6 +313,7 @@ impl PseudoTerminalCtl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::time::{timeout, Duration};
 
     async fn wait_for(path: &std::path::Path) {
         timeout(Duration::from_secs(5), async {
@@ -466,53 +323,6 @@ mod tests {
         })
         .await
         .expect("synthetic child failed to become ready");
-    }
-
-    #[tokio::test]
-    async fn escalation_signals_descendants_and_reaps_leader() {
-        let control = tempfile::tempdir().unwrap();
-        let ready = control.path().join("ready");
-        let reaped = control.path().join("reaped");
-        let mut cmd = tokio::process::Command::new("python3");
-        cmd.arg("-c")
-            .arg(
-                "
-import os, signal, sys, time
-from pathlib import Path
-signal.signal(signal.SIGINT, signal.SIG_IGN)
-pid = os.fork()
-if pid == 0:
-    while True: time.sleep(.02)
-signal.signal(signal.SIGTERM, signal.SIG_IGN)
-Path(sys.argv[1]).write_text(str(pid))
-os.waitpid(pid, 0)
-Path(sys.argv[2]).write_text('reaped')
-while True: time.sleep(.02)
-",
-            )
-            .arg(&ready)
-            .arg(&reaped)
-            .process_group(0)
-            .kill_on_drop(true);
-        let mut child = cmd.spawn().unwrap();
-        let pid = child.id().unwrap();
-        wait_for(&ready).await;
-        let helper: u32 = std::fs::read_to_string(&ready).unwrap().parse().unwrap();
-        timeout(
-            Duration::from_secs(3),
-            terminate_and_reap(
-                &mut child,
-                nix::unistd::Pid::from_raw(i32::try_from(pid).unwrap()),
-                Duration::from_millis(200),
-            ),
-        )
-        .await
-        .unwrap()
-        .unwrap();
-        assert!(reaped.exists(), "SIGTERM was not delivered to descendant");
-        assert_eq!(child.wait().await.unwrap().code(), None);
-        assert!(!std::path::Path::new(&format!("/proc/{pid}")).exists());
-        assert!(!std::path::Path::new(&format!("/proc/{helper}")).exists());
     }
 
     #[tokio::test]

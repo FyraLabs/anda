@@ -272,7 +272,8 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
 
     let walk = ignore::Walk::new(parent);
 
-    let path = path.canonicalize().map_err(|e| ProjectError::InvalidManifest(e.to_string()))?;
+    let root_manifest =
+        path.canonicalize().map_err(|e| ProjectError::InvalidManifest(e.to_string()))?;
 
     for entry in walk {
         trace!("Found {entry:?}");
@@ -281,14 +282,7 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
         if entry.file_type().is_some_and(|kind| kind.is_file())
             && entry.path().file_name().is_some_and(|name| name == "anda.hcl")
         {
-            // Walk paths may be relative, unlike the canonical root path. Only
-            // canonicalize manifest candidates, and never parse the root twice.
-            if entry
-                .path()
-                .canonicalize()
-                .map_err(|e| ProjectError::InvalidManifest(e.to_string()))?
-                == path
-            {
+            if is_same_file(entry.path(), &root_manifest)? {
                 continue;
             }
             debug!("Loading: {entry:?}");
@@ -310,6 +304,11 @@ pub fn load_from_file(path: &PathBuf) -> Result<Manifest, ProjectError> {
     generate_alias(&mut config);
 
     check_config(config)
+}
+
+fn is_same_file(path: &Path, canonical: &Path) -> Result<bool, ProjectError> {
+    let path = path.canonicalize().map_err(|e| ProjectError::InvalidManifest(e.to_string()))?;
+    Ok(path == canonical)
 }
 
 #[must_use]
@@ -484,8 +483,6 @@ mod test_parser {
 
     #[test]
     fn relative_root_manifest_is_not_loaded_twice() {
-        // Create under the existing cwd, then pass a relative path. Never
-        // mutate process-global cwd while the test suite runs concurrently.
         let directory = PathBuf::from(format!(
             ".anda-relative-root-{}-{}",
             std::process::id(),

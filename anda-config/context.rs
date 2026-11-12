@@ -22,13 +22,12 @@ static GLOBAL_CONTEXT: LazyLock<Context> = LazyLock::new(|| {
     ctx
 });
 
-/// Borrow the immutable evaluation context without cloning its env snapshot.
 #[must_use]
 pub fn shared_hcl_context() -> &'static Context<'static> {
     &GLOBAL_CONTEXT
 }
 
-/// Generate a mutable Context for callers that add variables or functions.
+/// Generate Context for HCL evaluation
 pub fn hcl_context() -> Context<'static> {
     GLOBAL_CONTEXT.clone()
 }

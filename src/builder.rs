@@ -22,10 +22,9 @@ pub async fn build_rpm(
     let repo_path = output_dir.join("rpm");
     println!("Building RPMs in {}", repo_path.display());
     let repodata_path = repo_path.join("repodata");
+    let maintain_local_repo = !rpmb_opts.no_repodata;
 
-    // Opting out also excludes existing metadata, which would otherwise become
-    // stale after this build and silently feed later dependency resolution.
-    if !rpmb_opts.no_repodata && repodata_path.exists() {
+    if maintain_local_repo && repodata_path.exists() {
         let repo_path = repo_path.canonicalize()?;
 
         let repo_path = format!("file://{}", repo_path.display());
@@ -86,7 +85,7 @@ pub async fn build_rpm(
 
     let builder = builder.build(spec, opts).await?;
 
-    if !rpmb_opts.no_repodata {
+    if maintain_local_repo {
         cmd!(? "createrepo_c" "--quiet" "--update" {{repo_path.display()}})?;
     }
 
