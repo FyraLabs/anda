@@ -61,12 +61,25 @@ pub fn group_build_entries(entries: Vec<BuildEntry>) -> Vec<BuildUnit> {
     for entry in entries {
         let name = match entry.labels.get("group").filter(|group| !group.is_empty()) {
             Some(group) => format!("group-{}", URL_SAFE_NO_PAD.encode(group)),
-            None => format!("package-{}-{}", URL_SAFE_NO_PAD.encode(&entry.pkg), entry.arch),
+            None => {
+                format!(
+                    "package-{}-{}",
+                    URL_SAFE_NO_PAD.encode(&entry.pkg),
+                    publish_arch(&entry.arch)
+                )
+            }
         };
         units.entry(name).or_default().push(entry);
     }
 
     units.into_iter().map(|(name, packages)| BuildUnit { name, packages }).collect()
+}
+
+fn publish_arch(arch: &str) -> &str {
+    match arch {
+        "i386" | "i686" => "x86_64",
+        arch => arch,
+    }
 }
 
 pub fn fetch_build_entries(config: &Manifest, config_path: &Path) -> Vec<BuildEntry> {
@@ -465,6 +478,8 @@ mod tests {
             entry("nvidia/a", "x86_64", Some("nvidia")),
             entry("nvidia/b", "aarch64", Some("nvidia")),
             entry("discord", "x86_64", None),
+            entry("discord", "i686", None),
+            entry("discord", "i386", None),
             entry("discord", "aarch64", None),
         ]);
 
@@ -474,7 +489,7 @@ mod tests {
             [
                 (format!("group-{}", URL_SAFE_NO_PAD.encode("nvidia")), 2),
                 (format!("package-{}-aarch64", URL_SAFE_NO_PAD.encode("discord")), 1),
-                (format!("package-{}-x86_64", URL_SAFE_NO_PAD.encode("discord")), 1),
+                (format!("package-{}-x86_64", URL_SAFE_NO_PAD.encode("discord")), 3),
             ]
         );
     }
