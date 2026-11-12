@@ -222,6 +222,22 @@ pub fn parse_filters(filters: &[String]) -> Option<Vec<Vec<(String, String)>>> {
     filters.iter().map(std::ops::Deref::deref).map(crate::parse_kv).map(Iterator::collect).collect()
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct LabelFilter {
+    pub filters: Vec<Vec<(String, String)>>,
+    pub excludes: Vec<Vec<(String, String)>>,
+}
+
+impl LabelFilter {
+    #[must_use]
+    pub fn matches(&self, labels: &BTreeMap<String, String>) -> bool {
+        let has_all =
+            |set: &Vec<(String, String)>| set.iter().all(|(k, v)| labels.get(k) == Some(v));
+        (self.filters.is_empty() || self.filters.iter().any(has_all))
+            && !self.excludes.iter().any(has_all)
+    }
+}
+
 /// Turn a string into a BTreeMap<String, String>
 pub fn parse_labels<'a, I: Iterator<Item = &'a str>>(labels: I) -> Option<Vec<(String, String)>> {
     labels.flat_map(parse_kv).collect()
@@ -450,6 +466,23 @@ mod test_parser {
 
         assert_eq!(config.project["anda"].labels.get("nightly"), Some(&"1".to_owned()));
         assert_eq!(config.project["anda"].build_group(), Some("nvidia"));
+    }
+
+    #[test]
+    fn label_filter_ors_filters_and_lets_excludes_win() {
+        let labels = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
+            pairs.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect()
+        };
+        let sets = |sets: &[&str]| {
+            parse_filters(&sets.iter().map(|&s| s.to_owned()).collect::<Vec<_>>()).unwrap()
+        };
+        let filter = LabelFilter { filters: sets(&["a=1,b=2", "c=3"]), excludes: sets(&["d=4"]) };
+
+        assert!(filter.matches(&labels(&[("a", "1"), ("b", "2")])));
+        assert!(filter.matches(&labels(&[("c", "3")])));
+        assert!(!filter.matches(&labels(&[("a", "1")])));
+        assert!(!filter.matches(&labels(&[("c", "3"), ("d", "4")])));
+        assert!(LabelFilter::default().matches(&labels(&[])));
     }
 
     #[test]

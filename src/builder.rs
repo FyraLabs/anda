@@ -6,7 +6,7 @@ use crate::{
     oci::{build_oci, OCIBackend},
     rpm_spec::{RPMBuilder, RPMExtraOptions, RPMOptions},
 };
-use anda_config::{Docker, Flatpak, Project};
+use anda_config::{Docker, Flatpak, LabelFilter, Project};
 use color_eyre::{eyre::eyre, eyre::Context, Result};
 use itertools::Itertools;
 use std::path::{Path, PathBuf};
@@ -459,74 +459,44 @@ async fn build_all(
     Ok(())
 }
 
-pub async fn builder(
-    cli: &Cli,
-    rpm_opts: RpmOpts,
-    all: bool,
-    project: Option<String>,
-    package: PackageType,
-    flatpak_opts: FlatpakOpts,
-    oci_opts: OciOpts,
-) -> Result<()> {
-    // Parse the project manifest
-    // todo
-    // ? can we assume cli.config won't be modified?
-    let config = anda_config::load_from_file(&cli.config.clone())?;
-    trace!("all: {all}");
-    trace!("project: {project:?}");
-    trace!("package: {package:?}");
-    // export envars for CLI environment
-    std::env::set_var("ANDA_TARGET_DIR", &cli.target_dir);
-    std::env::set_var("ANDA_CONFIG_PATH", &cli.config);
-
-    if all {
-        for (name, project) in config.project {
-            println!("Building project: {name}");
-            build_project(cli, project, package, &rpm_opts, &flatpak_opts, &oci_opts).await?;
-        }
-    } else {
-        // find project named project
-        if let Some(name) = project {
-            if let Some(project) = config.get_project(&name) {
-                // cannot take: get_project() returns immut ref
-                build_project(cli, project.clone(), package, &rpm_opts, &flatpak_opts, &oci_opts)
-                    .await?;
-            } else {
-                return Err(eyre!("Project not found: {name}"));
-            }
-        } else {
-            return Err(eyre!("No project specified"));
-        }
-    }
-    Ok(())
+pub enum BuildTarget {
+    All(LabelFilter),
+    Project(String),
 }
 
-pub async fn build_group(
+pub async fn builder(
     cli: &Cli,
-    group: &str,
+    target: BuildTarget,
     package: PackageType,
     rpm_opts: &RpmOpts,
     flatpak_opts: &FlatpakOpts,
     oci_opts: &OciOpts,
 ) -> Result<()> {
     let config = anda_config::load_from_file(&cli.config)?;
-    let members: Vec<_> = config
-        .project
-        .into_iter()
-        .filter(|(_, project)| project.build_group() == Some(group))
-        .collect();
-    if members.is_empty() {
-        return Err(eyre!("No projects found in build group: {group}"));
+    let projects: Vec<_> = match target {
+        BuildTarget::All(filter) => config
+            .project
+            .into_iter()
+            .filter(|(_, project)| filter.matches(&project.labels))
+            .collect(),
+        BuildTarget::Project(name) => {
+            let project =
+                config.get_project(&name).ok_or_else(|| eyre!("Project not found: {name}"))?;
+            vec![(name, project.clone())]
+        }
+    };
+    if projects.is_empty() {
+        return Err(eyre!("No projects matched the label filters"));
     }
 
     std::env::set_var("ANDA_TARGET_DIR", &cli.target_dir);
     std::env::set_var("ANDA_CONFIG_PATH", &cli.config);
 
-    for (name, project) in members {
-        println!("Building project in group {group}: {name}");
+    for (name, project) in projects {
+        println!("Building project: {name}");
         build_project(cli, project, package, rpm_opts, flatpak_opts, oci_opts)
             .await
-            .with_context(|| format!("Failed to build {name} in group {group}"))?;
+            .with_context(|| format!("Failed to build {name}"))?;
     }
     Ok(())
 }
