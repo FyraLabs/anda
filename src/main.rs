@@ -65,18 +65,13 @@ async fn main() -> Result<()> {
             builder::builder(&cli, rpm_opts, all, project, package, flatpak_opts, oci_opts).await?;
         }
         Command::BuildGroup {
-            ref mut group,
-            ref mut package,
-            ref mut rpm_opts,
-            ref mut flatpak_opts,
-            ref mut oci_opts,
+            ref group,
+            package,
+            ref rpm_opts,
+            ref flatpak_opts,
+            ref oci_opts,
         } => {
-            let group = take(group);
-            let package = std::mem::replace(package, cli::PackageType::Rpm);
-            let flatpak_opts = take(flatpak_opts);
-            let oci_opts = take(oci_opts);
-            let rpm_opts = take(rpm_opts);
-            builder::build_group(&cli, rpm_opts, &group, package, flatpak_opts, oci_opts).await?;
+            builder::build_group(&cli, group, package, rpm_opts, flatpak_opts, oci_opts).await?;
         }
         Command::Clean => {
             println!("Cleaning up build directory");
@@ -114,15 +109,13 @@ async fn main() -> Result<()> {
         }
         Command::CI { arches, unique_packages } => {
             let config = anda_config::load_from_file(&cli.config)?;
-            let entries = util::fetch_build_entries(&config, &cli.config);
-            let entries = util::configure_build_entries(entries, &arches, unique_packages);
-            let matrix = serde_json::to_string(&entries)?;
-            let units = util::group_build_entries(entries);
-
-            // Keep the package-level matrix for existing consumers and expose grouped build units
-            // for CI workflows that need per-group build/publish barriers.
-            println!("build_matrix={matrix}");
-            println!("build_units={}", serde_json::to_string(&units)?);
+            let entries = util::configure_build_entries(
+                util::fetch_build_entries(&config, &cli.config),
+                &arches,
+                unique_packages,
+            );
+            println!("build_matrix={}", serde_json::to_string(&entries)?);
+            println!("build_units={}", serde_json::to_string(&util::group_build_entries(entries))?);
         }
         Command::Update { labels, filters, excludes, project } => {
             let labels = parse_labels(labels.iter().map(std::ops::Deref::deref))

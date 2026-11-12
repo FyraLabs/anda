@@ -70,7 +70,6 @@ pub struct Project {
 }
 
 impl Project {
-    /// Return the build group for this project, if its `group` label is set.
     #[must_use]
     pub fn build_group(&self) -> Option<&str> {
         self.labels.get("group").map(String::as_str).filter(|group| !group.is_empty())
@@ -451,6 +450,18 @@ mod test_parser {
 
         assert_eq!(config.project["anda"].labels.get("nightly"), Some(&"1".to_owned()));
         assert_eq!(config.project["anda"].build_group(), Some("nvidia"));
+    }
+
+    #[test]
+    fn build_group_ignores_empty_and_subrepo_labels() {
+        let with_labels = |labels: &[(&str, &str)]| Project {
+            labels: labels.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect(),
+            ..Default::default()
+        };
+
+        assert_eq!(with_labels(&[("group", "explicit")]).build_group(), Some("explicit"));
+        assert_eq!(with_labels(&[("subrepo", "fallback")]).build_group(), None);
+        assert_eq!(with_labels(&[("group", "")]).build_group(), None);
     }
 
     #[test]
