@@ -17,7 +17,7 @@ Alternatively you can also manually download the sources from GitHub:
 ```sh
 git clone https://github.com/FyraLabs/anda
 cd anda
-git checkout 0.8.13
+git checkout 0.8.14
 cargo install --path .
 ```
 

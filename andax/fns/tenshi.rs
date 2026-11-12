@@ -65,14 +65,15 @@ pub mod ar {
     /// turns a map into json
     #[rhai_fn(return_raw, global)]
     pub fn to_json(ctx: NativeCallContext, map: rhai::Map) -> Res<String> {
-        let json = serde_json::to_string(&map).ehdl(&ctx)?;
+        let json = serde_json::to_string(&rhai::Dynamic::from_map(map)).ehdl(&ctx)?;
         Ok(json)
     }
 
     /// turns a json string into a map
     #[rhai_fn(return_raw, global)]
     pub fn from_json(ctx: NativeCallContext, json: String) -> Res<rhai::Map> {
-        let map = serde_json::from_str(&json).ehdl(&ctx)?;
-        Ok(map)
+        let value: rhai::Dynamic = serde_json::from_str(&json).ehdl(&ctx)?;
+        let type_name = value.type_name();
+        value.try_cast().ok_or_else(|| format!("expected a JSON object, got {type_name}").into())
     }
 }
