@@ -61,7 +61,7 @@ pub fn group_build_entries(entries: Vec<BuildEntry>) -> Vec<BuildUnit> {
     for entry in entries {
         let name = match entry.labels.get("group").filter(|group| !group.is_empty()) {
             Some(group) => format!("group-{}", URL_SAFE_NO_PAD.encode(group)),
-            None => format!("package-{}", URL_SAFE_NO_PAD.encode(&entry.pkg)),
+            None => format!("package-{}-{}", URL_SAFE_NO_PAD.encode(&entry.pkg), entry.arch),
         };
         units.entry(name).or_default().push(entry);
     }
@@ -460,7 +460,7 @@ mod tests {
     }
 
     #[test]
-    fn units_split_by_group_or_package() {
+    fn units_split_by_group_or_package_arch() {
         let units = group_build_entries(vec![
             entry("nvidia/a", "x86_64", Some("nvidia")),
             entry("nvidia/b", "aarch64", Some("nvidia")),
@@ -473,7 +473,8 @@ mod tests {
             summary,
             [
                 (format!("group-{}", URL_SAFE_NO_PAD.encode("nvidia")), 2),
-                (format!("package-{}", URL_SAFE_NO_PAD.encode("discord")), 2),
+                (format!("package-{}-aarch64", URL_SAFE_NO_PAD.encode("discord")), 1),
+                (format!("package-{}-x86_64", URL_SAFE_NO_PAD.encode("discord")), 1),
             ]
         );
     }
