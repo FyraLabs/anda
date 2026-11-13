@@ -1208,7 +1208,7 @@ impl RPMSpecBackend for RPMBuildBackend {
                 let rpms_dir = self.resultdir.join("rpm/rpms");
                 std::fs::create_dir_all(&rpms_dir)?;
                 let dest = rpms_dir.join(entry.file_name());
-                Artifact::new(entry.path().to_path_buf(), dest.clone()).publish()?;
+                Artifact::new(entry.path().to_path_buf(), dest).publish()?;
                 rpms.push(rpms_dir.join(entry.file_name()));
             }
         }

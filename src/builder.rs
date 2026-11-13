@@ -264,7 +264,7 @@ pub fn build_oci_call(
         );
 
         for artifact in art {
-            artifact_store.add(artifact.clone(), art_type);
+            artifact_store.add(artifact, art_type);
         }
     }
 }

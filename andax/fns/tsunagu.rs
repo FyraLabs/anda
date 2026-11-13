@@ -2035,7 +2035,7 @@ pub mod ar {
     #[rhai_fn(global)]
     pub fn env(key: &str) -> String {
         trace!("env(`{key}`) = {:?}", std::env::var_os(key));
-        std::env::var_os(key).map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+        std::env::var_os(key).map_or_default(|s| s.to_string_lossy().to_string())
     }
 }
 

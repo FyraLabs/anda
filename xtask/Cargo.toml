@@ -12,3 +12,6 @@ anda = { path = ".." }
 clap = { workspace = true }
 anyhow = "1.0.103"
 clap_complete = { workspace = true }
+
+[lints]
+workspace = true
