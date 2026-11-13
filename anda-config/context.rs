@@ -22,6 +22,11 @@ static GLOBAL_CONTEXT: LazyLock<Context> = LazyLock::new(|| {
     ctx
 });
 
+#[must_use]
+pub fn shared_hcl_context() -> &'static Context<'static> {
+    &GLOBAL_CONTEXT
+}
+
 /// Generate Context for HCL evaluation
 pub fn hcl_context() -> Context<'static> {
     GLOBAL_CONTEXT.clone()

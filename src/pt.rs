@@ -1,11 +1,13 @@
 use std::{
+    future::Future,
     io::Write,
     os::fd::FromRawFd,
     sync::{atomic::AtomicBool, Arc},
 };
 
 use color_eyre::eyre::{eyre, Context};
-use nix::sys::signal;
+
+use crate::process_group::{CancelOnDrop, ProcessGroupChild};
 
 type PeekBuf<'a> = std::iter::Peekable<std::slice::Iter<'a, u8>>;
 const PRINT_LOG_TIMEOUT: i32 = 50;
@@ -69,6 +71,7 @@ impl PseudoTerminal {
             match unsafe { nix::libc::poll(&raw mut pollfd, 1, PRINT_LOG_TIMEOUT) } {
                 0 => {}
                 1 => return Some(nix::unistd::read(self, buf)),
+                -1 if std::io::Error::last_os_error().raw_os_error() == Some(nix::libc::EINTR) => {}
                 rc => panic!("unexpected return value from poll(): {rc}"),
             }
         }
@@ -79,13 +82,13 @@ impl PseudoTerminal {
     // bytes, or in specific terminal modes that absolutely ignore them (e.g. sixel)
     #[tracing::instrument(skip(self))]
     pub fn print_log(&self, prefix: &[u8]) {
-        let mut buf = [0u8; 256];
-        let mut newbuf = Vec::with_capacity(256);
+        let mut buf = [0u8; 16 * 1024];
+        let mut newbuf = Vec::with_capacity(buf.len());
         while let Ok(Some(len @ 1..)) =
-            self.read(&mut buf).transpose().inspect_err(|e| tracing::error!("read(): {e:?}"))
+            self.read(&mut buf).transpose().inspect_err(|error| Self::report_read_error(*error))
         {
             newbuf.clear();
-            newbuf.reserve(len.saturating_add_signed(64));
+            newbuf.reserve(len.saturating_add(prefix.len()));
 
             self.transform_log(
                 buf.get(..len).expect("out of range buf slicing from read()"),
@@ -93,8 +96,22 @@ impl PseudoTerminal {
                 prefix,
             );
 
-            std::io::stdout().write_all(&newbuf).expect("cannot write to stdout");
+            if std::io::stdout().write_all(&newbuf).is_err() {
+                self.discard_remaining_output(&mut buf);
+                return;
+            }
         }
+    }
+
+    fn report_read_error(error: nix::errno::Errno) {
+        // the PTY master reports EIO once the last slave closes, which is a normal end of stream
+        if error != nix::errno::Errno::EIO {
+            tracing::error!("read(): {error:?}");
+        }
+    }
+
+    fn discard_remaining_output(&self, buf: &mut [u8]) {
+        while let Some(Ok(1..)) = self.read(buf) {}
     }
 
     fn transform_log(&self, buf: &[u8], newbuf: &mut Vec<u8>, prefix: &[u8]) {
@@ -213,53 +230,68 @@ impl PseudoTerminalCtl {
     }
 
     pub async fn run(self, cmd: &mut tokio::process::Command) -> color_eyre::Result<()> {
-        let process = cmd.as_std().get_program();
-        let process_str = process.to_string_lossy().into_owned();
-        let (stdout_prefix, stderr_prefix) = Self::get_prefix(process.as_encoded_bytes());
+        self.run_with_cancellation(cmd, std::future::pending(), true).await
+    }
 
-        let mut out = cmd
+    pub async fn run_with_cancellation<F>(
+        self,
+        cmd: &mut tokio::process::Command,
+        cancellation: F,
+        handle_ctrl_c: bool,
+    ) -> color_eyre::Result<()>
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        let child = self.spawn(cmd)?;
+        let (mut guard, dropped) = CancelOnDrop::new(Arc::default());
+        let cancelled = async move {
+            tokio::select! {
+                _ = dropped => {},
+                () = cancellation => {},
+                _ = tokio::signal::ctrl_c(), if handle_ctrl_c => {},
+            }
+        };
+        let process = cmd.as_std().get_program().as_encoded_bytes().to_owned();
+        let result = tokio::spawn(self.supervise(child, cancelled, process)).await?;
+        guard.disarm();
+        result
+    }
+
+    fn spawn(&self, cmd: &mut tokio::process::Command) -> color_eyre::Result<ProcessGroupChild> {
+        let program = cmd.as_std().get_program().to_string_lossy().into_owned();
+        cmd.process_group(0)
+            .kill_on_drop(true)
             .stdout(self.stdout.slave_stdio())
-            .stderr(self.stderr.slave_stdio())
-            .spawn()
-            .context(eyre!("Cannot run {process_str}"))?;
+            .stderr(self.stderr.slave_stdio());
+        let spawned = cmd.spawn();
+        Self::release_slave_fds(cmd);
+        ProcessGroupChild::new(spawned.context(eyre!("Cannot run {program}"))?)
+    }
 
+    fn release_slave_fds(cmd: &mut tokio::process::Command) {
+        cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    }
+
+    async fn supervise(
+        self,
+        mut child: ProcessGroupChild,
+        cancelled: impl Future<Output = ()>,
+        process: Vec<u8>,
+    ) -> color_eyre::Result<()> {
+        let (stdout_prefix, stderr_prefix) = Self::get_prefix(&process);
         let (stdout_stop, stderr_stop) =
             (Arc::clone(&self.stdout.stop), Arc::clone(&self.stderr.stop));
-
-        tokio::join!(
-            tokio::task::spawn_blocking(move || {
-                self.stdout.print_log(&stdout_prefix);
-            }),
-            tokio::task::spawn_blocking(move || {
-                self.stderr.print_log(&stderr_prefix);
-            }),
-            tokio::spawn(async move {
-                let res = tokio::select! {
-                    _ = tokio::signal::ctrl_c() => {
-                        let Some(id) = out.id() else { return Err(eyre!("Received ctrl-c, exiting")); };
-                        tracing::info!("Received ctrl-c, sending sigkill to child process");
-                        #[allow(clippy::cast_possible_wrap)]
-                        if let Err(e) = signal::kill(nix::unistd::Pid::from_raw(id as i32), signal::Signal::SIGKILL) {
-                            tracing::error!(?e, "cannot kill pt child");
-                        }
-                        Err(eyre!("Received ctrl-c, exiting"))
-                    }
-                    w = out.wait() => {
-                        let status = w.unwrap();
-                        if status.success() {
-                            tracing::info!("Command exited successfully");
-                            Ok(())
-                        } else {
-                            Err(eyre!("Command exited with status: {status}"))
-                        }
-                    }
-                };
-                stdout_stop.store(true, std::sync::atomic::Ordering::Relaxed);
-                stderr_stop.store(true, std::sync::atomic::Ordering::Relaxed);
-                println!();
-                res
-            })
-        ).2?
+        let stdout = tokio::task::spawn_blocking(move || self.stdout.print_log(&stdout_prefix));
+        let stderr = tokio::task::spawn_blocking(move || self.stderr.print_log(&stderr_prefix));
+        let result = child.run_until(cancelled).await;
+        stdout_stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        stderr_stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        let (stdout, stderr) = tokio::join!(stdout, stderr);
+        result?;
+        stdout?;
+        stderr?;
+        drop(std::io::stdout().write_all(b"\n"));
+        Ok(())
     }
 
     fn get_prefix(process: &[u8]) -> (Vec<u8>, Vec<u8>) {
@@ -275,5 +307,80 @@ impl PseudoTerminalCtl {
             [CYAN, process, RESET, " │ ".as_bytes()].concat(),
             [YELLOW, process, RESET, " │ ".as_bytes()].concat(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::time::{timeout, Duration};
+
+    async fn wait_for(path: &std::path::Path) {
+        timeout(Duration::from_secs(5), async {
+            while !path.exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("synthetic child failed to become ready");
+    }
+
+    #[tokio::test]
+    async fn dropped_logger_future_terminates_and_reaps_its_child() {
+        let control = tempfile::tempdir().unwrap();
+        let ready = control.path().join("ready");
+        let stopped = control.path().join("stopped");
+        let mut cmd = tokio::process::Command::new("python3");
+        cmd.arg("-c")
+            .arg(
+                "
+import os, signal, sys, time
+from pathlib import Path
+def stop(*_):
+    Path(sys.argv[2]).write_text('stopped')
+    sys.exit(0)
+signal.signal(signal.SIGINT, stop)
+Path(sys.argv[1]).write_text(str(os.getpid()))
+while True: time.sleep(.02)
+",
+            )
+            .arg(&ready)
+            .arg(&stopped);
+        let caller = tokio::spawn(async move {
+            PseudoTerminalCtl::new(cmd.as_std().get_program()).run(&mut cmd).await
+        });
+        wait_for(&ready).await;
+        let pid = std::fs::read_to_string(&ready).unwrap();
+        caller.abort();
+        assert!(caller.await.unwrap_err().is_cancelled());
+        wait_for(&stopped).await;
+        timeout(Duration::from_secs(3), async {
+            while std::path::Path::new(&format!("/proc/{pid}")).exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("cancelled child was not reaped");
+    }
+
+    #[tokio::test]
+    async fn spawn_and_exit_failures_are_reported_without_hanging_readers() {
+        let mut missing = tokio::process::Command::new("/anda-test-no-such-tool");
+        let result = timeout(
+            Duration::from_secs(2),
+            PseudoTerminalCtl::new(missing.as_std().get_program()).run(&mut missing),
+        )
+        .await
+        .unwrap();
+        assert!(result.unwrap_err().to_string().contains("Cannot run"));
+        let mut failure = tokio::process::Command::new("python3");
+        failure.arg("-c").arg("import sys; sys.exit(37)");
+        let result = timeout(
+            Duration::from_secs(2),
+            PseudoTerminalCtl::new(failure.as_std().get_program()).run(&mut failure),
+        )
+        .await
+        .unwrap();
+        assert!(result.unwrap_err().to_string().contains("37"));
     }
 }

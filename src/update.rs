@@ -78,7 +78,7 @@ pub fn update(
         }
         trace!(name, scr = scr.to_str(), "Th start");
         let fls = fls.to_owned();
-        let alias = proj.alias.into_iter().flatten().next().clone().unwrap_or(name);
+        let alias = proj.alias.into_iter().flatten().next().unwrap_or(name);
         handlers.push(Builder::new().name(alias).spawn(move || {
             let th = thread::current();
             let name = th.name().expect("No name for andax thread??");

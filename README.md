@@ -24,6 +24,19 @@ cargo install --path .
 ## How it works
 Andaman is simply a meta-build system that calls upon other build systems to build and distribute packages. It works by reading a project manifest in `anda.hcl` and then calling the appropriate build system to build the package.
 
+## Experimental single-process Mock builds
+
+`anda build PROJECT --mock-single-process` builds the SRPM and RPMs in a single
+Mock invocation instead of two, so the buildroot is only set up once. SCM builds
+aren't supported in this mode yet.
+
+## Skipping local repodata
+
+`anda build PROJECT --no-repodata` skips `createrepo_c` and doesn't feed the
+output directory back to Mock as a repository. Use it when artifacts get
+uploaded elsewhere, not when later builds depend on this one's packages. Run
+`createrepo_c --update OUTPUT/rpm` before reusing that directory as a repo.
+
 ## Features
 - Building RPMs
 - Building Docker/Podman/OCI images

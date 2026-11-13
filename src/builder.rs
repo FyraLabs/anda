@@ -22,8 +22,9 @@ pub async fn build_rpm(
     let repo_path = output_dir.join("rpm");
     println!("Building RPMs in {}", repo_path.display());
     let repodata_path = repo_path.join("repodata");
+    let maintain_local_repo = !rpmb_opts.no_repodata;
 
-    if repodata_path.exists() {
+    if maintain_local_repo && repodata_path.exists() {
         let repo_path = repo_path.canonicalize()?;
 
         let repo_path = format!("file://{}", repo_path.display());
@@ -84,7 +85,9 @@ pub async fn build_rpm(
 
     let builder = builder.build(spec, opts).await?;
 
-    cmd!(? "createrepo_c" "--quiet" "--update" {{repo_path.display()}})?;
+    if maintain_local_repo {
+        cmd!(? "createrepo_c" "--quiet" "--update" {{repo_path.display()}})?;
+    }
 
     Ok(builder)
 }
@@ -261,7 +264,7 @@ pub fn build_oci_call(
         );
 
         for artifact in art {
-            artifact_store.add(artifact.clone(), art_type);
+            artifact_store.add(artifact, art_type);
         }
     }
 }
@@ -337,6 +340,8 @@ pub async fn build_project(
             }
             // TODO: Implement global settings
         }
+
+        rpm_opts.mock_single_process = rbopts.mock_single_process;
 
         if let Some(mock_no_cleanup) = &rbopts.mock_no_cleanup {
             match mock_no_cleanup {

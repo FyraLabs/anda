@@ -7,7 +7,6 @@ use std::fs::create_dir_all;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 
 fn main() -> Result<()> {
     let task = env::args().nth(1);
@@ -25,51 +24,34 @@ fn print_help() {
 manpage            builds application and man pages
 completion         builds shell completions
 "
-    )
+    );
 }
 
-/// WARN: Consumes subcommands
-fn gen_manpage(cmd: Rc<Command>, man_dir: &Path) {
-    let name = cmd
-        .get_display_name()
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| cmd.clone().get_name().to_string());
+fn gen_manpage(cmd: &Command, man_dir: &Path) -> Result<()> {
+    let name = cmd.get_display_name().unwrap_or_else(|| cmd.get_name()).to_owned();
     if name.starts_with("anda-help") {
-        return;
+        return Ok(());
     }
-    let mut out = File::create(man_dir.join(format!("{name}.1"))).unwrap();
-    {
-        // HACK 'static
-        let name: &'static str = Box::leak(Box::new(name));
-        let man_cmd = (*cmd).clone().name(name);
-        clap_mangen::Man::new(man_cmd).render(&mut out).unwrap();
-    }
-    out.flush().unwrap();
+    let mut out = File::create(man_dir.join(format!("{name}.1")))?;
+    let name: &'static str = Box::leak(name.into_boxed_str());
+    clap_mangen::Man::new(cmd.clone().name(name)).render(&mut out)?;
+    out.flush()?;
 
-    for sub in (*cmd).clone().get_subcommands_mut() {
-        // let sub = sub.clone().display_name("anda-b");
-        gen_manpage(Rc::new(std::mem::take(sub)), man_dir)
+    for sub in cmd.get_subcommands() {
+        gen_manpage(sub, man_dir)?;
     }
+    Ok(())
 }
 
 fn manpage() -> Result<()> {
-    let app = Rc::new({
-        let mut cmd = Cli::command();
-        cmd.build();
-        cmd
-    });
-    let out_dir = "target";
-    let man_dir = PathBuf::from(&out_dir).join("man_pages");
+    let mut app = Cli::command();
+    app.build();
+    let out_dir = PathBuf::from("target");
 
-    create_dir_all(&man_dir).unwrap();
-
-    gen_manpage(app.clone(), &man_dir);
-
-    let path = PathBuf::from(&out_dir).join("assets");
-
-    let man_dir = path.join("man_pages");
-    std::fs::create_dir_all(&man_dir).unwrap();
-    gen_manpage(app, &man_dir);
+    for man_dir in [out_dir.join("man_pages"), out_dir.join("assets/man_pages")] {
+        create_dir_all(&man_dir)?;
+        gen_manpage(&app, &man_dir)?;
+    }
 
     Ok(())
 }
@@ -91,7 +73,7 @@ fn completion() -> Result<()> {
 
     for (shell, name) in shells {
         let dir = completion_dir.join(name);
-        std::fs::create_dir_all(&dir).unwrap();
+        create_dir_all(&dir)?;
         generate_to(shell, &mut app, "anda", dir)?;
     }
 
