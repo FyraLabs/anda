@@ -38,6 +38,13 @@ fn sort_git_tags(tags: &mut [String]) {
 
 pub const USER_AGENT: &str = "AndaX";
 
+fn submodule_array(
+    ctx: &NativeCallContext,
+    found: color_eyre::Result<Vec<submodules::Submodule>>,
+) -> Res<rhai::Array> {
+    Ok(rf(ctx, found)?.into_iter().map(|s| s.into_map().into()).collect())
+}
+
 /// Lookups against OCI distribution registries (GHCR, Docker Hub, Quay, …).
 mod oci {
     use super::USER_AGENT;
@@ -1451,14 +1458,56 @@ pub mod ar {
             .into_body()
             .read_to_string()
             .ehdl(&ctx)?;
-        let submodules = rf(&ctx, submodules::join(&url, gitlinks, &gitmodules))?;
-        Ok(submodules.into_iter().map(|s| s.into_map().into()).collect())
+        submodule_array(&ctx, submodules::join(&url, gitlinks, &gitmodules))
+    }
+
+    #[rhai_fn(return_raw, name = "gitlab_submodules", global)]
+    pub fn gitlab_submodules_domain(
+        ctx: NativeCallContext,
+        domain: &str,
+        id: &str,
+        git_ref: &str,
+    ) -> Res<rhai::Array> {
+        submodule_array(&ctx, submodules::from_gitlab(&AGENT, domain, id, git_ref))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn gitlab_submodules(ctx: NativeCallContext, id: &str, git_ref: &str) -> Res<rhai::Array> {
+        submodule_array(&ctx, submodules::from_gitlab(&AGENT, "gitlab.com", id, git_ref))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn gitea_submodules(
+        ctx: NativeCallContext,
+        host: &str,
+        repo: &str,
+        git_ref: &str,
+    ) -> Res<rhai::Array> {
+        submodule_array(&ctx, submodules::from_gitea(&AGENT, host, repo, git_ref))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn forgejo_submodules(
+        ctx: NativeCallContext,
+        host: &str,
+        repo: &str,
+        git_ref: &str,
+    ) -> Res<rhai::Array> {
+        submodule_array(&ctx, submodules::from_gitea(&AGENT, host, repo, git_ref))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn codeberg_submodules(
+        ctx: NativeCallContext,
+        repo: &str,
+        git_ref: &str,
+    ) -> Res<rhai::Array> {
+        submodule_array(&ctx, submodules::from_gitea(&AGENT, "codeberg.org", repo, git_ref))
     }
 
     #[rhai_fn(return_raw, global)]
     pub fn git_submodules(ctx: NativeCallContext, url: &str, git_ref: &str) -> Res<rhai::Array> {
-        let submodules = rf(&ctx, submodules::from_git(url, git_ref))?;
-        Ok(submodules.into_iter().map(|s| s.into_map().into()).collect())
+        submodule_array(&ctx, submodules::from_git(url, git_ref))
     }
 
     #[rhai_fn(return_raw, name = "gitlab", global)]

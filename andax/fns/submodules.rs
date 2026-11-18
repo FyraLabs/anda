@@ -2,7 +2,13 @@ use color_eyre::{
     eyre::{bail, eyre},
     Result,
 };
-use std::{collections::HashMap, path::Path, process::Command};
+use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
+use serde_json::Value;
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+    process::Command,
+};
 use tracing::warn;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,7 +89,14 @@ pub fn join(
     gitlinks: Vec<Gitlink>,
     gitmodules: &str,
 ) -> Result<Vec<Submodule>> {
-    let urls = gitmodules_paths_to_urls(gitmodules)?;
+    Ok(join_urls(superproject, gitlinks, &gitmodules_paths_to_urls(gitmodules)?))
+}
+
+fn join_urls(
+    superproject: &str,
+    gitlinks: Vec<Gitlink>,
+    urls: &HashMap<String, String>,
+) -> Vec<Submodule> {
     let mut submodules: Vec<Submodule> = gitlinks
         .into_iter()
         .filter_map(|Gitlink { path, commit }| {
@@ -95,7 +108,167 @@ pub fn join(
         })
         .collect();
     submodules.sort_unstable_by(|a, b| a.path.cmp(&b.path));
-    Ok(submodules)
+    submodules
+}
+
+fn split_parent(path: &str) -> (&str, &str) {
+    path.rsplit_once('/').unwrap_or(("", path))
+}
+
+fn from_directory_listings(
+    superproject: &str,
+    gitmodules: &str,
+    mut list_submodules_in: impl FnMut(&str) -> Result<HashMap<String, String>>,
+) -> Result<Vec<Submodule>> {
+    let urls = gitmodules_paths_to_urls(gitmodules)?;
+    let mut by_dir: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for path in urls.keys() {
+        by_dir.entry(split_parent(path).0).or_default().push(path);
+    }
+
+    let mut gitlinks = vec![];
+    for (dir, paths) in by_dir {
+        let listed = list_submodules_in(dir)?;
+        for path in paths {
+            if let Some(commit) = listed.get(split_parent(path).1) {
+                gitlinks.push(Gitlink { path: path.to_owned(), commit: commit.clone() });
+            } else {
+                warn!(
+                    "{superproject}: .gitmodules lists `{path}`, but it isn't a submodule at this ref, skipping it"
+                );
+            }
+        }
+    }
+    Ok(join_urls(superproject, gitlinks, &urls))
+}
+
+const PATH_SEGMENT: &AsciiSet =
+    &NON_ALPHANUMERIC.remove(b'-').remove(b'.').remove(b'_').remove(b'~');
+
+fn encode_component(component: &str) -> String {
+    utf8_percent_encode(component, PATH_SEGMENT).to_string()
+}
+
+fn encode_path(path: &str) -> String {
+    path.split('/').map(encode_component).collect::<Vec<_>>().join("/")
+}
+
+fn optional_text(agent: &ureq::Agent, url: &str, query: &[(&str, &str)]) -> Result<Option<String>> {
+    let response = agent
+        .get(url)
+        .query_pairs(query.iter().copied())
+        .header("User-Agent", super::tsunagu::USER_AGENT)
+        .call();
+    match response {
+        Ok(response) => {
+            let text = response.into_body().read_to_string()?;
+            Ok((!text.trim().is_empty()).then_some(text))
+        }
+        Err(ureq::Error::StatusCode(404)) => Ok(None),
+        Err(e) => Err(eyre!("{url}: {e}")),
+    }
+}
+
+fn get_json(
+    agent: &ureq::Agent,
+    url: &str,
+    query: &[(&str, &str)],
+) -> Result<(Value, Option<String>)> {
+    let response = agent
+        .get(url)
+        .query_pairs(query.iter().copied())
+        .header("User-Agent", super::tsunagu::USER_AGENT)
+        .call()
+        .map_err(|e| eyre!("{url}: {e}"))?;
+    let next_page = response
+        .headers()
+        .get("x-next-page")
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned);
+    Ok((response.into_body().read_json()?, next_page))
+}
+
+fn submodule_entries(
+    listing: &Value,
+    kind: &str,
+    commit_key: &str,
+) -> Result<HashMap<String, String>> {
+    Ok(listing
+        .as_array()
+        .ok_or_else(|| eyre!("expected a directory listing, got {listing}"))?
+        .iter()
+        .filter(|entry| entry["type"] == kind)
+        .filter_map(|entry| {
+            Some((entry["name"].as_str()?.to_owned(), entry[commit_key].as_str()?.to_owned()))
+        })
+        .collect())
+}
+
+pub fn from_gitlab(
+    agent: &ureq::Agent,
+    domain: &str,
+    id: &str,
+    git_ref: &str,
+) -> Result<Vec<Submodule>> {
+    let api = format!("https://{domain}/api/v4/projects/{}", encode_component(id));
+    let Some(gitmodules) = optional_text(
+        agent,
+        &format!("{api}/repository/files/.gitmodules/raw"),
+        &[("ref", git_ref)],
+    )?
+    else {
+        return Ok(vec![]);
+    };
+    let superproject = if id.contains('/') {
+        format!("https://{domain}/{id}")
+    } else {
+        let (project, _) = get_json(agent, &api, &[])?;
+        project["web_url"]
+            .as_str()
+            .ok_or_else(|| eyre!("{api}: project has no web_url"))?
+            .to_owned()
+    };
+
+    from_directory_listings(&superproject, &gitmodules, |dir| {
+        let mut entries = HashMap::new();
+        let mut page = "1".to_owned();
+        loop {
+            let mut query = vec![("ref", git_ref), ("per_page", "100"), ("page", page.as_str())];
+            if !dir.is_empty() {
+                query.push(("path", dir));
+            }
+            let (listing, next_page) = get_json(agent, &format!("{api}/repository/tree"), &query)?;
+            entries.extend(submodule_entries(&listing, "commit", "id")?);
+            match next_page {
+                Some(next) => page = next,
+                None => return Ok(entries),
+            }
+        }
+    })
+}
+
+pub fn from_gitea(
+    agent: &ureq::Agent,
+    host: &str,
+    repo: &str,
+    git_ref: &str,
+) -> Result<Vec<Submodule>> {
+    let api = format!("https://{host}/api/v1/repos/{repo}");
+    let Some(gitmodules) =
+        optional_text(agent, &format!("{api}/raw/.gitmodules"), &[("ref", git_ref)])?
+    else {
+        return Ok(vec![]);
+    };
+    from_directory_listings(&format!("https://{host}/{repo}"), &gitmodules, |dir| {
+        let url = if dir.is_empty() {
+            format!("{api}/contents")
+        } else {
+            format!("{api}/contents/{}", encode_path(dir))
+        };
+        let (listing, _) = get_json(agent, &url, &[("ref", git_ref)])?;
+        submodule_entries(&listing, "submodule", "sha")
+    })
 }
 
 fn git(dir: &Path, args: &[&str]) -> Result<String> {
@@ -182,6 +355,42 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn matches_gitmodules_against_parent_directory_listings() {
+        let gitmodules = "[submodule \"a\"]\n\tpath = external/a\n\turl = ../a.git\n\
+            [submodule \"b\"]\n\tpath = external/b\n\turl = https://example.com/b\n\
+            [submodule \"top\"]\n\tpath = top\n\turl = https://example.com/top\n\
+            [submodule \"stale\"]\n\tpath = external/stale\n\turl = https://example.com/stale\n";
+        let mut listed_dirs = vec![];
+        let submodules =
+            from_directory_listings("https://codeberg.org/org/app", gitmodules, |dir| {
+                listed_dirs.push(dir.to_owned());
+                Ok(match dir {
+                    "external" => {
+                        HashMap::from([("a".into(), "1".repeat(40)), ("b".into(), "2".repeat(40))])
+                    }
+                    "" => HashMap::from([("top".into(), "3".repeat(40))]),
+                    _ => HashMap::new(),
+                })
+            })
+            .unwrap();
+        assert_eq!(listed_dirs, vec!["", "external"]);
+        assert_eq!(
+            submodules.iter().map(|s| (s.path.as_str(), s.url.as_str())).collect::<Vec<_>>(),
+            vec![
+                ("external/a", "https://codeberg.org/org/a.git"),
+                ("external/b", "https://example.com/b"),
+                ("top", "https://example.com/top"),
+            ]
+        );
+    }
+
+    #[test]
+    fn encodes_api_path_segments() {
+        assert_eq!(encode_component("group/sub/project"), "group%2Fsub%2Fproject");
+        assert_eq!(encode_path("third party/lib-a.v2"), "third%20party/lib-a.v2");
     }
 
     #[test]
