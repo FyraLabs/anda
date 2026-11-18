@@ -95,6 +95,7 @@ dependencies = [
  "git2",
  "hcl-rs",
  "lazy_static",
+ "percent-encoding",
  "regex",
  "rhai",
  "rhai-fs",

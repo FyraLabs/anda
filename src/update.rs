@@ -1,5 +1,5 @@
 use crate::update_report::{
-    failure_outcome, panic_message, ErrorKind, ErrorReport, ProjectReport, Report, Status,
+    failure_outcome, panic_message, ErrorKind, ErrorReport, Event, ProjectReport, Report, Status,
 };
 use anda_config::Manifest;
 use andax::{run, try_run, RPMSpec};
@@ -28,6 +28,7 @@ struct Outcome {
     status: Status,
     spec_changed: bool,
     error: Option<ErrorReport>,
+    events: Vec<Event>,
 }
 
 fn run_update_script<K, V>(
@@ -56,21 +57,23 @@ where
         Ok(sc) => sc,
         Err(failure) => {
             let (status, error) = failure_outcome(failure);
-            return Outcome { status, spec_changed: false, error };
+            return Outcome { status, spec_changed: false, error, events: vec![] };
         }
     };
     let Some(mut rpm) = sc.get_value::<RPMSpec>("rpm") else {
-        return Outcome { status: Status::Ok, spec_changed: false, error: None };
+        return Outcome { status: Status::Ok, spec_changed: false, error: None, events: vec![] };
     };
+    let events = std::mem::take(&mut rpm.submodule_changes).into_iter().map(Event::from).collect();
     let spec_changed = rpm.changed();
     match rpm.write() {
-        Ok(()) => Outcome { status: Status::Ok, spec_changed, error: None },
+        Ok(()) => Outcome { status: Status::Ok, spec_changed, error: None, events },
         Err(e) => {
             error!("{name}: Failed to write RPM: {e}");
             Outcome {
                 status: Status::Failed,
                 spec_changed: false,
                 error: Some(ErrorReport::plain(ErrorKind::Write, e.to_string())),
+                events,
             }
         }
     }
@@ -104,6 +107,7 @@ pub fn single_update(
             spec_changed: outcome.spec_changed,
             duration_ms: Some(start.elapsed().as_millis()),
             error: outcome.error,
+            events: outcome.events,
         }])
         .write_to(path)?;
     }
@@ -145,6 +149,7 @@ pub fn update(
             spec_changed: false,
             duration_ms: None,
             error: None,
+            events: vec![],
         };
         let spec = pending.spec.clone();
         let handle = Builder::new().name(alias.unwrap_or(name)).spawn(move || {
@@ -177,6 +182,7 @@ pub fn update(
                     pending.spec_changed = outcome.spec_changed;
                     pending.duration_ms = Some(duration);
                     pending.error = outcome.error;
+                    pending.events = outcome.events;
                     reports.push(pending);
                     Some((name, duration))
                 }

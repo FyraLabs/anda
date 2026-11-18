@@ -1,4 +1,8 @@
-use crate::{error::AndaxRes, run::rf};
+use crate::{
+    error::AndaxRes,
+    fns::submodules::{self, Gitlink},
+    run::rf,
+};
 
 use git2::Remote;
 use rhai::{
@@ -33,6 +37,13 @@ fn sort_git_tags(tags: &mut [String]) {
 }
 
 pub const USER_AGENT: &str = "AndaX";
+
+fn submodule_array(
+    ctx: &NativeCallContext,
+    found: color_eyre::Result<Vec<submodules::Submodule>>,
+) -> Res<rhai::Array> {
+    Ok(rf(ctx, found)?.into_iter().map(|s| s.into_map().into()).collect())
+}
 
 /// Lookups against OCI distribution registries (GHCR, Docker Hub, Quay, …).
 mod oci {
@@ -1410,6 +1421,93 @@ pub mod ar {
     #[rhai_fn(return_raw, global)]
     pub fn gh_rawfile(ctx: NativeCallContext, repo: &str, branch: &str, file: &str) -> Res<String> {
         get(ctx, &format!("https://raw.githubusercontent.com/{repo}/{branch}/{file}"))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn gh_submodules(ctx: NativeCallContext, repo: &str, git_ref: &str) -> Res<rhai::Array> {
+        let req = AGENT
+            .get(&format!("https://api.github.com/repos/{repo}/git/trees/{git_ref}?recursive=1"))
+            .header("Authorization", &format!("Bearer {}", internal_env("GITHUB_TOKEN")?))
+            .header("User-Agent", USER_AGENT);
+        let tree: Value = req.call().ehdl(&ctx)?.into_body().read_json().ehdl(&ctx)?;
+        let url = format!("https://github.com/{repo}");
+        if tree["truncated"].as_bool().unwrap_or(false) {
+            trace!("{repo}: tree is truncated, fetching it with git instead");
+            return git_submodules(ctx, &url, git_ref);
+        }
+        let gitlinks: Vec<Gitlink> = tree["tree"]
+            .as_array()
+            .ok_or_else(|| E::from("gh_submodules: tree response has no `tree` array"))?
+            .iter()
+            .filter(|entry| entry["type"] == "commit")
+            .filter_map(|entry| {
+                Some(Gitlink {
+                    path: entry["path"].as_str()?.to_owned(),
+                    commit: entry["sha"].as_str()?.to_owned(),
+                })
+            })
+            .collect();
+        if gitlinks.is_empty() {
+            return Ok(rhai::Array::new());
+        }
+        let gitmodules = AGENT
+            .get(&format!("https://raw.githubusercontent.com/{repo}/{git_ref}/.gitmodules"))
+            .header("User-Agent", USER_AGENT)
+            .call()
+            .ehdl(&ctx)?
+            .into_body()
+            .read_to_string()
+            .ehdl(&ctx)?;
+        submodule_array(&ctx, submodules::join(&url, gitlinks, &gitmodules))
+    }
+
+    #[rhai_fn(return_raw, name = "gitlab_submodules", global)]
+    pub fn gitlab_submodules_domain(
+        ctx: NativeCallContext,
+        domain: &str,
+        id: &str,
+        git_ref: &str,
+    ) -> Res<rhai::Array> {
+        submodule_array(&ctx, submodules::from_gitlab(&AGENT, domain, id, git_ref))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn gitlab_submodules(ctx: NativeCallContext, id: &str, git_ref: &str) -> Res<rhai::Array> {
+        submodule_array(&ctx, submodules::from_gitlab(&AGENT, "gitlab.com", id, git_ref))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn gitea_submodules(
+        ctx: NativeCallContext,
+        host: &str,
+        repo: &str,
+        git_ref: &str,
+    ) -> Res<rhai::Array> {
+        submodule_array(&ctx, submodules::from_gitea(&AGENT, host, repo, git_ref))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn forgejo_submodules(
+        ctx: NativeCallContext,
+        host: &str,
+        repo: &str,
+        git_ref: &str,
+    ) -> Res<rhai::Array> {
+        submodule_array(&ctx, submodules::from_gitea(&AGENT, host, repo, git_ref))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn codeberg_submodules(
+        ctx: NativeCallContext,
+        repo: &str,
+        git_ref: &str,
+    ) -> Res<rhai::Array> {
+        submodule_array(&ctx, submodules::from_gitea(&AGENT, "codeberg.org", repo, git_ref))
+    }
+
+    #[rhai_fn(return_raw, global)]
+    pub fn git_submodules(ctx: NativeCallContext, url: &str, git_ref: &str) -> Res<rhai::Array> {
+        submodule_array(&ctx, submodules::from_git(url, git_ref))
     }
 
     #[rhai_fn(return_raw, name = "gitlab", global)]
