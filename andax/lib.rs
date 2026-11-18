@@ -10,7 +10,7 @@ mod run;
 
 pub use fns::rpm::RPMSpec;
 pub use rhai::{self, Map};
-pub use run::{errhdl, run};
+pub use run::{errhdl, run, try_run, Failure, ScriptError};
 
 /// The usual Error type returned by the Rhai engine.
 /// Alias for `Box<EvalAltResult>`.
