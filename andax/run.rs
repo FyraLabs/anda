@@ -172,23 +172,59 @@ pub fn traceback(proj: &str, scr: &Path, nntz: &TbErr, pos: Position, rhai_fn: &
     error!("Script Exception —— {proj}\n{code}");
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Failure {
+    Terminated,
+    Error(ScriptError),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScriptError {
+    pub message: String,
+    pub function: Option<String>,
+    pub line: Option<usize>,
+    pub column: Option<usize>,
+}
+
+impl ScriptError {
+    fn new(nntz: &TbErr, pos: Position, rhai_fn: &str) -> Self {
+        let message = match nntz {
+            Report(report) => format!("{report:#}"),
+            Arb(err) => err.to_string(),
+            Rhai(EvalAltResult::ErrorRuntime(value, _)) => value.to_string(),
+            Rhai(err) => err.to_string(),
+        };
+        Self {
+            message,
+            function: (!rhai_fn.is_empty()).then(|| rhai_fn.to_owned()),
+            line: pos.line(),
+            column: pos.position(),
+        }
+    }
+}
+
+fn report_error(
+    name: &str,
+    scr: &Path,
+    nntz: &TbErr,
+    pos: Position,
+    rhai_fn: &str,
+    fn_src: &str,
+) -> Failure {
+    traceback(name, scr, nntz, pos, rhai_fn, fn_src);
+    Failure::Error(ScriptError::new(nntz, pos, rhai_fn))
+}
+
 /// Handles an exception thrown while executing an AndaX script.
-pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
+pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) -> Failure {
     trace!("{name}: Generating traceback");
     if let EvalAltResult::ErrorRuntime(ref run_err, pos) = err {
         match run_err.clone().try_cast::<AErr>() {
             Some(AErr::RustReport(rhai_fn, fn_src, others)) => {
-                return traceback(
-                    name,
-                    scr,
-                    &Report(others),
-                    pos,
-                    rhai_fn.as_str(),
-                    fn_src.as_str(),
-                );
+                return report_error(name, scr, &Report(others), pos, &rhai_fn, &fn_src);
             }
             Some(AErr::RustError(rhai_fn, fn_src, others)) => {
-                return traceback(name, scr, &Arb(others), pos, rhai_fn.as_str(), fn_src.as_str());
+                return report_error(name, scr, &Arb(others), pos, &rhai_fn, &fn_src);
             }
             Some(AErr::Exit(b)) => {
                 if b {
@@ -196,14 +232,16 @@ pub fn errhdl(name: &str, scr: &Path, err: EvalAltResult) {
                     error!("生存係為咗喵？打程式幾好呀。仲喵要咁憤世嫉俗喎。還掂おこちゃま戦争係政治家嘅事……");
                     trace!("あなたは世界の終わりにずんだを食べるのだ");
                 }
-                return debug!("Exit from rhai at: {pos}");
+                debug!("Exit from rhai at: {pos}");
+                return Failure::Terminated;
             }
             None => {}
         }
     }
     trace!("Rhai moment: {err:#?}");
-    let pos = err.position();
-    traceback(name, scr, &Rhai(err), pos, "", "");
+    let mut err = err;
+    let pos = err.take_position();
+    report_error(name, scr, &Rhai(err), pos, "", "")
 }
 
 /// Executes an AndaX script.
@@ -219,6 +257,23 @@ pub fn run<
     labels: L,
     f: F,
 ) -> Option<Scope<'a>> {
+    try_run(name, scr, labels, f).ok()
+}
+
+/// # Errors
+/// The script threw an exception or terminated itself. The traceback is logged either way.
+pub fn try_run<
+    'a,
+    F: FnOnce(&mut Scope<'static>),
+    K: Into<rhai::Identifier>,
+    V: Into<Dynamic>,
+    L: Iterator<Item = (K, V)>,
+>(
+    name: &'a str,
+    scr: &'a Path,
+    labels: L,
+    f: F,
+) -> Result<Scope<'a>, Failure> {
     let (en, mut sc) = gen_en();
     f(&mut sc);
     let lbls: rhai::Map = labels.map(|(k, v)| (k.into(), v.into())).collect();
@@ -232,15 +287,15 @@ pub fn run<
 }
 
 #[instrument(skip(sc, en))]
-fn exec<'a>(name: &'a str, scr: &'a Path, mut sc: Scope<'a>, en: &Engine) -> Option<Scope<'a>> {
+fn exec<'a>(
+    name: &'a str,
+    scr: &'a Path,
+    mut sc: Scope<'a>,
+    en: &Engine,
+) -> Result<Scope<'a>, Failure> {
     debug!("Running {name}");
-    match en.run_file_with_scope(&mut sc, scr.to_path_buf()) {
-        Ok(()) => Some(sc),
-        Err(err) => {
-            errhdl(name, scr, *err);
-            None
-        }
-    }
+    en.run_file_with_scope(&mut sc, scr.to_path_buf()).map_err(|err| errhdl(name, scr, *err))?;
+    Ok(sc)
 }
 
 macro_rules! gen_h {
@@ -329,9 +384,44 @@ fn hint_ear(sl: &str, lns: &str, ear: &EvalAltResult, rhai_fn: &str) -> Option<S
 
 #[cfg(test)]
 mod tests {
-    use super::run;
+    use super::{run, try_run, Failure, ScriptError};
     use crate::fns::rpm::RPMSpec;
     use std::fs;
+
+    fn failure_of(source: &str) -> Failure {
+        let dir = tempfile::tempdir().expect("create temporary directory");
+        let script = dir.path().join("update.rhai");
+        fs::write(&script, source).expect("write script");
+        try_run("test", &script, std::iter::empty::<(String, String)>(), |_| {})
+            .expect_err("script should fail")
+    }
+
+    #[test]
+    fn reports_thrown_errors_without_position_noise() {
+        assert_eq!(
+            failure_of("let x = 1;\nthrow \"upstream moved\";\n"),
+            Failure::Error(ScriptError {
+                message: "upstream moved".to_owned(),
+                function: None,
+                line: Some(2),
+                column: Some(1),
+            })
+        );
+    }
+
+    #[test]
+    fn reports_the_failing_function() {
+        let Failure::Error(err) = failure_of(r#"let v = json_arr("{");"#) else {
+            panic!("expected a script error");
+        };
+        assert_eq!(err.function.as_deref(), Some("json_arr"));
+        assert_eq!((err.line, err.column), (Some(1), Some(9)));
+    }
+
+    #[test]
+    fn reports_terminate_as_terminated() {
+        assert_eq!(failure_of("terminate();"), Failure::Terminated);
+    }
 
     #[test]
     fn exposes_rpm_spec_to_scripts() {

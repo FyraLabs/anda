@@ -241,6 +241,9 @@ pub enum Command {
         /// This will always override `--filters`.
         #[clap(short, long)]
         excludes: Vec<String>,
+        /// Write a JSON report of how each update script went to this path
+        #[clap(long)]
+        report: Option<PathBuf>,
 
         #[clap()]
         project: Option<String>,
