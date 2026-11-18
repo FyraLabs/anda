@@ -1,4 +1,4 @@
-use andax::{Failure, ScriptError};
+use andax::{Failure, ScriptError, SubmoduleChange};
 use color_eyre::Result;
 use serde::Serialize;
 use std::{
@@ -44,6 +44,27 @@ pub struct ProjectReport {
     pub spec_changed: bool,
     pub duration_ms: Option<u128>,
     pub error: Option<ErrorReport>,
+    pub events: Vec<Event>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum Event {
+    SubmoduleAdded { path: String, url: String, commit: String, global: String },
+    SubmoduleDropped { global: String, commit: String },
+}
+
+impl From<SubmoduleChange> for Event {
+    fn from(change: SubmoduleChange) -> Self {
+        match change {
+            SubmoduleChange::Added { path, url, commit, global } => {
+                Self::SubmoduleAdded { path, url, commit, global }
+            }
+            SubmoduleChange::Dropped { global, commit } => {
+                Self::SubmoduleDropped { global, commit }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

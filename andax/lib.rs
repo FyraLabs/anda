@@ -8,7 +8,7 @@ mod error;
 mod fns;
 mod run;
 
-pub use fns::rpm::RPMSpec;
+pub use fns::rpm::{RPMSpec, SubmoduleChange};
 pub use rhai::{self, Map};
 pub use run::{errhdl, run, try_run, Failure, ScriptError};
 
