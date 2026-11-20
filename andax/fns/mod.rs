@@ -5,5 +5,6 @@ pub mod cfg;
 pub mod io;
 pub mod kokoro;
 pub mod rpm;
+pub mod submodules;
 pub mod tenshi;
 pub mod tsunagu;

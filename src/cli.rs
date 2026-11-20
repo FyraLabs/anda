@@ -266,6 +266,9 @@ pub enum Command {
         labels: Vec<String>,
         #[clap(flatten)]
         label_filters: LabelFilters,
+        /// Write a JSON report of how each update script went to this path
+        #[clap(long)]
+        report: Option<PathBuf>,
 
         #[clap()]
         project: Option<String>,

@@ -10,6 +10,7 @@ mod oci;
 mod pt;
 mod rpm_spec;
 mod update;
+mod update_report;
 mod util;
 use anda_config::parse_labels;
 use clap::{CommandFactory, Parser};
@@ -108,15 +109,15 @@ async fn main() -> Result<()> {
             println!("build_matrix={}", serde_json::to_string(&entries)?);
             println!("build_units={}", serde_json::to_string(&util::group_build_entries(entries))?);
         }
-        Command::Update { labels, label_filters, project } => {
+        Command::Update { labels, label_filters, report, project } => {
             let labels = parse_labels(labels.iter().map(std::ops::Deref::deref))
                 .ok_or_else(|| eyre!("Cannot parse --labels"))?;
             let filter = parse_label_filter(&label_filters)?;
             let cfg = anda_config::load_from_file(&cli.config)?;
             if let Some(proj) = project {
-                update::single_update(&cfg, &proj, &labels, filter.filters)?;
+                update::single_update(&cfg, &proj, &labels, filter.filters, report.as_deref())?;
             } else {
-                update::update(cfg, &labels, &filter)?;
+                update::update(cfg, &labels, &filter, report.as_deref())?;
             }
         }
         Command::Run { scripts, labels } => {

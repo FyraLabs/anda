@@ -5,7 +5,9 @@ use std::{
     path::{Path, PathBuf},
     sync::LazyLock,
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
+
+use super::submodules::{global_name, Submodule};
 
 static RE_RELEASE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"Release:([\t ]+)(.+?)\n").unwrap());
@@ -31,6 +33,13 @@ pub struct RPMSpec {
     pub spec: PathBuf,
     /// RPM spec file content
     pub f: String,
+    pub submodule_changes: Vec<SubmoduleChange>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SubmoduleChange {
+    Added { path: String, url: String, commit: String, global: String },
+    Dropped { global: String, commit: String },
 }
 
 impl RPMSpec {
@@ -46,7 +55,14 @@ impl RPMSpec {
         let f = fs::read_to_string(&spec).expect("Cannot read spec to string");
         let mut hasher = std::hash::DefaultHasher::default();
         f.hash(&mut hasher);
-        Self { name, chkupdate: chkupdate.into(), original: hasher.finish(), f, spec: spec.into() }
+        Self {
+            name,
+            chkupdate: chkupdate.into(),
+            original: hasher.finish(),
+            f,
+            spec: spec.into(),
+            submodule_changes: vec![],
+        }
     }
     /// Resets the release number to 1
     pub fn reset_release(&mut self) {
@@ -126,6 +142,73 @@ impl RPMSpec {
         info!("{}: Source{i}: {p}", self.name);
         self.f = self.f.replace(&cap[0], &format!("Source{i}:{}{p}\n", &cap[2]));
     }
+    fn track_submodules(&mut self, upstream: &[Submodule], ignore: &[String]) {
+        let tracked: Vec<(String, String)> = RE_GLOBAL
+            .captures_iter(&self.f)
+            .filter(|cap| cap[2].starts_with("submodule_"))
+            .map(|cap| (cap[2].to_owned(), cap[4].trim().to_owned()))
+            .collect();
+
+        for submodule in upstream {
+            let global = global_name(&submodule.path);
+            match tracked.iter().find(|(name, _)| *name == global) {
+                Some((_, commit)) if *commit == submodule.commit => {}
+                Some((_, commit)) => {
+                    info!("{}: {}: {commit} —→ {}", self.name, submodule.path, submodule.commit);
+                    self.global(&global, &submodule.commit);
+                }
+                None if ignore.contains(&submodule.path) => {}
+                None => {
+                    warn!(
+                        "{}: upstream added submodule {} ({}), add `%global {global}` and a source for it, or ignore it",
+                        self.name, submodule.path, submodule.url
+                    );
+                    self.submodule_changes.push(SubmoduleChange::Added {
+                        path: submodule.path.clone(),
+                        url: submodule.url.clone(),
+                        commit: submodule.commit.clone(),
+                        global,
+                    });
+                }
+            }
+        }
+
+        for (global, commit) in tracked {
+            if !upstream.iter().any(|submodule| global_name(&submodule.path) == global) {
+                warn!("{}: `%global {global}` no longer matches an upstream submodule", self.name);
+                self.submodule_changes.push(SubmoduleChange::Dropped { global, commit });
+            }
+        }
+    }
+
+    fn submodules_with(
+        &mut self,
+        upstream: &[rhai::Dynamic],
+        options: &rhai::Map,
+    ) -> Result<(), Box<rhai::EvalAltResult>> {
+        let upstream = upstream
+            .iter()
+            .map(|entry| {
+                let map = entry
+                    .read_lock::<rhai::Map>()
+                    .ok_or("rpm.submodules() takes an array of submodule maps")?;
+                Submodule::from_map(&map).map_err(|e| e.to_string().into())
+            })
+            .collect::<Result<Vec<_>, Box<rhai::EvalAltResult>>>()?;
+        let ignore = match options.get("ignore") {
+            None => vec![],
+            Some(list) => list
+                .clone()
+                .into_typed_array::<rhai::ImmutableString>()
+                .map_err(|_| "rpm.submodules(): `ignore` must be an array of paths")?
+                .into_iter()
+                .map(|path| path.to_string())
+                .collect(),
+        };
+        self.track_submodules(&upstream, &ignore);
+        Ok(())
+    }
+
     /// Write the updated spec file content
     ///
     /// # Errors
@@ -167,6 +250,62 @@ impl CustomType for RPMSpec {
             .with_fn("release", Self::release)
             .with_fn("release", Self::release_num)
             .with_fn("changed", Self::changed)
+            .with_fn("submodules", |rpm: &mut Self, upstream: rhai::Array| {
+                rpm.submodules_with(&upstream, &rhai::Map::new())
+            })
+            .with_fn("submodules", |rpm: &mut Self, upstream: rhai::Array, options: rhai::Map| {
+                rpm.submodules_with(&upstream, &options)
+            })
             .with_get_set("f", Self::get, Self::set);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RPMSpec, Submodule, SubmoduleChange};
+
+    fn submodule(path: &str, commit: &str) -> Submodule {
+        Submodule {
+            path: path.into(),
+            url: format!("https://example.com/{path}"),
+            commit: commit.into(),
+        }
+    }
+
+    #[test]
+    fn tracks_upstream_submodules_against_spec_globals() {
+        let dir = tempfile::tempdir().expect("create temporary directory");
+        let spec = dir.path().join("test.spec");
+        std::fs::write(
+            &spec,
+            "%global submodule_lib_a aaa\n%global submodule_lib_b bbb\n%global submodule_gone ggg\n%global commit_date 20260101\nName: test\n",
+        )
+        .expect("write spec");
+        let mut rpm = RPMSpec::new("test".to_owned(), dir.path().join("update.rhai"), &spec);
+
+        rpm.track_submodules(
+            &[
+                submodule("lib/a", "aaa2"),
+                submodule("lib/b", "bbb"),
+                submodule("lib/new", "nnn"),
+                submodule("lib/win-only", "www"),
+            ],
+            &["lib/win-only".to_owned()],
+        );
+
+        assert!(rpm.f.contains("%global submodule_lib_a aaa2\n"));
+        assert!(rpm.f.contains("%global submodule_lib_b bbb\n"));
+        assert_eq!(
+            rpm.submodule_changes,
+            vec![
+                SubmoduleChange::Added {
+                    path: "lib/new".into(),
+                    url: "https://example.com/lib/new".into(),
+                    commit: "nnn".into(),
+                    global: "submodule_lib_new".into(),
+                },
+                SubmoduleChange::Dropped { global: "submodule_gone".into(), commit: "ggg".into() },
+            ]
+        );
     }
 }

@@ -38,15 +38,16 @@ impl Manifest {
 
     #[must_use]
     pub fn get_project(&self, key: &str) -> Option<&Project> {
-        self.project.get(key).map_or_else(
-            || {
-                self.project.iter().find_map(|(_k, v)| {
-                    let alias = v.alias.as_ref()?;
-                    alias.contains(&key.to_owned()).then_some(v)
-                })
-            },
-            Some,
-        )
+        self.get_project_entry(key).map(|(_, project)| project)
+    }
+
+    #[must_use]
+    pub fn get_project_entry(&self, key: &str) -> Option<(&String, &Project)> {
+        self.project.get_key_value(key).or_else(|| {
+            self.project.iter().find(|(_, project)| {
+                project.alias.as_ref().is_some_and(|alias| alias.iter().any(|a| a == key))
+            })
+        })
     }
 }
 
