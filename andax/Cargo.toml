@@ -1,6 +1,6 @@
 [package]
 name = "andax"
-version = "0.8.15"
+version = "0.8.16"
 edition = "2021"
 license = "AGPL-3.0-or-later"
 description = "Andaman scripting runtime"
