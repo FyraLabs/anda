@@ -42,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "anda"
-version = "0.8.16"
+version = "0.8.17"
 dependencies = [
  "anda-config",
  "andax",
@@ -58,7 +58,7 @@ dependencies = [
  "itertools",
  "lazy_format",
  "lazy_static",
- "nix 0.32.0",
+ "nix 0.31.4",
  "promptly",
  "regex",
  "serde",
@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "anda-config"
-version = "0.8.16"
+version = "0.8.17"
 dependencies = [
  "dotenv",
  "env_logger",
@@ -86,7 +86,7 @@ dependencies = [
 
 [[package]]
 name = "andax"
-version = "0.8.16"
+version = "0.8.17"
 dependencies = [
  "anda-config",
  "chrono",
@@ -1494,9 +1494,9 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.32.0"
+version = "0.31.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77730ed34f01f4990cb2ea67fec715ecebc6fab9a6396cf83c5529b13f581bdc"
+checksum = "2bc81ce8148d3b4f3274da811f11cdd824ae661ee4ef732cdb229825cf5be7f7"
 dependencies = [
  "bitflags 2.13.2",
  "cfg-if",
